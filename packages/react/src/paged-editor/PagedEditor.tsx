@@ -727,27 +727,18 @@ function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableM
     for (let cellIdx = 0; cellIdx < row.cells.length; cellIdx++) {
       const cell = row.cells[cellIdx];
       const sourceCell = sourceRowCells?.[cellIdx];
+      // `paragraphMeasure.totalHeight` already includes spacing.before /
+      // spacing.after; just sum the block heights. Adjacent-paragraph
+      // collapse rules don't apply across the cell-content boundary, so this
+      // matches Word's per-cell layout.
       let contentHeight = 0;
-      let previousParagraphAfter = 0;
-
-      for (let blockIdx = 0; blockIdx < cell.blocks.length; blockIdx++) {
-        const blockMeasure = cell.blocks[blockIdx];
-        const sourceBlock = sourceCell?.blocks[blockIdx];
-
-        if (blockMeasure.kind === 'paragraph') {
-          const spacing =
-            sourceBlock?.kind === 'paragraph' ? sourceBlock.attrs?.spacing : undefined;
-          contentHeight += Math.max(previousParagraphAfter, spacing?.before ?? 0);
+      for (const blockMeasure of cell.blocks) {
+        if ('totalHeight' in blockMeasure) {
           contentHeight += blockMeasure.totalHeight;
-          previousParagraphAfter = spacing?.after ?? 0;
-        } else if ('totalHeight' in blockMeasure) {
-          contentHeight += previousParagraphAfter;
-          contentHeight += blockMeasure.totalHeight;
-          previousParagraphAfter = 0;
         }
       }
 
-      cell.height = contentHeight + previousParagraphAfter;
+      cell.height = contentHeight;
       const padTop = sourceCell?.padding?.top ?? DEFAULT_CELL_PADDING_Y;
       const padBottom = sourceCell?.padding?.bottom ?? DEFAULT_CELL_PADDING_Y;
       cell.height += padTop + padBottom;

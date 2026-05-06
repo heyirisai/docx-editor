@@ -100,18 +100,27 @@ export function collectSectionConfigs(
   return { configs, breakIndices };
 }
 
-/**
- * Get spacing before a paragraph block.
- */
-function getSpacingBefore(block: ParagraphBlock): number {
-  return block.attrs?.spacing?.before ?? 0;
+function isEmptyParagraph(block: ParagraphBlock): boolean {
+  if (block.runs.length === 0) return true;
+  if (block.runs.length !== 1) return false;
+  const r = block.runs[0];
+  return r.kind === 'text' && ((r as { text?: string }).text ?? '') === '';
 }
 
 /**
- * Get spacing after a paragraph block.
+ * Word collapses style-inherited spacing on empty paragraphs (only direct
+ * formatting survives). `spacingExplicit` tracks which side was set inline.
  */
+function getSpacingBefore(block: ParagraphBlock): number {
+  const value = block.attrs?.spacing?.before ?? 0;
+  if (isEmptyParagraph(block) && !block.attrs?.spacingExplicit?.before) return 0;
+  return value;
+}
+
 function getSpacingAfter(block: ParagraphBlock): number {
-  return block.attrs?.spacing?.after ?? 0;
+  const value = block.attrs?.spacing?.after ?? 0;
+  if (isEmptyParagraph(block) && !block.attrs?.spacingExplicit?.after) return 0;
+  return value;
 }
 
 /**
@@ -498,10 +507,9 @@ function layoutTable(
     const rawAvailableHeight = paginator.getAvailableHeight();
     const isFirstFragment = currentRowIndex === 0;
 
-    // Account for trailing spacing from previous block that addFragment will consume.
-    // addFragment computes effectiveSpaceBefore = max(spaceBefore, trailingSpacing)
-    // and adds it to the fragment height before calling ensureFits.
-    // We pass spaceBefore=0 for tables, so the overhead is just trailingSpacing.
+    // Account for trailing spacing from the previous block that addFragment
+    // will consume. We pass spaceBefore=0 for tables, so the overhead is just
+    // trailingSpacing (paginator does max(spaceBefore, trailingSpacing)).
     const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
     const availableHeight = rawAvailableHeight - pendingSpacing;
 

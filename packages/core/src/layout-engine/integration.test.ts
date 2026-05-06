@@ -860,6 +860,8 @@ describe('Header/Footer Margin Inflation', () => {
 // =============================================================================
 
 describe('Layout Engine - Contextual Spacing', () => {
+  // Non-suppressed gaps below are max(spaceAfter, spaceBefore) — Word
+  // collapses adjacent paragraph spacing rather than summing it.
   /**
    * Helper to create a paragraph block with spacing and contextualSpacing attrs.
    */
@@ -945,9 +947,8 @@ describe('Layout Engine - Contextual Spacing', () => {
     const layout = layoutDocument(blocks, measures, makeLayoutOptions());
 
     const frags = layout.pages[0].fragments;
-    // Gap = max(spaceAfter=13, spaceBefore=5) = 13 (paginator collapses spacing)
     const gap = frags[1].y - (frags[0].y + frags[0].height);
-    expect(gap).toBe(13);
+    expect(gap).toBe(13); // max(13, 5)
   });
 
   test('does NOT suppress spacing when styles differ', () => {
@@ -973,9 +974,8 @@ describe('Layout Engine - Contextual Spacing', () => {
 
     const frags = layout.pages[0].fragments;
     // Different styles — spacing should NOT be suppressed
-    // gap = max(spaceAfter=13, spaceBefore=5) = 13
     const gap = frags[1].y - (frags[0].y + frags[0].height);
-    expect(gap).toBe(13);
+    expect(gap).toBe(13); // max(13, 5)
   });
 
   test('does NOT suppress when only one paragraph has contextualSpacing', () => {
@@ -1000,9 +1000,8 @@ describe('Layout Engine - Contextual Spacing', () => {
     const layout = layoutDocument(blocks, measures, makeLayoutOptions());
 
     const frags = layout.pages[0].fragments;
-    // gap = max(spaceAfter=13, spaceBefore=5) = 13
     const gap = frags[1].y - (frags[0].y + frags[0].height);
-    expect(gap).toBe(13);
+    expect(gap).toBe(13); // max(13, 5)
   });
 
   test('suppresses spacing in a chain of 3+ same-style paragraphs', () => {
@@ -1080,17 +1079,15 @@ describe('Layout Engine - Contextual Spacing', () => {
     const frags = layout.pages[0].fragments;
     expect(frags.length).toBe(4);
 
-    // Gap between Normal and Bullet 1 — Normal has no contextualSpacing, so
-    // gap = max(spaceAfter=13, spaceBefore=5) = 13
+    // Normal → Bullet: no contextualSpacing, max(13, 5)
     const gap0to1 = frags[1].y - (frags[0].y + frags[0].height);
     expect(gap0to1).toBe(13);
 
-    // Gap between Bullet 1 and Bullet 2 — both contextual, same style → suppressed
+    // Bullet → Bullet: both contextual, same style → suppressed
     const gap1to2 = frags[2].y - (frags[1].y + frags[1].height);
     expect(gap1to2).toBe(0);
 
-    // Gap between Bullet 2 and Normal 2 — Normal 2 has no contextualSpacing
-    // gap = max(spaceAfter=13, spaceBefore=5) = 13
+    // Bullet → Normal: Normal lacks contextualSpacing, max(13, 5)
     const gap2to3 = frags[3].y - (frags[2].y + frags[2].height);
     expect(gap2to3).toBe(13);
   });
@@ -1118,8 +1115,7 @@ describe('Layout Engine - Contextual Spacing', () => {
 
     const frags = layout.pages[0].fragments;
     // Without styleId, contextual spacing should NOT be applied
-    // gap = max(spaceAfter=10, spaceBefore=5) = 10
     const gap = frags[1].y - (frags[0].y + frags[0].height);
-    expect(gap).toBe(10);
+    expect(gap).toBe(10); // max(10, 5)
   });
 });

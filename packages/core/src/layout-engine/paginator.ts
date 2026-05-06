@@ -243,7 +243,8 @@ export function createPaginator(options: PaginatorOptions) {
     spaceBefore: number = 0,
     spaceAfter: number = 0
   ): { state: PageState; x: number; y: number } {
-    // Collapse space before with trailing spacing from previous block
+    // Word collapses adjacent paragraphs' spaceAfter / next.spaceBefore to
+    // the larger of the two (CSS-style margin-collapse), not the sum.
     const effectiveSpaceBefore = Math.max(spaceBefore, getCurrentState().trailingSpacing);
     const totalHeight = effectiveSpaceBefore + height;
 

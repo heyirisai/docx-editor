@@ -885,28 +885,8 @@ export function renderParagraphFragment(
     fragmentEl.dataset.styleId = block.attrs.styleId;
   }
 
-  // Render spacing.before/after as padding so it shows above/below the
-  // text instead of as bottom slack. Word collapses style-inherited
-  // spacing on empty paragraphs — `spacingExplicit` distinguishes inline
-  // from inherited.
-  const isEmpty =
-    block.runs.length === 0 ||
-    (block.runs.length === 1 &&
-      block.runs[0].kind === 'text' &&
-      ((block.runs[0] as { text?: string }).text ?? '') === '');
-  const explicit = block.attrs?.spacingExplicit;
-  const spaceBefore = block.attrs?.spacing?.before;
-  if (spaceBefore && spaceBefore > 0 && !fragment.continuesFromPrev) {
-    if (!isEmpty || explicit?.before) {
-      fragmentEl.style.paddingTop = `${spaceBefore}px`;
-    }
-  }
-  const spaceAfter = block.attrs?.spacing?.after;
-  if (spaceAfter && spaceAfter > 0 && !fragment.continuesOnNext) {
-    if (!isEmpty || explicit?.after) {
-      fragmentEl.style.paddingBottom = `${spaceAfter}px`;
-    }
-  }
+  // Paginator owns vertical positioning; spacing.before/after are baked
+  // into fragment.y, not applied as wrapper padding (would double-count).
 
   // Apply RTL direction
   const isBidi = block.attrs?.bidi;

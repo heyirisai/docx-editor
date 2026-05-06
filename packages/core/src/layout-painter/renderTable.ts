@@ -275,6 +275,7 @@ function renderCellContent(
       const paragraphBlock = block as ParagraphBlock;
       let paragraphMeasure = measure as ParagraphMeasure;
       const spacing = paragraphBlock.attrs?.spacing;
+      // Match body paginator: max-collapse adjacent paragraph spacing.
       const effectiveSpaceBefore = Math.max(previousParagraphAfter, spacing?.before ?? 0);
       cumulativeY += effectiveSpaceBefore;
 
