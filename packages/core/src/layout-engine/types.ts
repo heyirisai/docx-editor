@@ -283,6 +283,14 @@ export type ParagraphAttrs = {
   // Default font for empty paragraphs (from style's rPr / pPr/rPr)
   defaultFontSize?: number; // in points
   defaultFontFamily?: string;
+  /**
+   * Skip the empty-paragraph line-height fallback. Used by HF measurement
+   * for the canonical OOXML "trailing empty paragraph after a table" pattern
+   * — Word renders that paragraph as a zero-height anchor, not as a full
+   * line-height of phantom space. See `normalizeHeaderFooterMeasureBlocks`
+   * (#381).
+   */
+  suppressEmptyParagraphHeight?: boolean;
 };
 
 /**

@@ -54,7 +54,6 @@ import type {
   ImageBlock,
   ImageRun,
   PageMargins,
-  Run,
   SectionBreakBlock,
   TextBoxBlock,
 } from '@eigenpal/docx-core/layout-engine';
@@ -65,7 +64,6 @@ import {
   addRowBelow,
   addColumnRight,
   findStartPosForParaId,
-  headerFooterToProseDoc,
 } from '@eigenpal/docx-core/prosemirror';
 
 // Layout bridge
@@ -97,6 +95,7 @@ import {
   type CaretPosition,
 } from '@eigenpal/docx-core/layout-bridge';
 import { findWordBoundaries } from '@eigenpal/docx-core/utils';
+import { emuToPixels } from '@eigenpal/docx-core/utils';
 
 // Layout painter
 import { LayoutPainter, type BlockLookup } from '@eigenpal/docx-core/layout-painter';
@@ -106,6 +105,7 @@ import {
   type RenderPagesUpdateKind,
   type HeaderFooterContent,
   type FootnoteRenderItem,
+  isFloatingImageRun,
 } from '@eigenpal/docx-core/layout-painter';
 
 // Selection sync
@@ -133,6 +133,9 @@ import {
   mapFootnotesToPages,
   calculateFootnoteReservedHeights,
   buildFootnoteContentMap,
+  convertHeaderFooterToContent,
+  detectTableInsertHover,
+  TABLE_INSERT_HIDE_DELAY_MS as TABLE_INSERT_HIDE_DELAY,
 } from '@eigenpal/docx-core/layout-bridge';
 import type { RenderedDomContext } from '../plugin-api/types';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
@@ -347,11 +350,8 @@ const DEFAULT_MARGINS: PageMargins = {
 
 const DEFAULT_PAGE_GAP = 24;
 
-/** Distance in px from a row/column boundary that triggers the insert button */
-/** Distance in px from the table edge where boundary detection is active */
-const TABLE_INSERT_EDGE_PROXIMITY = 30;
-/** Delay in ms before hiding the insert button when cursor moves away */
-const TABLE_INSERT_HIDE_DELAY = 200;
+// Table-insert hover constants live in core (`@eigenpal/docx-core/layout-
+// bridge`) so React + Vue share the same hit-test parameters.
 
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
@@ -607,33 +607,9 @@ function computePerBlockWidths(
   return widths;
 }
 
-/**
- * Check if an image run is a floating image (should affect text wrapping)
- */
-function isFloatingImageRun(run: ImageRun): boolean {
-  const wrapType = run.wrapType;
-  const displayMode = run.displayMode;
-
-  // Floating images have specific wrap types that allow text to flow around them
-  if (wrapType && ['square', 'tight', 'through'].includes(wrapType)) {
-    return true;
-  }
-
-  // Or explicit float display mode
-  if (displayMode === 'float') {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * EMU to pixels conversion
- */
-function emuToPixels(emu: number | undefined): number {
-  if (emu === undefined) return 0;
-  return Math.round((emu * 96) / 914400);
-}
+// `isFloatingImageRun` and `emuToPixels` are imported from core. Local
+// duplicates were drifting from the canonical implementations; sharing
+// keeps them in lockstep across React + Vue adapters.
 
 function measureTableBlock(tableBlock: TableBlock, contentWidth: number): TableMeasure {
   const DEFAULT_CELL_PADDING_X = 7; // Word default: 108 twips ≈ 7px
@@ -1115,199 +1091,11 @@ function measureBlocks(blocks: FlowBlock[], contentWidth: number | number[]): Me
   });
 }
 
-type HeaderFooterMetrics = {
-  section: 'header' | 'footer';
-  pageSize: { w: number; h: number };
-  margins: PageMargins;
-};
-
-type PositionedAxis = {
-  relativeTo?: string;
-  posOffset?: number;
-  align?: string;
-  alignment?: string;
-};
-
-function getPositionAlignment(axis: PositionedAxis | undefined): string | undefined {
-  return axis?.align ?? axis?.alignment;
-}
-
-function resolveHeaderFooterVisualTop(
-  run: ImageRun,
-  paragraphY: number,
-  flowHeight: number,
-  metrics: HeaderFooterMetrics
-): number {
-  const flowTop =
-    metrics.section === 'header'
-      ? (metrics.margins.header ?? 48)
-      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
-  const vertical = run.position?.vertical;
-
-  if (!vertical) {
-    return paragraphY;
-  }
-
-  const align = getPositionAlignment(vertical);
-  const offsetPx = vertical.posOffset !== undefined ? emuToPixels(vertical.posOffset) : undefined;
-
-  if (vertical.relativeTo === 'page') {
-    if (offsetPx !== undefined) return offsetPx - flowTop;
-    if (align === 'top') return -flowTop;
-    if (align === 'bottom') return metrics.pageSize.h - run.height - flowTop;
-    if (align === 'center') return (metrics.pageSize.h - run.height) / 2 - flowTop;
-  }
-
-  if (vertical.relativeTo === 'margin') {
-    const marginTop = metrics.margins.top;
-    const marginHeight = metrics.pageSize.h - metrics.margins.top - metrics.margins.bottom;
-    if (offsetPx !== undefined) return marginTop + offsetPx - flowTop;
-    if (align === 'top') return marginTop - flowTop;
-    if (align === 'bottom') return marginTop + marginHeight - run.height - flowTop;
-    if (align === 'center') return marginTop + (marginHeight - run.height) / 2 - flowTop;
-  }
-
-  if (offsetPx !== undefined) {
-    return paragraphY + offsetPx;
-  }
-
-  return paragraphY;
-}
-
-function calculateHeaderFooterVisualBounds(
-  blocks: FlowBlock[],
-  measures: Measure[],
-  flowHeight: number,
-  metrics: HeaderFooterMetrics
-): { visualTop: number; visualBottom: number } {
-  let visualTop = 0;
-  let visualBottom = flowHeight;
-  let cursorY = 0;
-
-  for (let i = 0; i < blocks.length; i++) {
-    const block = blocks[i];
-    const measure = measures[i];
-    if (!block || !measure) continue;
-
-    if (block.kind === 'paragraph' && measure.kind === 'paragraph') {
-      const paragraphBlock = block as ParagraphBlock;
-      const paragraphStartY = cursorY;
-      const paragraphBottomY = paragraphStartY + measure.totalHeight;
-      visualTop = Math.min(visualTop, paragraphStartY);
-      visualBottom = Math.max(visualBottom, paragraphBottomY);
-
-      for (const run of paragraphBlock.runs) {
-        if (run.kind !== 'image' || !run.position) continue;
-        const imageRun = run as ImageRun;
-        const runTop = resolveHeaderFooterVisualTop(imageRun, paragraphStartY, flowHeight, metrics);
-        visualTop = Math.min(visualTop, runTop);
-        visualBottom = Math.max(visualBottom, runTop + imageRun.height);
-      }
-
-      cursorY = paragraphBottomY;
-    } else if (block.kind === 'table' && measure.kind === 'table') {
-      const blockBottomY = cursorY + measure.totalHeight;
-      visualTop = Math.min(visualTop, cursorY);
-      visualBottom = Math.max(visualBottom, blockBottomY);
-      cursorY = blockBottomY;
-    } else if (block.kind === 'image' && measure.kind === 'image') {
-      const blockBottomY = cursorY + measure.height;
-      visualTop = Math.min(visualTop, cursorY);
-      visualBottom = Math.max(visualBottom, blockBottomY);
-      cursorY = blockBottomY;
-    } else if (block.kind === 'textBox' && measure.kind === 'textBox') {
-      const blockBottomY = cursorY + measure.height;
-      visualTop = Math.min(visualTop, cursorY);
-      visualBottom = Math.max(visualBottom, blockBottomY);
-      cursorY = blockBottomY;
-    }
-  }
-
-  return { visualTop, visualBottom };
-}
-
-function isAnchoredImageRun(run: Run): boolean {
-  return run.kind === 'image' && !!run.position;
-}
-
-/**
- * Build the measurement copy of HF blocks. Drops anchored/floating images
- * (positioned absolutely, not in flow) so paragraph height excludes them.
- * The render pipeline keeps the original `blocks` with the anchored images.
- *
- * Paragraph spacing is left intact — Word renders header paragraphs with
- * their authored `spaceBefore`/`spaceAfter`, same as body paragraphs.
- */
-function normalizeHeaderFooterMeasureBlocks(blocks: FlowBlock[]): FlowBlock[] {
-  return blocks.map((block) => {
-    if (block.kind !== 'paragraph') return block;
-    if (!block.runs.some(isAnchoredImageRun)) return block;
-
-    let inlineRuns = block.runs.filter((r) => !isAnchoredImageRun(r));
-    if (inlineRuns.length === 0) {
-      // Always build a fresh array — never mutate `block.runs` (shared with
-      // the render-side `blocks`).
-      inlineRuns = [{ kind: 'text' as const, text: '' }];
-    }
-
-    return { ...block, runs: inlineRuns };
-  });
-}
-
-/**
- * Convert HeaderFooter (document type) to HeaderFooterContent (render type).
- *
- * Routes through the same pipeline as the body: HF.content →
- * headerFooterToProseDoc → toFlowBlocks → measureBlocks. The inline editor
- * uses the same conversion chain, so block support (paragraph, table, image,
- * textBox, fields) and the inline editor's content stay in lockstep.
- */
-function convertHeaderFooterToContent(
-  headerFooter: HeaderFooter | null | undefined,
-  contentWidth: number,
-  metrics: HeaderFooterMetrics,
-  options: { styles?: StyleDefinitions | null; theme?: Theme | null }
-): HeaderFooterContent | undefined {
-  if (!headerFooter || !headerFooter.content || headerFooter.content.length === 0) {
-    return undefined;
-  }
-
-  const pmDoc = headerFooterToProseDoc(headerFooter.content, {
-    styles: options.styles ?? undefined,
-    theme: options.theme ?? null,
-  });
-  const blocks = toFlowBlocks(pmDoc, { theme: options.theme ?? undefined });
-  if (blocks.length === 0) return undefined;
-
-  // Render uses `blocks` (with floating images and original spacing).
-  // Measurement uses a normalized copy that strips floating images (positioned
-  // absolutely, not in flow) and spaceBefore/spaceAfter (renderer zeroes
-  // inter-paragraph margins). Keeping them separate preserves the data the
-  // renderer needs while making the measure match what the user sees.
-  const blocksForMeasure = normalizeHeaderFooterMeasureBlocks(blocks);
-  const measures = measureBlocks(blocksForMeasure, contentWidth);
-  const totalHeight = measures.reduce((h, m) => {
-    if (m.kind === 'paragraph') return h + m.totalHeight;
-    if (m.kind === 'table') return h + m.totalHeight;
-    if (m.kind === 'image') return h + m.height;
-    if (m.kind === 'textBox') return h + m.height;
-    return h;
-  }, 0);
-  const { visualTop, visualBottom } = calculateHeaderFooterVisualBounds(
-    blocks,
-    measures,
-    totalHeight,
-    metrics
-  );
-
-  return {
-    blocks,
-    measures,
-    height: totalHeight,
-    visualTop,
-    visualBottom,
-  };
-}
+// HF metrics, visual-bounds helpers, normalizeHeaderFooterMeasureBlocks,
+// and convertHeaderFooterToContent live in
+// `@eigenpal/docx-core/layout-bridge` (headerFooterLayout.ts). This adapter
+// just hands its `measureBlocks` callback into the core helper so the core
+// pipeline runs without dragging in Canvas/font-metric dependencies.
 
 // =============================================================================
 // FOOTNOTE HELPERS
@@ -1672,7 +1460,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           // to compute effective margins when header content exceeds available space)
           const hfMetricsHeader = { section: 'header' as const, pageSize, margins };
           const hfMetricsFooter = { section: 'footer' as const, pageSize, margins };
-          const hfOptions = { styles, theme: _theme };
+          const hfOptions = { styles, theme: _theme, measureBlocks };
           const headerContentForRender = convertHeaderFooterToContent(
             headerContent,
             contentWidth,
@@ -3427,49 +3215,25 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         const pagesEl = pagesContainerRef.current;
         if (!pagesEl) return;
 
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
+        const hit = detectTableInsertHover({
+          mouseX: e.clientX,
+          mouseY: e.clientY,
+          pagesContainer: pagesEl,
+          target: e.target as HTMLElement,
+          hfEditMode: hfEditMode ?? null,
+        });
 
-        // Find the table — either directly under the cursor or nearby (for edge hover)
-        let tableEl = (e.target as HTMLElement).closest('.layout-table') as HTMLElement | null;
-        if (!tableEl) {
-          // Mouse may be in the margin area near a table — check all tables
-          const tables = pagesEl.querySelectorAll('.layout-table');
-          for (const t of Array.from(tables)) {
-            const r = t.getBoundingClientRect();
-            const nearLeft = mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX < r.left;
-            const nearTop = mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY < r.top;
-            const withinX = mouseX >= r.left - TABLE_INSERT_EDGE_PROXIMITY && mouseX <= r.right;
-            const withinY = mouseY >= r.top - TABLE_INSERT_EDGE_PROXIMITY && mouseY <= r.bottom;
-            if ((nearLeft && withinY) || (nearTop && withinX)) {
-              tableEl = t as HTMLElement;
-              break;
-            }
+        if (!hit) {
+          // Schedule a delayed hide so brief moves between cells don't flicker
+          // the button. The hit-test returns null for both "no nearby table"
+          // and "near table but not over a row/column"; both want the same
+          // delayed-hide UX.
+          if (!tableInsertHideTimerRef.current) {
+            tableInsertHideTimerRef.current = setTimeout(() => {
+              setTableInsertButton(null);
+              tableInsertHideTimerRef.current = null;
+            }, TABLE_INSERT_HIDE_DELAY);
           }
-        }
-
-        if (!tableEl) {
-          setTableInsertButton(null);
-          return;
-        }
-
-        const tableRect = tableEl.getBoundingClientRect();
-
-        const nearLeftEdge =
-          mouseX < tableRect.left + TABLE_INSERT_EDGE_PROXIMITY &&
-          mouseX >= tableRect.left - TABLE_INSERT_EDGE_PROXIMITY;
-        const nearTopEdge =
-          mouseY < tableRect.top + TABLE_INSERT_EDGE_PROXIMITY &&
-          mouseY >= tableRect.top - TABLE_INSERT_EDGE_PROXIMITY;
-
-        if (!nearLeftEdge && !nearTopEdge) {
-          setTableInsertButton(null);
-          return;
-        }
-
-        const rows = tableEl.querySelectorAll(':scope > .layout-table-row');
-        if (rows.length === 0) {
-          setTableInsertButton(null);
           return;
         }
 
@@ -3477,61 +3241,15 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
         if (!viewportEl) return;
         const viewportRect = viewportEl.getBoundingClientRect();
 
-        /** Extract PM position from a cell element */
-        const getCellPmPos = (el: HTMLElement | null): number =>
-          el ? Number(el.dataset.pmStart) || 0 : 0;
-
-        // Show button centered on the hovered row (left edge hover)
-        if (nearLeftEdge) {
-          for (let i = 0; i < rows.length; i++) {
-            const rowRect = rows[i].getBoundingClientRect();
-            if (mouseY >= rowRect.top && mouseY <= rowRect.bottom) {
-              const cell = rows[i].querySelector('.layout-table-cell') as HTMLElement | null;
-              const pmPos = getCellPmPos(cell);
-              if (!pmPos) break;
-              const rowCenterY = rowRect.top + rowRect.height / 2;
-              setTableInsertButton({
-                type: 'row',
-                x: tableRect.left - viewportRect.left - 24,
-                y: rowCenterY - viewportRect.top - 10,
-                cellPmPos: pmPos,
-              });
-              clearTableInsertTimer();
-              return;
-            }
-          }
-        }
-
-        // Show button centered on the hovered column (top edge hover)
-        if (nearTopEdge) {
-          const cells = rows[0].querySelectorAll(':scope > .layout-table-cell');
-          for (let i = 0; i < cells.length; i++) {
-            const cellRect = cells[i].getBoundingClientRect();
-            if (mouseX >= cellRect.left && mouseX <= cellRect.right) {
-              const pmPos = getCellPmPos(cells[i] as HTMLElement);
-              if (!pmPos) break;
-              const cellCenterX = cellRect.left + cellRect.width / 2;
-              setTableInsertButton({
-                type: 'column',
-                x: cellCenterX - viewportRect.left - 10,
-                y: tableRect.top - viewportRect.top - 24,
-                cellPmPos: pmPos,
-              });
-              clearTableInsertTimer();
-              return;
-            }
-          }
-        }
-
-        // Not over any row/column — schedule hide with a small delay
-        if (!tableInsertHideTimerRef.current) {
-          tableInsertHideTimerRef.current = setTimeout(() => {
-            setTableInsertButton(null);
-            tableInsertHideTimerRef.current = null;
-          }, TABLE_INSERT_HIDE_DELAY);
-        }
+        setTableInsertButton({
+          type: hit.type,
+          x: hit.clientX - viewportRect.left,
+          y: hit.clientY - viewportRect.top,
+          cellPmPos: hit.cellPmPos,
+        });
+        clearTableInsertTimer();
       },
-      [readOnly, clearTableInsertTimer]
+      [readOnly, clearTableInsertTimer, hfEditMode]
     );
 
     /**

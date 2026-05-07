@@ -388,6 +388,29 @@ export function measureParagraph(
 
   // Handle empty paragraph
   if (runs.length === 0) {
+    // OOXML's "trailing empty paragraph after a table" pattern (canonical
+    // for HF and body) renders as a zero-height anchor in Word. When the
+    // caller flags `suppressEmptyParagraphHeight`, return a zero-height
+    // measure so the block exists for click-to-position but doesn't
+    // inflate container height (#381).
+    if (attrs?.suppressEmptyParagraphHeight) {
+      lines.push({
+        fromRun: 0,
+        fromChar: 0,
+        toRun: 0,
+        toChar: 0,
+        width: 0,
+        ascent: 0,
+        descent: 0,
+        lineHeight: 0,
+      });
+      return {
+        kind: 'paragraph',
+        lines,
+        totalHeight: 0,
+      };
+    }
+
     const emptyFontSize = attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
     const emptyFontFamily = attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
     const emptyMetrics = calculateEmptyParagraphMetrics(emptyFontSize, spacing, emptyFontFamily);
@@ -400,10 +423,19 @@ export function measureParagraph(
       ...emptyMetrics,
     });
 
+    // Word renders spacing.before / spacing.after for empty paragraphs the
+    // same as non-empty (§17.3.1.33). The non-empty branch below adds them
+    // to totalHeight; do the same here so empty paragraphs don't collapse
+    // their authored spacing (e.g. an HF horizontal-rule paragraph with
+    // <w:spacing w:before="120">).
+    let emptyTotal = emptyMetrics.lineHeight;
+    if (spacing?.before) emptyTotal += spacing.before;
+    if (spacing?.after) emptyTotal += spacing.after;
+
     return {
       kind: 'paragraph',
       lines,
-      totalHeight: emptyMetrics.lineHeight,
+      totalHeight: emptyTotal,
     };
   }
 

@@ -118,6 +118,15 @@ export interface RenderContext {
   insideTableCell?: boolean;
   /** Comment IDs that are resolved — skip highlight for these */
   resolvedCommentIds?: Set<number>;
+  /**
+   * How the renderer should position its outer element. The body lays
+   * fragments at absolute (x, y) on the page (`'absolute'`, the default),
+   * while headers/footers and text boxes flow blocks vertically and let
+   * normal document flow handle placement (`'flow'`). The caller passes
+   * 'flow' instead of overwriting the renderer's inline styles after the
+   * fact (#379).
+   */
+  positioning?: 'absolute' | 'flow';
 }
 
 /**
@@ -192,7 +201,7 @@ export interface RenderPageOptions {
   resolvedCommentIds?: Set<number>;
 }
 
-interface HeaderFooterLayoutInfo {
+export interface HeaderFooterLayoutInfo {
   flowTop: number;
   flowLeft: number;
   contentWidth: number;
@@ -384,6 +393,45 @@ function applyHeaderFooterFloatHorizontalPosition(
   }
 
   img.style.left = '0';
+}
+
+/**
+ * Resolve the (left, top) position for a floating table inside a header/
+ * footer container, per ECMA-376 §17.4.57. The table's `floating.tblpX/tblpY`
+ * are already in pixels (parser converted from twips); `horzAnchor`/
+ * `vertAnchor` decide whether the offset is relative to the page, the
+ * margins, or the surrounding text/column. Coordinates returned are
+ * relative to the HF container's flow origin (`layout.flowTop` /
+ * `layout.flowLeft`) so the caller can drop them straight into
+ * `style.top` / `style.left`.
+ */
+export function resolveHeaderFooterFloatingTablePosition(
+  floating: NonNullable<TableBlock['floating']>,
+  layout: HeaderFooterLayoutInfo
+): { left: number; top: number } {
+  // Vertical: tblpY relative to vertAnchor.
+  let top = floating.tblpY ?? 0;
+  if (floating.vertAnchor === 'page') {
+    top -= layout.flowTop;
+  } else if (floating.vertAnchor === 'margin') {
+    top += layout.margins.top - layout.flowTop;
+  }
+  // 'text' anchor (or unspecified) means offset from the surrounding
+  // paragraph — for HF that's the flow cursor, but tblpY for floating
+  // tables is typically authored relative to the page or margin. Treat
+  // an unspecified anchor as 'text' but with zero offset → leaves top
+  // at tblpY relative to container origin, which matches Word's
+  // observed behavior for HF floating tables.
+
+  // Horizontal: tblpX relative to horzAnchor.
+  let left = floating.tblpX ?? 0;
+  if (floating.horzAnchor === 'page') {
+    left -= layout.flowLeft;
+  } else if (floating.horzAnchor === 'margin') {
+    left += layout.margins.left - layout.flowLeft;
+  }
+
+  return { left, top };
 }
 
 /**
@@ -748,20 +796,20 @@ function renderHeaderFooterContent(
         toLine: paragraphMeasure.lines.length,
       };
 
-      // Render paragraph fragment (with floating images filtered out)
+      // Render paragraph fragment (with floating images filtered out). The
+      // HF context positions blocks absolutely within its own container,
+      // stacking vertically via `cursorY` — `paragraphMeasure.totalHeight`
+      // already includes `spaceBefore` / `spaceAfter`. Pass `positioning:
+      // 'absolute'` so the renderer applies that mode itself instead of the
+      // caller having to flip its inline style after the fact (#379).
       const fragEl = renderParagraphFragment(
         syntheticFragment,
         inlineBlock,
         paragraphMeasure,
-        context,
+        { ...context, positioning: 'absolute' },
         { document: doc }
       );
 
-      // Position absolutely within the HF container using cursorY. This
-      // matches how the body positions fragments so the rendered placement
-      // tracks `paragraphMeasure.totalHeight` (which includes spaceBefore/
-      // spaceAfter from spacing). See #379 for the proper render-context fix.
-      fragEl.style.position = 'absolute';
       fragEl.style.top = `${cursorY}px`;
       fragEl.style.left = '0';
       fragEl.style.width = `${contentWidth}px`;
@@ -782,15 +830,33 @@ function renderHeaderFooterContent(
         pmStart: block.pmStart,
         pmEnd: block.pmEnd,
       };
-      const fragEl = renderTableFragment(syntheticFragment, block, measure, context, {
-        document: doc,
-      });
-      // renderTableFragment positions itself absolutely inside the page area;
-      // we override to position absolutely inside the HF container at cursorY.
-      fragEl.style.top = `${cursorY}px`;
-      fragEl.style.left = '0';
-      containerEl.appendChild(fragEl);
-      cursorY += measure.totalHeight;
+      const fragEl = renderTableFragment(
+        syntheticFragment,
+        block,
+        measure,
+        { ...context, positioning: 'absolute' },
+        { document: doc }
+      );
+
+      // Floating tables (`<w:tblpPr>`) opt out of the cursorY flow. They
+      // anchor at (tblpX, tblpY) relative to the page/margin/column per
+      // ECMA-376 §17.4.57 and don't advance cursorY (#382). Inline tables
+      // keep their cursorY-based stacking.
+      if (block.floating) {
+        const { left, top } = resolveHeaderFooterFloatingTablePosition(block.floating, layout);
+        fragEl.style.top = `${top}px`;
+        fragEl.style.left = `${left}px`;
+        containerEl.appendChild(fragEl);
+        // Floating tables do NOT advance cursorY — surrounding HF blocks
+        // flow as if the table weren't there. Word renders text behind
+        // floating tables when no wrap behavior is requested; we match.
+      } else {
+        // Inline placement: top/left stack within the HF container at cursorY.
+        fragEl.style.top = `${cursorY}px`;
+        fragEl.style.left = '0';
+        containerEl.appendChild(fragEl);
+        cursorY += measure.totalHeight;
+      }
     }
   }
 

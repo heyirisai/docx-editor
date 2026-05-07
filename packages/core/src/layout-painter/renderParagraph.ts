@@ -944,7 +944,14 @@ export function renderParagraphFragment(
 
   const fragmentEl = doc.createElement('div');
   fragmentEl.className = PARAGRAPH_CLASS_NAMES.fragment;
-  fragmentEl.style.position = 'relative'; // For absolute positioning of floating images
+  // Outer positioning honors the render context. Body's per-page layout
+  // overrides this anyway via applyFragmentStyles (legacy default), but
+  // HF callers explicitly pass `positioning: 'absolute'` and textbox
+  // callers pass `positioning: 'flow'` — keeps the choice in the
+  // RenderContext rather than scattered post-render style flips (#379).
+  // 'flow' / unspecified default to relative because the element must
+  // be a containing block for absolutely positioned floating images.
+  fragmentEl.style.position = context.positioning === 'absolute' ? 'absolute' : 'relative';
 
   // Store block and fragment metadata
   fragmentEl.dataset.blockId = String(fragment.blockId);

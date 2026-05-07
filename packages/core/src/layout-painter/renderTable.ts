@@ -706,8 +706,12 @@ export function renderTableFragment(
   const tableEl = doc.createElement('div');
   tableEl.className = TABLE_CLASS_NAMES.table;
 
-  // Basic table styling
-  tableEl.style.position = 'absolute';
+  // Outer positioning: body's per-page layout uses `absolute` (caller sets
+  // x/y via applyFragmentStyles); HF / textbox flow blocks vertically and
+  // pass `positioning: 'flow'` so the table participates in normal document
+  // flow instead. Pre-PR (#379) those callers had to overwrite the inline
+  // style after the renderer call.
+  tableEl.style.position = context.positioning === 'flow' ? 'relative' : 'absolute';
   tableEl.style.width = `${fragment.width}px`;
   tableEl.style.height = `${fragment.height}px`;
   tableEl.style.overflow = 'hidden';

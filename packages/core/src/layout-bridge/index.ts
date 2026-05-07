@@ -85,6 +85,25 @@ export {
 } from './footnoteLayout';
 export type { MeasureBlocksFn, ConvertFootnoteOptions } from './footnoteLayout';
 
+// Header / footer layout helpers — same pattern as footnote: full pipeline
+// (normalization + conversion) lives in core, with adapter-supplied
+// `measureBlocks` so the helper stays Canvas-free.
+export {
+  normalizeHeaderFooterMeasureBlocks,
+  resolveHeaderFooterVisualTop,
+  calculateHeaderFooterVisualBounds,
+  convertHeaderFooterToContent,
+} from './headerFooterLayout';
+export type { HeaderFooterMetrics, ConvertHeaderFooterOptions } from './headerFooterLayout';
+
+// Table-insert hover hit-test — pure DOM logic shared across adapters.
+export {
+  detectTableInsertHover,
+  TABLE_INSERT_EDGE_PROXIMITY,
+  TABLE_INSERT_HIDE_DELAY_MS,
+} from './tableInsertHover';
+export type { TableInsertHoverHit, TableInsertHoverInput } from './tableInsertHover';
+
 // Body-scoped PM-position DOM lookups. Centralizes the `.layout-page-content`
 // prefix so call sites can't accidentally match HF runs whose PM positions
 // collide with body positions (HF parses to a separate PM document).

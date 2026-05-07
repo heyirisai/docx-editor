@@ -100,14 +100,19 @@ export function renderTextBoxFragment(
       toLine: paraMeasure.lines.length,
     };
 
-    const paraEl = renderParagraphFragment(paraFragment, paraBlock, paraMeasure, context, {
-      document: doc,
-    });
-
-    // Override absolute positioning to use relative flow within the text box
-    paraEl.style.position = 'relative';
-    paraEl.style.left = '0';
-    paraEl.style.top = '0';
+    // Pass `positioning: 'flow'` so the renderer's outer position is
+    // explicit. `renderParagraphFragment` already defaults to `position:
+    // relative` (it needs to be a containing block for floating images),
+    // so passing 'flow' here is documentation more than behavior change —
+    // pre-PR the textbox caller re-set the same `position: relative; top:
+    // 0; left: 0` after the renderer call (#379).
+    const paraEl = renderParagraphFragment(
+      paraFragment,
+      paraBlock,
+      paraMeasure,
+      { ...context, positioning: 'flow' },
+      { document: doc }
+    );
 
     containerEl.appendChild(paraEl);
     yOffset += paraMeasure.totalHeight;

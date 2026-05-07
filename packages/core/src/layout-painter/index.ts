@@ -31,6 +31,7 @@ import type {
 import {
   renderPage,
   renderPages,
+  isFloatingImageRun,
   type RenderContext,
   type RenderPagesUpdateKind,
 } from './renderPage';
@@ -55,6 +56,7 @@ export {
   IMAGE_CLASS_NAMES,
   renderTextBoxFragment,
   TEXTBOX_CLASS_NAMES,
+  isFloatingImageRun,
   type RenderContext,
 };
 export type { RenderPagesUpdateKind };
