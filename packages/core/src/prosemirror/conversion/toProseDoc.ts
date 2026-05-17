@@ -48,6 +48,7 @@ import type { TableAttrs, TableRowAttrs, TableCellAttrs } from '../schema/nodes'
 import { resolveColorToHex } from '../../utils/colorResolver';
 import { mergeTextFormatting } from '../../utils/textFormattingMerge';
 import type { Theme } from '../../types/document';
+import { isAnchoredDocxTextBox, textBoxAnchorAttrsFromDocx } from './textBoxAnchors';
 
 /**
  * Options for document conversion
@@ -1742,13 +1743,38 @@ function convertParagraphWithTextBoxes(
   const pmParagraph = convertParagraph(block, styleResolver);
   const nodes: PMNode[] = [];
   const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
+  const { anchored, inFlow } = partitionTextBoxesByAnchor(textBoxes);
+
+  for (const tb of anchored) {
+    nodes.push(convertTextBox(tb, styleResolver));
+  }
+
   if (!isEmptyAfterExtraction) {
     nodes.push(pmParagraph);
   }
-  for (const tb of textBoxes) {
+
+  for (const tb of inFlow) {
     nodes.push(convertTextBox(tb, styleResolver));
   }
   return nodes;
+}
+
+function partitionTextBoxesByAnchor(textBoxes: TextBox[]): {
+  anchored: TextBox[];
+  inFlow: TextBox[];
+} {
+  const anchored: TextBox[] = [];
+  const inFlow: TextBox[] = [];
+
+  for (const textBox of textBoxes) {
+    if (isAnchoredDocxTextBox(textBox)) {
+      anchored.push(textBox);
+    } else {
+      inFlow.push(textBox);
+    }
+  }
+
+  return { anchored, inFlow };
 }
 
 /**
@@ -1840,6 +1866,7 @@ function convertTextBox(textBox: TextBox, styleResolver: StyleResolver | null): 
       marginBottom,
       marginLeft,
       marginRight,
+      ...textBoxAnchorAttrsFromDocx(textBox),
     },
     contentNodes
   );

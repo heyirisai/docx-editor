@@ -31,11 +31,10 @@ import type {
 import {
   renderPage,
   renderPages,
-  isFloatingImageRun,
-  isTextWrappingFloatingImageRun,
   type RenderContext,
   type RenderPagesUpdateKind,
 } from './renderPage';
+import { isFloatingImageRun, isTextWrappingFloatingImageRun } from './floatingImageFlow';
 import { renderParagraphFragment, sliceRunsForLine, renderLine } from './renderParagraph';
 import { renderFragment, FRAGMENT_CLASS_NAMES } from './renderFragment';
 import { renderTableFragment, TABLE_CLASS_NAMES } from './renderTable';

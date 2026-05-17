@@ -37,6 +37,7 @@ import {
   getMidChainIndices,
   hasPageBreakBefore,
 } from './keep-together';
+import { isFloatingTextBoxBlock } from './textBoxFlow';
 
 // Default page size (US Letter in pixels at 96 DPI)
 const DEFAULT_PAGE_SIZE = { w: 816, h: 1056 };
@@ -756,6 +757,24 @@ function layoutTextBox(
 ): void {
   if (measure.kind !== 'textBox') {
     throw new Error(`layoutTextBox: expected textBox measure`);
+  }
+
+  if (isFloatingTextBoxBlock(block)) {
+    const state = paginator.getCurrentState();
+    const fragment: TextBoxFragment = {
+      kind: 'textBox',
+      blockId: block.id,
+      x: paginator.getColumnX(state.columnIndex),
+      y: state.cursorY,
+      width: measure.width,
+      height: measure.height,
+      pmStart: block.pmStart,
+      pmEnd: block.pmEnd,
+      isFloating: true,
+      zIndex: block.wrapType === 'behind' ? -1 : 1,
+    };
+    state.page.fragments.push(fragment);
+    return;
   }
 
   const state = paginator.ensureFits(measure.height);

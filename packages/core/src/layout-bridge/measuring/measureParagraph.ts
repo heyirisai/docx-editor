@@ -9,6 +9,7 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
   MeasuredLine,
+  MeasuredLineSegment,
   Run,
   TextRun,
   TabRun,
@@ -17,6 +18,13 @@ import type {
   FieldRun,
   ParagraphSpacing,
 } from '../../layout-engine/types';
+import {
+  getFloatingAvailableWidth,
+  getFloatingMargins,
+  type FloatingImageZone,
+  type FloatingLineSegmentZone,
+} from './floatingZones';
+import { wrapsAroundText } from '../../docx/wrapTypes';
 
 import {
   measureTextWidth,
@@ -87,20 +95,7 @@ function findMaxFittingLength(
   return forceMin && best === 0 ? 1 : best;
 }
 
-/**
- * Floating image exclusion zone - describes an area where text cannot flow.
- * Used to calculate reduced line widths for text wrapping around floating images.
- */
-export interface FloatingImageZone {
-  /** Left margin reduction (pixels from left edge) */
-  leftMargin: number;
-  /** Right margin reduction (pixels from right edge) */
-  rightMargin: number;
-  /** Top Y coordinate of the exclusion zone (pixels from paragraph start) */
-  topY: number;
-  /** Bottom Y coordinate of the exclusion zone (pixels from paragraph start) */
-  bottomY: number;
-}
+export type { FloatingImageZone } from './floatingZones';
 
 /**
  * Options for paragraph measurement
@@ -139,6 +134,8 @@ interface LineState {
   leftOffset: number;
   /** Right offset from floating images (pixels from content right edge) */
   rightOffset: number;
+  /** Optional split segment zones from centered floating exclusions */
+  segmentZones?: FloatingLineSegmentZone[];
 }
 
 /**
@@ -303,38 +300,6 @@ function findWordBreaks(text: string): number[] {
 const DEFAULT_TAB_WIDTH = 48;
 
 /**
- * Calculate width reduction for a line based on floating image zones.
- * Returns the left and right margins that need to be applied.
- */
-function getFloatingMargins(
-  lineY: number,
-  lineHeight: number,
-  zones: FloatingImageZone[] | undefined,
-  paragraphYOffset: number
-): { leftMargin: number; rightMargin: number } {
-  if (!zones || zones.length === 0) {
-    return { leftMargin: 0, rightMargin: 0 };
-  }
-
-  let leftMargin = 0;
-  let rightMargin = 0;
-
-  // Line position relative to exclusion zones
-  const absoluteLineTop = paragraphYOffset + lineY;
-  const absoluteLineBottom = absoluteLineTop + lineHeight;
-
-  for (const zone of zones) {
-    // Check if this line overlaps vertically with the exclusion zone
-    if (absoluteLineBottom > zone.topY && absoluteLineTop < zone.bottomY) {
-      leftMargin = Math.max(leftMargin, zone.leftMargin);
-      rightMargin = Math.max(rightMargin, zone.rightMargin);
-    }
-  }
-
-  return { leftMargin, rightMargin };
-}
-
-/**
  * Measure a paragraph block and compute line breaks
  *
  * @param block - The paragraph block to measure
@@ -381,7 +346,7 @@ export function measureParagraph(
   );
   const firstLineWidth = Math.max(
     1,
-    baseFirstLineWidth - firstLineFloatingMargins.leftMargin - firstLineFloatingMargins.rightMargin
+    getFloatingAvailableWidth(firstLineFloatingMargins, baseFirstLineWidth)
   );
 
   const lines: MeasuredLine[] = [];
@@ -479,6 +444,7 @@ export function measureParagraph(
     availableWidth: firstLineWidth,
     leftOffset: firstLineFloatingMargins.leftMargin,
     rightOffset: firstLineFloatingMargins.rightMargin,
+    segmentZones: firstLineFloatingMargins.segments,
   };
 
   /**
@@ -528,11 +494,71 @@ export function measureParagraph(
     if (currentLine.rightOffset > 0) {
       line.rightOffset = currentLine.rightOffset;
     }
+    if (currentLine.segmentZones?.length) {
+      line.segments = createLineSegments(line, currentLine.segmentZones);
+    }
 
     lines.push(line);
 
     // Update cumulative height for next line's floating zone calculation
     cumulativeHeight += typography.lineHeight;
+  };
+
+  const createLineSegments = (
+    line: MeasuredLine,
+    segmentZones: FloatingLineSegmentZone[]
+  ): MeasuredLineSegment[] | undefined => {
+    const firstZone = segmentZones[0];
+    const secondZone = segmentZones[1];
+    if (!firstZone) return undefined;
+    if (!secondZone || line.width <= firstZone.availableWidth + WIDTH_TOLERANCE) {
+      return [
+        {
+          fromRun: line.fromRun,
+          fromChar: line.fromChar,
+          toRun: line.toRun,
+          toChar: line.toChar,
+          width: line.width,
+          leftOffset: firstZone.leftOffset,
+          availableWidth: firstZone.availableWidth,
+        },
+      ];
+    }
+
+    if (line.fromRun !== line.toRun) return undefined;
+    const run = runs[line.fromRun];
+    if (!run || !isTextRun(run)) return undefined;
+
+    const textRun = run as TextRun;
+    const text = textRun.text.slice(line.fromChar, line.toChar);
+    const style = runToFontStyle(textRun);
+    const firstLength = findMaxFittingLength(text, style, firstZone.availableWidth);
+    if (firstLength <= 0 || firstLength >= text.length) return undefined;
+
+    const splitChar = line.fromChar + firstLength;
+    const firstText = text.slice(0, firstLength);
+    const secondText = text.slice(firstLength);
+
+    return [
+      {
+        fromRun: line.fromRun,
+        fromChar: line.fromChar,
+        toRun: line.toRun,
+        toChar: splitChar,
+        width: measureTextWidth(firstText, style),
+        leftOffset: firstZone.leftOffset,
+        availableWidth: firstZone.availableWidth,
+      },
+      {
+        fromRun: line.fromRun,
+        fromChar: splitChar,
+        toRun: line.toRun,
+        toChar: line.toChar,
+        width: measureTextWidth(secondText, style),
+        leftOffset: secondZone.leftOffset,
+        availableWidth: secondZone.availableWidth,
+      },
+    ];
   };
 
   /**
@@ -552,10 +578,7 @@ export function measureParagraph(
     );
 
     // Body content width minus floating image margins
-    const adjustedWidth = Math.max(
-      1,
-      bodyContentWidth - floatingMargins.leftMargin - floatingMargins.rightMargin
-    );
+    const adjustedWidth = Math.max(1, getFloatingAvailableWidth(floatingMargins, bodyContentWidth));
 
     currentLine = {
       fromRun: runIndex,
@@ -569,6 +592,7 @@ export function measureParagraph(
       availableWidth: adjustedWidth,
       leftOffset: floatingMargins.leftMargin,
       rightOffset: floatingMargins.rightMargin,
+      segmentZones: floatingMargins.segments,
     };
   };
 
@@ -622,9 +646,7 @@ export function measureParagraph(
 
     if (isImageRun(run)) {
       const wrapType = run.wrapType;
-      const isFloating =
-        run.displayMode === 'float' ||
-        (wrapType && ['square', 'tight', 'through'].includes(wrapType));
+      const isFloating = run.displayMode === 'float' || wrapsAroundText(wrapType);
 
       // Skip truly floating images - they don't contribute to line height
       // (they are positioned absolutely and text wraps around them)

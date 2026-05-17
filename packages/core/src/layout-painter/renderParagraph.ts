@@ -21,7 +21,8 @@ import type {
   FieldRun,
   TabStop,
 } from '../layout-engine/types';
-import { isFloatingImageRun, type RenderContext } from './renderPage';
+import type { RenderContext } from './renderPage';
+import { isFloatingImageRun } from './floatingImageFlow';
 import { applyImageVisualAttrs, hasImageVisualAttrs } from './renderImage';
 import {
   calculateTabWidth,
@@ -1273,7 +1274,6 @@ export function renderParagraphFragment(
   }
 
   // Render each line with per-line floating margin calculation
-  let cumulativeLineY = 0; // Track Y position within the fragment
   const renderedInlineImageKeys = options.renderedInlineImageKeys ?? new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
@@ -1300,6 +1300,48 @@ export function renderParagraphFragment(
       } else if (hasFirstLineIndent && indent?.firstLine) {
         lineAvailableWidth = availableWidth - indent.firstLine;
       }
+    }
+
+    if (canRenderSplitLineAroundFloatingObject(line, block)) {
+      const splitLineEl = doc.createElement('div');
+      splitLineEl.className = `${PARAGRAPH_CLASS_NAMES.line} layout-line-split`;
+      splitLineEl.style.position = 'relative';
+      splitLineEl.style.height = `${line.lineHeight}px`;
+      splitLineEl.style.lineHeight = `${line.lineHeight}px`;
+
+      for (const segment of line.segments) {
+        const segmentLine: MeasuredLine = {
+          fromRun: segment.fromRun,
+          fromChar: segment.fromChar,
+          toRun: segment.toRun,
+          toChar: segment.toChar,
+          width: segment.width,
+          ascent: line.ascent,
+          descent: line.descent,
+          lineHeight: line.lineHeight,
+        };
+        const segmentEl = renderLine(block, segmentLine, alignment, doc, {
+          availableWidth: segment.availableWidth,
+          isLastLine,
+          isFirstLine,
+          paragraphEndsWithLineBreak,
+          tabStops: block.attrs?.tabs,
+          leftIndentPx: indentLeft,
+          firstLineIndentPx: isFirstLine ? firstLineIndentPx : 0,
+          context,
+          floatingMargins: { leftMargin: 0, rightMargin: 0 },
+          renderedInlineImageKeys,
+        });
+        segmentEl.className += ' layout-line-segment';
+        segmentEl.style.position = 'absolute';
+        segmentEl.style.left = `${segment.leftOffset}px`;
+        segmentEl.style.top = '0';
+        segmentEl.style.width = `${segment.availableWidth}px`;
+        splitLineEl.appendChild(segmentEl);
+      }
+
+      fragmentEl.appendChild(splitLineEl);
+      continue;
     }
 
     const lineEl = renderLine(block, line, alignment, doc, {
@@ -1330,9 +1372,6 @@ export function renderParagraphFragment(
         lineEl.style.width = `${constrainedWidth}px`;
       }
     }
-
-    // Update cumulative Y for next line
-    cumulativeLineY += line.lineHeight;
 
     // Apply line-level indentation
     // Indentation is applied per-line for correct text wrapping
@@ -1432,6 +1471,13 @@ export function renderParagraphFragment(
   }
 
   return fragmentEl;
+}
+
+function canRenderSplitLineAroundFloatingObject(
+  line: MeasuredLine,
+  block: ParagraphBlock
+): line is MeasuredLine & { segments: NonNullable<MeasuredLine['segments']> } {
+  return (line.segments?.length ?? 0) > 1 && !block.attrs?.listMarker;
 }
 
 /**

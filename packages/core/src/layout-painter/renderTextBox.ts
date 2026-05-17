@@ -52,6 +52,7 @@ export function renderTextBoxFragment(
   containerEl.style.height = `${fragment.height}px`;
   containerEl.style.overflow = 'hidden';
   containerEl.style.boxSizing = 'border-box';
+  applyTextBoxStacking(containerEl, fragment);
 
   // Fill color
   if (block.fillColor) {
@@ -119,4 +120,9 @@ export function renderTextBoxFragment(
   }
 
   return containerEl;
+}
+
+function applyTextBoxStacking(element: HTMLElement, fragment: TextBoxFragment): void {
+  if (!fragment.isFloating && fragment.zIndex === undefined) return;
+  element.style.zIndex = String(fragment.zIndex ?? 10);
 }

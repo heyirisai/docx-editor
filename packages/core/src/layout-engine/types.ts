@@ -145,6 +145,8 @@ export type ImageRunPosition = {
   };
 };
 
+export type WrapTextDirection = 'bothSides' | 'left' | 'right' | 'largest';
+
 /**
  * An inline image run.
  */
@@ -506,6 +508,23 @@ export type TextBoxBlock = {
   margins?: { top: number; bottom: number; left: number; right: number };
   /** Paragraph blocks inside the text box */
   content: ParagraphBlock[];
+  /** Display mode copied from the ProseMirror text box node */
+  displayMode?: 'inline' | 'float' | 'block';
+  /** CSS float direction copied from the ProseMirror text box node */
+  cssFloat?: 'left' | 'right' | 'none';
+  /** OOXML wrap type for anchored text boxes */
+  wrapType?: string;
+  /** OOXML wrapText direction */
+  wrapText?: WrapTextDirection;
+  /** Anchor target used during DOCX import/export */
+  anchorTarget?: 'followingBlock';
+  /** Position for floating/anchored text boxes */
+  position?: ImageRunPosition;
+  /** Wrap distances in pixels */
+  distTop?: number;
+  distBottom?: number;
+  distLeft?: number;
+  distRight?: number;
   pmStart?: number;
   pmEnd?: number;
 };
@@ -550,6 +569,18 @@ export type MeasuredLine = {
   leftOffset?: number;
   /** Right offset from floating images (pixels from content right edge). */
   rightOffset?: number;
+  /** Optional split segments for centered floating exclusions. */
+  segments?: MeasuredLineSegment[];
+};
+
+export type MeasuredLineSegment = {
+  fromRun: number;
+  fromChar: number;
+  toRun: number;
+  toChar: number;
+  width: number;
+  leftOffset: number;
+  availableWidth: number;
 };
 
 /**
@@ -726,6 +757,10 @@ export type TextBoxFragment = FragmentBase & {
   kind: 'textBox';
   /** Height of the text box. */
   height: number;
+  /** True when positioned outside normal document flow. */
+  isFloating?: boolean;
+  /** Stack order hint for anchored text boxes. */
+  zIndex?: number;
 };
 
 /**

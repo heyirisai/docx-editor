@@ -39,6 +39,20 @@ export interface TextBoxAttrs {
   cssFloat?: 'left' | 'right' | 'none';
   /** Wrap type */
   wrapType?: string;
+  /** OOXML wrapText direction for anchored text boxes */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
+  /** Display anchor relationship for exported text boxes */
+  anchorTarget?: 'followingBlock';
+  /** Anchor position copied from wp:positionH/wp:positionV */
+  position?: {
+    horizontal?: { relativeTo?: string; posOffset?: number; align?: string };
+    vertical?: { relativeTo?: string; posOffset?: number; align?: string };
+  };
+  /** Wrap distances in pixels */
+  distTop?: number;
+  distBottom?: number;
+  distLeft?: number;
+  distRight?: number;
 }
 
 export const TextBoxExtension = createNodeExtension({
@@ -65,6 +79,13 @@ export const TextBoxExtension = createNodeExtension({
       displayMode: { default: 'inline' },
       cssFloat: { default: null },
       wrapType: { default: 'inline' },
+      wrapText: { default: null },
+      anchorTarget: { default: null },
+      position: { default: null },
+      distTop: { default: null },
+      distBottom: { default: null },
+      distLeft: { default: null },
+      distRight: { default: null },
     },
     parseDOM: [
       {
@@ -87,6 +108,13 @@ export const TextBoxExtension = createNodeExtension({
             displayMode: (el.dataset.displayMode as TextBoxAttrs['displayMode']) || undefined,
             cssFloat: (el.dataset.cssFloat as TextBoxAttrs['cssFloat']) || undefined,
             wrapType: el.dataset.wrapType || undefined,
+            wrapText: (el.dataset.wrapText as TextBoxAttrs['wrapText']) || undefined,
+            anchorTarget: (el.dataset.anchorTarget as TextBoxAttrs['anchorTarget']) || undefined,
+            position: el.dataset.position ? JSON.parse(el.dataset.position) : undefined,
+            distTop: el.dataset.distTop ? Number(el.dataset.distTop) : undefined,
+            distBottom: el.dataset.distBottom ? Number(el.dataset.distBottom) : undefined,
+            distLeft: el.dataset.distLeft ? Number(el.dataset.distLeft) : undefined,
+            distRight: el.dataset.distRight ? Number(el.dataset.distRight) : undefined,
           };
         },
       },
@@ -113,6 +141,13 @@ export const TextBoxExtension = createNodeExtension({
       if (attrs.displayMode) domAttrs['data-display-mode'] = attrs.displayMode;
       if (attrs.cssFloat) domAttrs['data-css-float'] = attrs.cssFloat;
       if (attrs.wrapType) domAttrs['data-wrap-type'] = attrs.wrapType;
+      if (attrs.wrapText) domAttrs['data-wrap-text'] = attrs.wrapText;
+      if (attrs.anchorTarget) domAttrs['data-anchor-target'] = attrs.anchorTarget;
+      if (attrs.position) domAttrs['data-position'] = JSON.stringify(attrs.position);
+      if (attrs.distTop != null) domAttrs['data-dist-top'] = String(attrs.distTop);
+      if (attrs.distBottom != null) domAttrs['data-dist-bottom'] = String(attrs.distBottom);
+      if (attrs.distLeft != null) domAttrs['data-dist-left'] = String(attrs.distLeft);
+      if (attrs.distRight != null) domAttrs['data-dist-right'] = String(attrs.distRight);
 
       // Build inline styles
       const styles: string[] = [];

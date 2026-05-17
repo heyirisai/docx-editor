@@ -52,6 +52,12 @@ import type {
   TableCellAttrs,
 } from '../schema/nodes';
 import type { TextColorAttrs, UnderlineAttrs, FontFamilyAttrs } from '../schema/marks';
+import {
+  shouldExportTextBoxInsideFollowingParagraph,
+  textBoxPositionFromAttrs,
+  textBoxWrapFromAttrs,
+} from './textBoxAnchors';
+import type { TextBoxAttrs } from '../extensions/nodes/TextBoxExtension';
 
 /**
  * Convert a ProseMirror document to our Document type
@@ -92,20 +98,45 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
 function extractBlocks(pmDoc: PMNode): (Paragraph | Table)[] {
   const blocks: (Paragraph | Table)[] = [];
   const documentCounts = buildDocumentTrackedChangeCounts(pmDoc);
+  let pendingAnchoredTextBoxRuns: Run[] = [];
+
+  const flushPendingTextBoxes = (): void => {
+    for (const run of pendingAnchoredTextBoxRuns) {
+      blocks.push({
+        type: 'paragraph',
+        content: [run],
+      });
+    }
+    pendingAnchoredTextBoxRuns = [];
+  };
 
   pmDoc.forEach((node) => {
     if (node.type.name === 'paragraph') {
-      blocks.push(convertPMParagraph(node, documentCounts));
+      const paragraph = convertPMParagraph(node, documentCounts);
+      if (pendingAnchoredTextBoxRuns.length > 0) {
+        paragraph.content = [...pendingAnchoredTextBoxRuns, ...paragraph.content];
+        pendingAnchoredTextBoxRuns = [];
+      }
+      blocks.push(paragraph);
     } else if (node.type.name === 'table') {
+      flushPendingTextBoxes();
       blocks.push(convertPMTable(node, documentCounts));
     } else if (node.type.name === 'textBox') {
-      // Convert text box back to a paragraph containing a shape with text body
-      blocks.push(convertPMTextBox(node));
+      const attrs = node.attrs as TextBoxAttrs;
+      if (shouldExportTextBoxInsideFollowingParagraph(attrs)) {
+        pendingAnchoredTextBoxRuns.push(convertPMTextBoxRun(node));
+      } else {
+        flushPendingTextBoxes();
+        blocks.push(convertPMTextBox(node));
+      }
     } else if (node.type.name === 'pageBreak') {
+      flushPendingTextBoxes();
       // Convert page break node to a paragraph with a page break run
       blocks.push(createPageBreakParagraph());
     }
   });
+
+  flushPendingTextBoxes();
 
   return blocks;
 }
@@ -1652,7 +1683,7 @@ function tableCellAttrsToFormatting(attrs: TableCellAttrs): TableCellFormatting 
  * Convert a ProseMirror textBox node back to a Paragraph wrapping a ShapeContent run.
  * The text box content becomes a Shape with textBody.
  */
-function convertPMTextBox(node: PMNode): Paragraph {
+function convertPMTextBoxRun(node: PMNode): Run {
   const attrs = node.attrs as import('../extensions/nodes/TextBoxExtension').TextBoxAttrs;
 
   // Extract child paragraphs from the text box content
@@ -1684,6 +1715,16 @@ function convertPMTextBox(node: PMNode): Paragraph {
     },
   };
 
+  const position = textBoxPositionFromAttrs(attrs);
+  if (position) {
+    shape.position = position;
+  }
+
+  const wrap = textBoxWrapFromAttrs(attrs);
+  if (wrap) {
+    shape.wrap = wrap;
+  }
+
   // Convert fill color back
   if (attrs.fillColor) {
     shape.fill = {
@@ -1712,11 +1753,13 @@ function convertPMTextBox(node: PMNode): Paragraph {
 
   // Wrap the shape in a paragraph with a run containing ShapeContent
   const shapeContent: ShapeContent = { type: 'shape', shape };
-  const run: Run = { type: 'run', content: [shapeContent] };
+  return { type: 'run', content: [shapeContent] };
+}
 
+function convertPMTextBox(node: PMNode): Paragraph {
   return {
     type: 'paragraph',
-    content: [run],
+    content: [convertPMTextBoxRun(node)],
   };
 }
 

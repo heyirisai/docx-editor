@@ -38,6 +38,12 @@ export {
   type FloatingImageZone,
   type MeasureParagraphOptions,
 } from './measureParagraph';
+export {
+  rectsToFloatingZones,
+  getFloatingMargins,
+  type FloatingExclusionRect,
+  type FloatingLineSegmentZone,
+} from './floatingZones';
 
 // Caching utilities
 export {

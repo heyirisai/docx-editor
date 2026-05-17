@@ -20,13 +20,14 @@ import type {
   ImageRun,
 } from '../layout-engine/types';
 import type { RenderContext } from './renderPage';
+import { renderFloatingImagesLayer } from './floatingImageLayer';
 import {
-  isFloatingImageRun,
-  emuToPixels,
-  floatingImageWrapsText,
   floatingImageIsBehindDoc,
-  renderFloatingImagesLayer,
-} from './renderPage';
+  floatingImageWrapsText,
+  imageWrapTextFromCssFloat,
+  isFloatingImageRun,
+} from './floatingImageFlow';
+import { emuToPixels } from '../utils/units';
 import { renderParagraphFragment } from './renderParagraph';
 import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
 
@@ -148,16 +149,6 @@ function extractCellFloatingImages(
       // Clamp within cell bounds
       x = Math.max(0, Math.min(x, contentWidth - imgRun.width));
 
-      // Derive wrapText from cssFloat (same pattern as page-level):
-      // cssFloat='left' → image floats left → text on right → wrapText='right'
-      // cssFloat='right' → image floats right → text on left → wrapText='left'
-      let wrapText: 'bothSides' | 'left' | 'right' | 'largest' = 'bothSides';
-      if (imgRun.cssFloat === 'left') {
-        wrapText = 'right';
-      } else if (imgRun.cssFloat === 'right') {
-        wrapText = 'left';
-      }
-
       result.push({
         src: imgRun.src,
         width: imgRun.width,
@@ -171,7 +162,7 @@ function extractCellFloatingImages(
         distBottom,
         distLeft,
         distRight,
-        wrapText,
+        wrapText: imageWrapTextFromCssFloat(imgRun.cssFloat),
         wrapType: imgRun.wrapType,
         pmStart: imgRun.pmStart,
         pmEnd: imgRun.pmEnd,
