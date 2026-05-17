@@ -21,6 +21,7 @@ import type {
   ImageMeasure,
   ImageFragment,
   ImageRun,
+  FootnoteContent,
   TextBoxBlock,
   TextBoxMeasure,
   TextBoxFragment,
@@ -40,6 +41,7 @@ import {
   type FloatingExclusionRect,
   type FloatingImageZone,
 } from '../layout-bridge/measuring';
+import { FOOTNOTE_SEPARATOR_HEIGHT } from '../layout-bridge/footnoteLayout';
 import { resolveFontFamily } from '../utils/fontResolver';
 import { emuToPixels, pointsToPixels } from '../utils/units';
 import { floatingTextBoxWrapsText, isFloatingTextBoxBlock } from '../layout-engine/textBoxFlow';
@@ -167,6 +169,8 @@ export interface FootnoteRenderItem {
   displayNumber: string;
   /** Plain text content */
   text: string;
+  /** Measured body-pipeline content used for WYSIWYG painting. */
+  content?: FootnoteContent;
 }
 
 /**
@@ -802,9 +806,158 @@ function renderHeaderFooterContent(
  * Render the footnote area at the bottom of a page.
  * Includes a separator line (33% width) and footnote entries.
  */
+function renderMeasuredFootnoteContent(
+  content: FootnoteContent,
+  contentWidth: number,
+  context: RenderContext,
+  doc: Document
+): HTMLElement {
+  const container = doc.createElement('div');
+  container.className = 'layout-footnote-content';
+  container.style.position = 'relative';
+  container.style.width = `${contentWidth}px`;
+  container.style.height = `${content.height}px`;
+
+  let cursorY = 0;
+  for (let i = 0; i < content.blocks.length; i++) {
+    const block = content.blocks[i];
+    const measure = content.measures[i];
+    if (!block || !measure) continue;
+
+    if (block.kind === 'paragraph' && measure.kind === 'paragraph') {
+      const spacingBefore = block.attrs?.spacing?.before ?? 0;
+      const syntheticFragment: ParagraphFragment = {
+        kind: 'paragraph',
+        blockId: block.id,
+        x: 0,
+        y: cursorY + spacingBefore,
+        width: contentWidth,
+        height: measure.totalHeight,
+        pmStart: block.pmStart,
+        pmEnd: block.pmEnd,
+        fromLine: 0,
+        toLine: measure.lines.length,
+      };
+      const fragEl = renderParagraphFragment(
+        syntheticFragment,
+        block,
+        measure,
+        { ...context, section: 'body', contentWidth, positioning: 'absolute' },
+        { document: doc }
+      );
+      fragEl.style.top = `${cursorY + spacingBefore}px`;
+      fragEl.style.left = '0';
+      fragEl.style.width = `${contentWidth}px`;
+      fragEl.style.height = `${measure.totalHeight}px`;
+      container.appendChild(fragEl);
+      cursorY += measure.totalHeight;
+    } else if (block.kind === 'table' && measure.kind === 'table') {
+      const syntheticFragment: TableFragment = {
+        kind: 'table',
+        blockId: block.id,
+        x: 0,
+        y: cursorY,
+        width: measure.totalWidth,
+        height: measure.totalHeight,
+        pmStart: block.pmStart,
+        pmEnd: block.pmEnd,
+        fromRow: 0,
+        toRow: measure.rows.length,
+      };
+      const fragEl = renderTableFragment(
+        syntheticFragment,
+        block,
+        measure,
+        { ...context, section: 'body', contentWidth, positioning: 'absolute' },
+        { document: doc }
+      );
+      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.left = '0';
+      container.appendChild(fragEl);
+      cursorY += measure.totalHeight;
+    } else if (block.kind === 'image' && measure.kind === 'image') {
+      const syntheticFragment: ImageFragment = {
+        kind: 'image',
+        blockId: block.id,
+        x: 0,
+        y: cursorY,
+        width: measure.width,
+        height: measure.height,
+        pmStart: block.pmStart,
+        pmEnd: block.pmEnd,
+      };
+      const fragEl = renderImageFragment(
+        syntheticFragment,
+        block,
+        measure,
+        { ...context, section: 'body', contentWidth, positioning: 'absolute' },
+        { document: doc }
+      );
+      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.left = '0';
+      container.appendChild(fragEl);
+      cursorY += measure.height;
+    } else if (block.kind === 'textBox' && measure.kind === 'textBox') {
+      const syntheticFragment: TextBoxFragment = {
+        kind: 'textBox',
+        blockId: block.id,
+        x: 0,
+        y: cursorY,
+        width: measure.width,
+        height: measure.height,
+        pmStart: block.pmStart,
+        pmEnd: block.pmEnd,
+      };
+      const fragEl = renderTextBoxFragment(
+        syntheticFragment,
+        block,
+        measure,
+        { ...context, section: 'body', contentWidth, positioning: 'absolute' },
+        { document: doc }
+      );
+      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.left = '0';
+      container.appendChild(fragEl);
+      cursorY += measure.height;
+    }
+  }
+
+  return container;
+}
+
+function renderPlainFootnoteItem(fn: FootnoteRenderItem, doc: Document): HTMLElement {
+  const fnEl = doc.createElement('div');
+  fnEl.style.fontSize = '10px';
+  fnEl.style.lineHeight = '1.3';
+  fnEl.style.marginBottom = '4px';
+  fnEl.style.color = '#000';
+
+  const sup = doc.createElement('sup');
+  sup.textContent = fn.displayNumber;
+  sup.style.fontSize = '7px';
+  sup.style.marginRight = '2px';
+  fnEl.appendChild(sup);
+
+  const textNode = doc.createTextNode(' ' + fn.text);
+  fnEl.appendChild(textNode);
+
+  return fnEl;
+}
+
+function calculateFootnoteAreaRenderHeight(footnotes: FootnoteRenderItem[]): number {
+  let height = FOOTNOTE_SEPARATOR_HEIGHT;
+  for (const fn of footnotes) {
+    if (fn.content) {
+      height += fn.content.height;
+    }
+  }
+  return height;
+}
+
 function renderFootnoteArea(
   footnotes: FootnoteRenderItem[],
   contentWidth: number,
+  context: RenderContext,
   doc: Document
 ): HTMLElement {
   const container = doc.createElement('div');
@@ -813,31 +966,22 @@ function renderFootnoteArea(
 
   // Separator line (33% width, Google Docs style)
   const separator = doc.createElement('div');
+  const separatorRuleHeight = 0.5;
+  const separatorMargin = (FOOTNOTE_SEPARATOR_HEIGHT - separatorRuleHeight) / 2;
   separator.style.width = '33%';
-  separator.style.height = '0.5px';
+  separator.style.height = `${separatorRuleHeight}px`;
   separator.style.backgroundColor = '#000';
-  separator.style.marginBottom = '6px';
-  separator.style.marginTop = '6px';
+  separator.style.marginBottom = `${separatorMargin}px`;
+  separator.style.marginTop = `${separatorMargin}px`;
   container.appendChild(separator);
 
   // Render each footnote
   for (const fn of footnotes) {
-    const fnEl = doc.createElement('div');
-    fnEl.style.fontSize = '10px';
-    fnEl.style.lineHeight = '1.3';
-    fnEl.style.marginBottom = '4px';
-    fnEl.style.color = '#000';
-
-    const sup = doc.createElement('sup');
-    sup.textContent = fn.displayNumber;
-    sup.style.fontSize = '7px';
-    sup.style.marginRight = '2px';
-    fnEl.appendChild(sup);
-
-    const textNode = doc.createTextNode(' ' + fn.text);
-    fnEl.appendChild(textNode);
-
-    container.appendChild(fnEl);
+    container.appendChild(
+      fn.content
+        ? renderMeasuredFootnoteContent(fn.content, contentWidth, context, doc)
+        : renderPlainFootnoteItem(fn, doc)
+    );
   }
 
   return container;
@@ -1168,13 +1312,16 @@ export function renderPage(
 
   // Render footnote area at the bottom of the content area (above footer)
   if (options.footnoteArea && options.footnoteArea.length > 0) {
-    const fnAreaEl = renderFootnoteArea(options.footnoteArea, contentWidth, doc);
+    const fnAreaEl = renderFootnoteArea(options.footnoteArea, contentWidth, context, doc);
     fnAreaEl.style.position = 'absolute';
     // Position at page bottom minus bottom margin (bottom of content area)
     // The reserved height includes separator + all footnotes
-    const reservedHeight = page.footnoteReservedHeight ?? 0;
+    const reservedHeight = Math.max(
+      page.footnoteReservedHeight ?? 0,
+      calculateFootnoteAreaRenderHeight(options.footnoteArea)
+    );
     const contentAreaBottom = page.size.h - page.margins.bottom - page.margins.top;
-    fnAreaEl.style.top = `${contentAreaBottom - reservedHeight}px`;
+    fnAreaEl.style.top = `${Math.max(-page.margins.top, contentAreaBottom - reservedHeight)}px`;
     fnAreaEl.style.left = '0';
     fnAreaEl.style.right = '0';
     contentEl.appendChild(fnAreaEl);

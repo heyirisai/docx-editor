@@ -55,6 +55,7 @@ import type {
   TableMeasure,
   ImageBlock,
   ImageRun,
+  FootnoteContent,
   PageMargins,
   SectionBreakBlock,
   TextBoxBlock,
@@ -1172,7 +1173,7 @@ function measureBlocks(blocks: FlowBlock[], contentWidth: number | number[]): Me
  */
 function buildFootnoteRenderItems(
   pageFootnoteMap: Map<number, number[]>,
-  footnoteContentMap: Map<number, { displayNumber: number }>,
+  footnoteContentMap: Map<number, FootnoteContent>,
   doc: Document | null
 ): Map<number, FootnoteRenderItem[]> {
   const result = new Map<number, FootnoteRenderItem[]>();
@@ -1199,6 +1200,7 @@ function buildFootnoteRenderItems(
       items.push({
         displayNumber: String(displayNum),
         text,
+        content,
       });
     }
 
@@ -1208,6 +1210,16 @@ function buildFootnoteRenderItems(
   }
 
   return result;
+}
+
+function footnoteReservedHeightsEqual(a: Map<number, number>, b: Map<number, number>): boolean {
+  if (a.size !== b.size) return false;
+
+  for (const [pageNumber, height] of a) {
+    if (b.get(pageNumber) !== height) return false;
+  }
+
+  return true;
 }
 
 // =============================================================================
@@ -1611,7 +1623,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           stepStart = performance.now();
           let newLayout: Layout;
           let pageFootnoteMap = new Map<number, number[]>();
-          let footnoteContentMap = new Map<number, { displayNumber: number; height: number }>();
+          let footnoteContentMap = new Map<number, FootnoteContent>();
 
           // Common layout options for all passes
           const bodyBreakType = finalSectionProperties?.sectionStart as
@@ -1633,6 +1645,7 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
           if (hasFootnotes) {
             // Pass 1: Layout without footnote space to determine page assignments
             const pass1Layout = layoutDocument(newBlocks, newMeasures, layoutOpts);
+            newLayout = pass1Layout;
 
             // Map footnote refs to pages
             pageFootnoteMap = mapFootnotesToPages(pass1Layout.pages, footnoteRefs);
@@ -1654,20 +1667,47 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
             );
 
             // Calculate per-page reserved heights
-            const footnoteReservedHeights = calculateFootnoteReservedHeights(
+            let footnoteReservedHeights = calculateFootnoteReservedHeights(
               pageFootnoteMap,
               footnoteContentMap
             );
 
-            // Pass 2: Layout with reserved heights
+            // Pass 2+: Layout with reserved heights. Reserving footnote space
+            // can move a reference to another page, so keep remapping until
+            // the final page->height contract is the same one used by layout.
             if (footnoteReservedHeights.size > 0) {
-              newLayout = layoutDocument(newBlocks, newMeasures, {
-                ...layoutOpts,
-                footnoteReservedHeights,
-              });
+              const maxFootnoteLayoutPasses = 6;
+              let footnoteLayoutStabilized = false;
+              for (let pass = 0; pass < maxFootnoteLayoutPasses; pass++) {
+                newLayout = layoutDocument(newBlocks, newMeasures, {
+                  ...layoutOpts,
+                  footnoteReservedHeights,
+                });
 
-              // Re-map footnotes to pages (assignments may have shifted)
-              pageFootnoteMap = mapFootnotesToPages(newLayout.pages, footnoteRefs);
+                const nextPageFootnoteMap = mapFootnotesToPages(newLayout.pages, footnoteRefs);
+                const nextFootnoteReservedHeights = calculateFootnoteReservedHeights(
+                  nextPageFootnoteMap,
+                  footnoteContentMap
+                );
+
+                pageFootnoteMap = nextPageFootnoteMap;
+                if (
+                  footnoteReservedHeightsEqual(footnoteReservedHeights, nextFootnoteReservedHeights)
+                ) {
+                  footnoteReservedHeights = nextFootnoteReservedHeights;
+                  footnoteLayoutStabilized = true;
+                  break;
+                }
+
+                footnoteReservedHeights = nextFootnoteReservedHeights;
+              }
+              if (!footnoteLayoutStabilized) {
+                newLayout = layoutDocument(newBlocks, newMeasures, {
+                  ...layoutOpts,
+                  footnoteReservedHeights,
+                });
+                pageFootnoteMap = mapFootnotesToPages(newLayout.pages, footnoteRefs);
+              }
 
               // Store footnoteIds on each page for rendering
               for (const [pageNum, fnIds] of pageFootnoteMap) {

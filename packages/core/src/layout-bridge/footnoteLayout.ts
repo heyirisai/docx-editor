@@ -25,8 +25,8 @@ import type { Footnote, StyleDefinitions, Theme } from '../types/document';
 import { footnoteToProseDoc } from '../prosemirror/conversion/toProseDoc';
 import { toFlowBlocks } from './toFlowBlocks';
 
-/** Separator line height + padding in pixels */
-const SEPARATOR_HEIGHT = 12;
+/** Separator line height + vertical padding in pixels. */
+export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
 
 /**
  * Default footnote font size in points. Word's built-in "Footnote Text"
@@ -308,7 +308,7 @@ export function calculateFootnoteReservedHeights(
 
     if (totalHeight > 0) {
       // Add separator height
-      totalHeight += SEPARATOR_HEIGHT;
+      totalHeight += FOOTNOTE_SEPARATOR_HEIGHT;
       reserved.set(pageNumber, totalHeight);
     }
   }
