@@ -18,6 +18,12 @@
  * - w:tbl contains w:tblPr, w:tblGrid, and w:tr elements
  * - w:tr contains w:trPr and w:tc elements
  * - w:tc contains w:tcPr and content (paragraphs, tables)
+ *
+ * Composite parsers (parseTable, parseTableRow, parseTableCell, plus the
+ * three property parsers and their tracked-change variants) live here.
+ * Leaf property parsers (measurements, borders, margins, shading, look,
+ * floating) are in ./tableParser/properties.ts. Query helpers (counts, merge
+ * checks, text extraction) are in ./tableParser/queries.ts.
  */
 
 import type {
@@ -31,18 +37,9 @@ import type {
   TableRowPropertyChange,
   TableCellPropertyChange,
   TableStructuralChangeInfo,
-  TableMeasurement,
-  TableWidthType,
-  TableBorders,
-  TableLook,
-  CellMargins,
-  FloatingTableProperties,
   ConditionalFormatStyle,
   Paragraph,
   Theme,
-  BorderSpec,
-  ShadingProperties,
-  ColorValue,
   RelationshipMap,
   MediaFile,
 } from '../types/document';
@@ -58,363 +55,38 @@ import {
   type XmlElement,
 } from './xmlParser';
 
-// ============================================================================
-// TABLE MEASUREMENT PARSING
-// ============================================================================
-
-/**
- * Parse a table measurement (width, height, etc.)
- *
- * @param element - Element with w:w and w:type attributes
- * @returns Parsed measurement or undefined
- */
-export function parseTableMeasurement(element: XmlElement | null): TableMeasurement | undefined {
-  if (!element) return undefined;
-
-  const value = parseNumericAttribute(element, 'w', 'w') ?? 0;
-  const typeStr = getAttribute(element, 'w', 'type') ?? 'dxa';
-
-  let type: TableWidthType = 'dxa';
-  if (typeStr === 'auto' || typeStr === 'dxa' || typeStr === 'nil' || typeStr === 'pct') {
-    type = typeStr;
-  }
-
-  return { value, type };
-}
-
-/**
- * Parse width from an element (shorthand for common case)
- */
-function parseWidth(element: XmlElement | null): TableMeasurement | undefined {
-  return parseTableMeasurement(element);
-}
-
-function parseTrackedChangeInfo(node: XmlElement): TableStructuralChangeInfo['info'] {
-  const rawId = getAttribute(node, 'w', 'id');
-  const parsedId = rawId ? parseInt(rawId, 10) : 0;
-  const author = (getAttribute(node, 'w', 'author') ?? '').trim();
-  const date = (getAttribute(node, 'w', 'date') ?? '').trim();
-
-  return {
-    id: Number.isInteger(parsedId) && parsedId >= 0 ? parsedId : 0,
-    author: author.length > 0 ? author : 'Unknown',
-    date: date.length > 0 ? date : undefined,
-  };
-}
-
-function parsePropertyChangeInfo(
-  node: XmlElement
-): TablePropertyChange['info'] | TableRowPropertyChange['info'] | TableCellPropertyChange['info'] {
-  const base = parseTrackedChangeInfo(node);
-  const rsid = (getAttribute(node, 'w', 'rsid') ?? '').trim();
-  return rsid.length > 0 ? { ...base, rsid } : base;
-}
-
-// ============================================================================
-// BORDER PARSING
-// ============================================================================
-
-/**
- * Parse a single border specification
- *
- * @param element - Border element (w:top, w:bottom, etc.)
- * @returns Parsed border or undefined
- */
-export function parseBorderSpec(element: XmlElement | null): BorderSpec | undefined {
-  if (!element) return undefined;
-
-  const styleStr = getAttribute(element, 'w', 'val') ?? 'none';
-  const style = styleStr as BorderSpec['style'];
-
-  const border: BorderSpec = { style };
-
-  // Size in eighths of a point
-  const sz = parseNumericAttribute(element, 'w', 'sz');
-  if (sz !== undefined) {
-    border.size = sz;
-  }
-
-  // Space from text in points
-  const space = parseNumericAttribute(element, 'w', 'space');
-  if (space !== undefined) {
-    border.space = space;
-  }
-
-  // Color (border uses w:color, not w:val)
-  const color = getAttribute(element, 'w', 'color');
-  const themeColor = getAttribute(element, 'w', 'themeColor');
-  const themeTint = getAttribute(element, 'w', 'themeTint');
-  const themeShade = getAttribute(element, 'w', 'themeShade');
-  if (color || themeColor || themeTint || themeShade) {
-    border.color = {
-      rgb: color ?? undefined,
-      themeColor: themeColor as ColorValue['themeColor'],
-      themeTint: themeTint ?? undefined,
-      themeShade: themeShade ?? undefined,
-    };
-  }
-
-  // Shadow effect
-  const shadow = getAttribute(element, 'w', 'shadow');
-  if (shadow === '1' || shadow === 'true') {
-    border.shadow = true;
-  }
-
-  // Frame effect
-  const frame = getAttribute(element, 'w', 'frame');
-  if (frame === '1' || frame === 'true') {
-    border.frame = true;
-  }
-
-  return border;
-}
-
-/**
- * Parse table borders (w:tblBorders or w:tcBorders)
- *
- * @param bordersElement - The borders container element
- * @returns Parsed borders or undefined
- */
-export function parseTableBorders(bordersElement: XmlElement | null): TableBorders | undefined {
-  if (!bordersElement) return undefined;
-
-  const borders: TableBorders = {};
-
-  const top = parseBorderSpec(findChild(bordersElement, 'w', 'top'));
-  if (top) borders.top = top;
-
-  const bottom = parseBorderSpec(findChild(bordersElement, 'w', 'bottom'));
-  if (bottom) borders.bottom = bottom;
-
-  const left = parseBorderSpec(
-    findChild(bordersElement, 'w', 'left') ?? findChild(bordersElement, 'w', 'start')
-  );
-  if (left) borders.left = left;
-
-  const right = parseBorderSpec(
-    findChild(bordersElement, 'w', 'right') ?? findChild(bordersElement, 'w', 'end')
-  );
-  if (right) borders.right = right;
-
-  const insideH = parseBorderSpec(findChild(bordersElement, 'w', 'insideH'));
-  if (insideH) borders.insideH = insideH;
-
-  const insideV = parseBorderSpec(findChild(bordersElement, 'w', 'insideV'));
-  if (insideV) borders.insideV = insideV;
-
-  // Return undefined if no borders were parsed
-  if (Object.keys(borders).length === 0) return undefined;
-
-  return borders;
-}
-
-// ============================================================================
-// CELL MARGINS PARSING
-// ============================================================================
-
-/**
- * Parse cell margins (w:tblCellMar or w:tcMar)
- *
- * @param marginsElement - The margins container element
- * @returns Parsed margins or undefined
- */
-export function parseCellMargins(marginsElement: XmlElement | null): CellMargins | undefined {
-  if (!marginsElement) return undefined;
-
-  const margins: CellMargins = {};
-
-  const top = parseWidth(findChild(marginsElement, 'w', 'top'));
-  if (top) margins.top = top;
-
-  const bottom = parseWidth(findChild(marginsElement, 'w', 'bottom'));
-  if (bottom) margins.bottom = bottom;
-
-  const left = parseWidth(
-    findChild(marginsElement, 'w', 'left') ?? findChild(marginsElement, 'w', 'start')
-  );
-  if (left) margins.left = left;
-
-  const right = parseWidth(
-    findChild(marginsElement, 'w', 'right') ?? findChild(marginsElement, 'w', 'end')
-  );
-  if (right) margins.right = right;
-
-  if (Object.keys(margins).length === 0) return undefined;
-
-  return margins;
-}
-
-// ============================================================================
-// SHADING PARSING
-// ============================================================================
-
-/**
- * Parse shading properties (w:shd)
- *
- * @param shdElement - The w:shd element
- * @returns Parsed shading or undefined
- */
-export function parseShading(shdElement: XmlElement | null): ShadingProperties | undefined {
-  if (!shdElement) return undefined;
-
-  const shading: ShadingProperties = {};
-
-  // Fill color (background)
-  const fillStr = getAttribute(shdElement, 'w', 'fill');
-  if (fillStr && fillStr !== 'auto') {
-    shading.fill = { rgb: fillStr };
-  }
-
-  // Theme fill
-  const themeFill = getAttribute(shdElement, 'w', 'themeFill');
-  if (themeFill) {
-    shading.fill = { themeColor: themeFill as any };
-
-    const themeFillTint = getAttribute(shdElement, 'w', 'themeFillTint');
-    if (themeFillTint && shading.fill) {
-      shading.fill.themeTint = themeFillTint;
-    }
-
-    const themeFillShade = getAttribute(shdElement, 'w', 'themeFillShade');
-    if (themeFillShade && shading.fill) {
-      shading.fill.themeShade = themeFillShade;
-    }
-  }
-
-  // Pattern color
-  const colorStr = getAttribute(shdElement, 'w', 'color');
-  if (colorStr && colorStr !== 'auto') {
-    shading.color = { rgb: colorStr };
-  }
-
-  // Pattern value
-  const pattern = getAttribute(shdElement, 'w', 'val');
-  if (pattern) {
-    shading.pattern = pattern as ShadingProperties['pattern'];
-  }
-
-  if (Object.keys(shading).length === 0) return undefined;
-
-  return shading;
-}
-
-// ============================================================================
-// TABLE LOOK PARSING
-// ============================================================================
-
-/**
- * Parse table look flags (w:tblLook)
- *
- * @param lookElement - The w:tblLook element
- * @returns Parsed table look or undefined
- */
-export function parseTableLook(lookElement: XmlElement | null): TableLook | undefined {
-  if (!lookElement) return undefined;
-
-  const look: TableLook = {};
-
-  // Parse individual flags
-  const firstRow = getAttribute(lookElement, 'w', 'firstRow');
-  if (firstRow === '1' || firstRow === 'true') look.firstRow = true;
-
-  const lastRow = getAttribute(lookElement, 'w', 'lastRow');
-  if (lastRow === '1' || lastRow === 'true') look.lastRow = true;
-
-  const firstColumn = getAttribute(lookElement, 'w', 'firstColumn');
-  if (firstColumn === '1' || firstColumn === 'true') look.firstColumn = true;
-
-  const lastColumn = getAttribute(lookElement, 'w', 'lastColumn');
-  if (lastColumn === '1' || lastColumn === 'true') look.lastColumn = true;
-
-  const noHBand = getAttribute(lookElement, 'w', 'noHBand');
-  if (noHBand === '1' || noHBand === 'true') look.noHBand = true;
-
-  const noVBand = getAttribute(lookElement, 'w', 'noVBand');
-  if (noVBand === '1' || noVBand === 'true') look.noVBand = true;
-
-  // Also check for the val attribute (hexadecimal flags)
-  const val = getAttribute(lookElement, 'w', 'val');
-  if (val) {
-    const flags = parseInt(val, 16);
-    if (!isNaN(flags)) {
-      if (flags & 0x0020) look.firstRow = true;
-      if (flags & 0x0040) look.lastRow = true;
-      if (flags & 0x0080) look.firstColumn = true;
-      if (flags & 0x0100) look.lastColumn = true;
-      if (flags & 0x0200) look.noHBand = true;
-      if (flags & 0x0400) look.noVBand = true;
-    }
-  }
-
-  if (Object.keys(look).length === 0) return undefined;
-
-  return look;
-}
-
-// ============================================================================
-// FLOATING TABLE PROPERTIES
-// ============================================================================
-
-/**
- * Parse floating table properties (w:tblpPr)
- *
- * @param tblpPrElement - The w:tblpPr element
- * @returns Parsed floating properties or undefined
- */
-export function parseFloatingTableProperties(
-  tblpPrElement: XmlElement | null
-): FloatingTableProperties | undefined {
-  if (!tblpPrElement) return undefined;
-
-  const floating: FloatingTableProperties = {};
-
-  // Horizontal anchor
-  const horzAnchor = getAttribute(tblpPrElement, 'w', 'horzAnchor');
-  if (horzAnchor === 'margin' || horzAnchor === 'page' || horzAnchor === 'text') {
-    floating.horzAnchor = horzAnchor;
-  }
-
-  // Vertical anchor
-  const vertAnchor = getAttribute(tblpPrElement, 'w', 'vertAnchor');
-  if (vertAnchor === 'margin' || vertAnchor === 'page' || vertAnchor === 'text') {
-    floating.vertAnchor = vertAnchor;
-  }
-
-  // Horizontal position
-  const tblpX = parseNumericAttribute(tblpPrElement, 'w', 'tblpX');
-  if (tblpX !== undefined) floating.tblpX = tblpX;
-
-  const tblpXSpec = getAttribute(tblpPrElement, 'w', 'tblpXSpec');
-  if (tblpXSpec) {
-    floating.tblpXSpec = tblpXSpec as FloatingTableProperties['tblpXSpec'];
-  }
-
-  // Vertical position
-  const tblpY = parseNumericAttribute(tblpPrElement, 'w', 'tblpY');
-  if (tblpY !== undefined) floating.tblpY = tblpY;
-
-  const tblpYSpec = getAttribute(tblpPrElement, 'w', 'tblpYSpec');
-  if (tblpYSpec) {
-    floating.tblpYSpec = tblpYSpec as FloatingTableProperties['tblpYSpec'];
-  }
-
-  // Distance from text
-  const topFromText = parseNumericAttribute(tblpPrElement, 'w', 'topFromText');
-  if (topFromText !== undefined) floating.topFromText = topFromText;
-
-  const bottomFromText = parseNumericAttribute(tblpPrElement, 'w', 'bottomFromText');
-  if (bottomFromText !== undefined) floating.bottomFromText = bottomFromText;
-
-  const leftFromText = parseNumericAttribute(tblpPrElement, 'w', 'leftFromText');
-  if (leftFromText !== undefined) floating.leftFromText = leftFromText;
-
-  const rightFromText = parseNumericAttribute(tblpPrElement, 'w', 'rightFromText');
-  if (rightFromText !== undefined) floating.rightFromText = rightFromText;
-
-  if (Object.keys(floating).length === 0) return undefined;
-
-  return floating;
-}
+import {
+  parseWidth,
+  parseTableBorders,
+  parseCellMargins,
+  parseShading,
+  parseTableLook,
+  parseFloatingTableProperties,
+  parseTrackedChangeInfo,
+  parsePropertyChangeInfo,
+} from './tableParser/properties';
+
+// Public re-exports (preserve historical import surface).
+export {
+  parseTableMeasurement,
+  parseBorderSpec,
+  parseTableBorders,
+  parseCellMargins,
+  parseShading,
+  parseTableLook,
+  parseFloatingTableProperties,
+} from './tableParser/properties';
+export {
+  getTableColumnCount,
+  getTableRowCount,
+  isCellMergeContinuation,
+  isCellMergeStart,
+  isCellHorizontallyMerged,
+  getTableText,
+  hasHeaderRow,
+  getHeaderRows,
+  isFloatingTable,
+} from './tableParser/queries';
 
 // ============================================================================
 // TABLE PROPERTIES PARSING (w:tblPr)
@@ -1118,139 +790,4 @@ export function parseTable(
   inferImplicitSingleCellRowSpans(table);
 
   return table;
-}
-
-// ============================================================================
-// TABLE UTILITIES
-// ============================================================================
-
-/**
- * Get the number of columns in a table
- *
- * Uses the table grid if available, otherwise counts cells in first row.
- *
- * @param table - The table to measure
- * @returns Number of columns
- */
-export function getTableColumnCount(table: Table): number {
-  if (table.columnWidths && table.columnWidths.length > 0) {
-    return table.columnWidths.length;
-  }
-
-  if (table.rows.length === 0) return 0;
-
-  // Count cells in first row, accounting for grid span
-  return table.rows[0].cells.reduce((count, cell) => {
-    return count + (cell.formatting?.gridSpan ?? 1);
-  }, 0);
-}
-
-/**
- * Get the number of rows in a table
- *
- * @param table - The table to measure
- * @returns Number of rows
- */
-export function getTableRowCount(table: Table): number {
-  return table.rows.length;
-}
-
-/**
- * Check if a cell is part of a vertical merge
- *
- * @param cell - The cell to check
- * @returns true if cell continues a vertical merge
- */
-export function isCellMergeContinuation(cell: TableCell): boolean {
-  return cell.formatting?.vMerge === 'continue';
-}
-
-/**
- * Check if a cell starts a vertical merge
- *
- * @param cell - The cell to check
- * @returns true if cell starts a vertical merge
- */
-export function isCellMergeStart(cell: TableCell): boolean {
-  return cell.formatting?.vMerge === 'restart';
-}
-
-/**
- * Check if a cell spans multiple columns
- *
- * @param cell - The cell to check
- * @returns true if cell spans multiple columns
- */
-export function isCellHorizontallyMerged(cell: TableCell): boolean {
-  return (cell.formatting?.gridSpan ?? 1) > 1;
-}
-
-/**
- * Get the plain text content of a table
- *
- * @param table - The table to extract text from
- * @returns Plain text content
- */
-export function getTableText(table: Table): string {
-  const rows: string[] = [];
-
-  for (const row of table.rows) {
-    const cells: string[] = [];
-
-    for (const cell of row.cells) {
-      const cellText = cell.content
-        .filter((c): c is Paragraph => c.type === 'paragraph')
-        .map((p) => getParagraphText(p))
-        .join('\n');
-      cells.push(cellText);
-    }
-
-    rows.push(cells.join('\t'));
-  }
-
-  return rows.join('\n');
-}
-
-/**
- * Helper to get paragraph text (simplified)
- */
-function getParagraphText(para: Paragraph): string {
-  return para.content
-    .filter((c) => 'content' in c)
-    .flatMap((run) => {
-      if (!('content' in run)) return [];
-      return (run as any).content.filter((c: any) => c.type === 'text').map((c: any) => c.text);
-    })
-    .join('');
-}
-
-/**
- * Check if table has header row
- *
- * @param table - The table to check
- * @returns true if first row is marked as header
- */
-export function hasHeaderRow(table: Table): boolean {
-  if (table.rows.length === 0) return false;
-  return table.rows[0].formatting?.header === true;
-}
-
-/**
- * Get all header rows from a table
- *
- * @param table - The table to search
- * @returns Array of header rows
- */
-export function getHeaderRows(table: Table): TableRow[] {
-  return table.rows.filter((row) => row.formatting?.header === true);
-}
-
-/**
- * Check if table is a floating table
- *
- * @param table - The table to check
- * @returns true if table has floating properties
- */
-export function isFloatingTable(table: Table): boolean {
-  return table.formatting?.floating !== undefined;
 }
