@@ -2,7 +2,7 @@
  * Shared file-input → docx-buffer reader.
  *
  * React (DocxEditor.tsx `handleDocxFileChange`) and Vue
- * (DocxEditorVue.vue `handleDocxFileChange`) had byte-equivalent
+ * (DocxEditor.vue `handleDocxFileChange`) had byte-equivalent
  * `await file.arrayBuffer()` + `name.replace(/\.docx$/i, '')` boilerplate
  * around their hidden file inputs. This helper folds the common steps
  * into one place so the two adapters can never drift on filename
