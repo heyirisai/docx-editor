@@ -1,5 +1,17 @@
 # @eigenpal/docx-editor-core
 
+## 1.0.3
+
+### Patch Changes
+
+- 24b31a4: Numbered paragraphs whose direct `w:ind` has a first-line indent but no hanging slot (e.g. `<w:ind w:left="0" w:firstLine="720"/>`) now render the marker inline with the first body line at the firstLine position, matching Word/LibreOffice. Previously the painter wrapped the marker into a separate row above the text and the layout engine didn't reserve space for that row — the last line of the first fragment spilled below its container and the continuation fragment rendered on top of it (fixes #483).
+- ec36a50: Footnote references authored inside table cells (and text boxes) are now collected by the page-reservation pass. Previously `collectFootnoteRefs` walked only top-level blocks and skipped tables entirely, so nested refs never reached `mapFootnotesToPages` and the per-page footnote area silently dropped them while the body still rendered the in-line superscript marker. Fixes #584.
+- 143c31e: Numbered paragraphs that write a neutral `w:hanging="0"` direct indent now keep the numbering level's hanging indent, mirroring the fix already in place for `w:firstLine="0"`. Per ECMA-376 §17.3.1.12, both are no-op values and shouldn't suppress the level-defined indent.
+- d91357e: Render text boxes in headers and footers. Headers and footers now flow through the same block-content parser as the document body, so text boxes (and bullet-glyph conversion) are parsed everywhere a Word user can place them. The header/footer page painter also now draws `textBox` and `image` blocks, which it previously measured but never painted — so a header/footer text box that only appeared in the inline editor now also shows in the page view.
+- bdd7f50: Preserve numbered paragraph hanging indents when DOCX paragraphs include a neutral first-line indent override.
+- 6d56181: Vue now renders documents with stacked floating objects identically to React. Previously, the Vue composable ran a simplified measurement pipeline without floating-zone awareness, so anchored images / floating textboxes / floating tables would not push body text below them in Vue. The float-extraction and per-block orchestration is now shared from `@eigenpal/docx-editor-core/layout-bridge` (`measureBlocksWithFloats`); both adapters call it with their own per-block measure callback.
+- e80093d: Body text now flows around stacked floating objects correctly. Documents with a side-anchored textbox plus an image floating to the right, or with a floating table whose width fills the page, used to render body paragraphs at full content width on top of the floats, push tables to the page top, or collapse the first paragraph to a single glyph per line. All three cases now match Word's layout.
+
 ## 1.0.2
 
 ### Patch Changes
