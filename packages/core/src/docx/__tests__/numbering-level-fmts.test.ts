@@ -103,4 +103,39 @@ describe('paragraphParser applies numbering indentation defaults', () => {
     expect(para.formatting?.indentFirstLine).toBe(-360);
     expect(para.formatting?.hangingIndent).toBe(true);
   });
+
+  test('keeps level hanging indent when paragraph writes neutral hanging zero', () => {
+    const para = parseParagraphXml(
+      `<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr>
+          <w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>
+          <w:ind w:hanging="0"/>
+        </w:pPr>
+      </w:p>`,
+      numbering
+    );
+
+    expect(para.formatting?.indentLeft).toBe(360);
+    expect(para.formatting?.indentFirstLine).toBe(-360);
+    expect(para.formatting?.hangingIndent).toBe(true);
+  });
+
+  test('non-zero direct firstLine still overrides the level hanging indent', () => {
+    const para = parseParagraphXml(
+      `<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr>
+          <w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>
+          <w:ind w:firstLine="180"/>
+        </w:pPr>
+      </w:p>`,
+      numbering
+    );
+
+    // Direct firstLine="180" wins over the level's hanging — the
+    // paragraph keeps the level's left indent and the direct positive
+    // first-line offset, with no hanging flag inherited.
+    expect(para.formatting?.indentLeft).toBe(360);
+    expect(para.formatting?.indentFirstLine).toBe(180);
+    expect(para.formatting?.hangingIndent).toBeUndefined();
+  });
 });
