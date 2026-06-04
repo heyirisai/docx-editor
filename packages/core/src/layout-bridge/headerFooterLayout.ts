@@ -403,15 +403,33 @@ function getHfDomSnapshot(
   section: 'header' | 'footer',
   doc: globalThis.Document
 ): HfDomSnapshot | null {
-  const cached = hfDomCache[section];
-  if (cached && cached.host.isConnected) return cached;
-  // The same HF doc is painted on every page (shared by `r:id`). Pick the
-  // first painted host for the active section; its spans share PM coords with
-  // every other page's copy, so a single host suffices for caret resolution.
+  // The same HF doc is painted on every page (shared by `r:id`), so any painted
+  // instance carries the right PM coords. But the caret/selection overlay must
+  // render on the instance the user is actually editing — pick the host nearest
+  // the viewport center. Always taking the first (page 1) host drew the overlay
+  // on page 1 even while editing a header/footer on a later page, so the user
+  // saw no caret or highlight where they were typing (#691 footer).
   // Scoping to `.layout-page-${section}` keeps the header and footer from
   // shadowing each other (#671).
-  const host = doc.querySelector<HTMLElement>(`.layout-page-${section}`);
-  if (!host) return null;
+  const hosts = doc.querySelectorAll<HTMLElement>(`.layout-page-${section}`);
+  if (hosts.length === 0) return null;
+  const win = doc.defaultView;
+  const vpCenter = win ? win.innerHeight / 2 : 0;
+  let host = hosts[0];
+  let bestDist = Infinity;
+  for (const h of Array.from(hosts)) {
+    const r = h.getBoundingClientRect();
+    const dist = Math.abs((r.top + r.bottom) / 2 - vpCenter);
+    if (dist < bestDist) {
+      bestDist = dist;
+      host = h;
+    }
+  }
+  // Reuse the cached span lists only when they belong to the same painted host
+  // (and it's still live). The host changes as the user scrolls between pages,
+  // so a section-only cache would keep resolving against the wrong instance.
+  const cached = hfDomCache[section];
+  if (cached && cached.host === host && cached.host.isConnected) return cached;
   const spans = Array.from(host.querySelectorAll<HTMLElement>('span[data-pm-start][data-pm-end]'));
   const ranged = Array.from(host.querySelectorAll<HTMLElement>('[data-pm-start][data-pm-end]'));
   const snapshot = { host, spans, ranged };
