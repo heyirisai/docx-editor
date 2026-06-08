@@ -136,6 +136,16 @@ export function computeListMarker(
   }
 
   const level = numPr.ilvl ?? 0;
+
+  // numFmt="none" (ECMA-376 §17.18.59): the level shows no auto-number — its
+  // `lvlText` is taken literally (empty `lvlText` ⇒ no marker at all). Word
+  // renders such paragraphs as plain text, so don't fall through to the
+  // generic decimal formatter below and fabricate a "1." marker. (#718)
+  const levelFmt = pmAttrs.listLevelNumFmts?.[level] ?? pmAttrs.listNumFmt;
+  if (levelFmt === 'none') {
+    return pmAttrs.listMarker ? pmAttrs.listMarker : null;
+  }
+
   const counterKey = pmAttrs.listAbstractNumId ?? numId;
   const counters = listCounters.get(counterKey) ?? new Array(9).fill(0);
 
