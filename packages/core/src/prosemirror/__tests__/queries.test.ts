@@ -17,6 +17,7 @@ import {
   getPageContent,
   findCommentRange,
   findChangeRange,
+  clampRangeToDoc,
 } from '../queries';
 
 const schema = singletonManager.getSchema();
@@ -136,6 +137,24 @@ describe('findCommentRange', () => {
   test('null view returns null', () => {
     expect(findCommentRange(null, 7)).toBeNull();
   });
+
+  test('unions a range split by an un-marked gap into one span', () => {
+    // Same comment id on two text nodes separated by un-marked inline content.
+    // The resolved range must span the gap (earliest start → latest end), per
+    // the docstring's "interrupted by un-marked inline" contract.
+    const mark = schema.marks.comment.create({ commentId: 3 });
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create({ paraId: 'AAA' }, [
+        schema.text('head ', [mark]),
+        schema.text('GAP'),
+        schema.text(' tail', [mark]),
+      ]),
+    ]);
+    const view = asView(EditorState.create({ schema, doc }));
+    const range = findCommentRange(view, 3);
+    expect(range).not.toBeNull();
+    expect(view.state.doc.textBetween(range!.from, range!.to)).toBe('head GAP tail');
+  });
 });
 
 describe('findChangeRange', () => {
@@ -164,6 +183,59 @@ describe('findChangeRange', () => {
 
   test('null view returns null', () => {
     expect(findChangeRange(null, 42)).toBeNull();
+  });
+
+  test('matches a replacement via its insertionRevisionId, not just the primary id', () => {
+    // An adjacent deletion (id 10) + insertion (id 11) with the same author/date
+    // coalesces into one `replacement` entry: revisionId 10, insertionRevisionId
+    // 11, range spanning both. Resolving either id must hit the same span.
+    const del = schema.marks.deletion.create({ revisionId: 10, author: 'A', date: null });
+    const ins = schema.marks.insertion.create({ revisionId: 11, author: 'A', date: null });
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create({ paraId: 'AAA' }, [
+        schema.text('old', [del]),
+        schema.text('new', [ins]),
+      ]),
+    ]);
+    const view = asView(EditorState.create({ schema, doc }));
+
+    const byPrimary = findChangeRange(view, 10);
+    const byInsertion = findChangeRange(view, 11);
+    expect(byPrimary).not.toBeNull();
+    expect(byInsertion).toEqual(byPrimary!);
+    expect(view.state.doc.textBetween(byInsertion!.from, byInsertion!.to)).toBe('oldnew');
+  });
+});
+
+describe('clampRangeToDoc', () => {
+  // 'hello' (5) inside one paragraph → content.size = 7 (open+text+close).
+  const doc = schema.nodes.doc.create(null, [para('AAA', 'hello')]);
+  const max = doc.content.size;
+
+  test('passes a valid in-range request through unchanged', () => {
+    expect(clampRangeToDoc(doc, 1, 4)).toEqual({ from: 1, to: 4 });
+  });
+
+  test('clamps an out-of-range `to` to the document size', () => {
+    expect(clampRangeToDoc(doc, 1, max + 1000)).toEqual({ from: 1, to: max });
+  });
+
+  test('allows `from` exactly at the document end (inclusive boundary)', () => {
+    expect(clampRangeToDoc(doc, max, max + 5)).toEqual({ from: max, to: max });
+  });
+
+  test('returns null when `from` is past the document end', () => {
+    expect(clampRangeToDoc(doc, max + 1, max + 2)).toBeNull();
+  });
+
+  test('returns null for a reversed range', () => {
+    expect(clampRangeToDoc(doc, 5, 2)).toBeNull();
+  });
+
+  test('returns null for negative or non-integer positions', () => {
+    expect(clampRangeToDoc(doc, -1, 4)).toBeNull();
+    expect(clampRangeToDoc(doc, 1.5, 4)).toBeNull();
+    expect(clampRangeToDoc(doc, 1, Number.NaN)).toBeNull();
   });
 });
 

@@ -9,6 +9,7 @@
  */
 
 import type { EditorView } from 'prosemirror-view';
+import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import type { Layout } from '../layout-engine';
 import { getVanillaNodeText, getVanillaTextBetween } from './paraText';
 import { extractTrackedChanges } from './utils/extractTrackedChanges';
@@ -17,6 +18,21 @@ import { extractTrackedChanges } from './utils/extractTrackedChanges';
 export interface PmRange {
   from: number;
   to: number;
+}
+
+/**
+ * Clamp a caller-supplied `[from, to]` range to a valid in-document span, or
+ * return `null` when it cannot be made valid: non-integer, negative, reversed
+ * (`to < from`), or a `from` past the document end. `to` is clamped to the
+ * document size so an out-of-range end never makes `doc.resolve()` throw a
+ * `RangeError`. Both adapters' `highlightRange` route raw caller positions
+ * through this so the no-op contract holds identically.
+ */
+export function clampRangeToDoc(doc: ProseMirrorNode, from: number, to: number): PmRange | null {
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < from) return null;
+  const max = doc.content.size;
+  if (from > max) return null;
+  return { from, to: Math.min(to, max) };
 }
 
 /**
