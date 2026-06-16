@@ -72,6 +72,9 @@ const schema = new Schema({
     emphasisMark: {
       attrs: { type: { default: 'dot' } },
     },
+    footnoteRef: {
+      attrs: { id: { default: 0 }, noteType: { default: 'footnote' } },
+    },
     characterSpacing: {
       attrs: {
         spacing: { default: null },
@@ -177,6 +180,25 @@ describe('toFlowBlocks — run-level marks reach RunFormatting (#410)', () => {
     const doc = buildSingleRunDoc('hi', 'emphasisMark', { type: 'unknownXyz' });
     const blocks = toFlowBlocks(doc, {});
     expect(firstRun(blocks).emphasisMark).toBe('dot');
+  });
+
+  test('footnoteRef mark implies superscript (Word raises the anchor mark)', () => {
+    // The footnote reference anchor renders superscript by default — Word's
+    // built-in FootnoteReference char style sets w:vertAlign="superscript".
+    // Many docs (e.g. Pandoc output) omit an explicit rStyle on the anchor
+    // run, so the bridge must apply the superscript implicitly rather than
+    // depend on the mark being present.
+    const doc = buildSingleRunDoc('1', 'footnoteRef', { id: 5, noteType: 'footnote' });
+    const run = firstRun(toFlowBlocks(doc, {}));
+    expect(run.footnoteRefId).toBe(5);
+    expect(run.superscript).toBe(true);
+  });
+
+  test('endnoteRef mark implies superscript', () => {
+    const doc = buildSingleRunDoc('1', 'footnoteRef', { id: 3, noteType: 'endnote' });
+    const run = firstRun(toFlowBlocks(doc, {}));
+    expect(run.endnoteRefId).toBe(3);
+    expect(run.superscript).toBe(true);
   });
 });
 

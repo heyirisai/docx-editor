@@ -93,10 +93,7 @@ export function clipRectToTableWindow(spanEl: Element, rect: {
 } | null;
 
 // @public
-export function collectFootnoteRefs(blocks: FlowBlock[]): Array<{
-    footnoteId: number;
-    pmPos: number;
-}>;
+export function collectFootnoteRefs(blocks: FlowBlock[]): FootnoteRefLocation[];
 
 // @public (undocumented)
 export function columnWidthForSection(config: SectionLayoutConfig): number;
@@ -330,6 +327,14 @@ export interface FontStyle {
 export const FOOTNOTE_SEPARATOR_HEIGHT = 12;
 
 // @public
+export type FootnoteRefLocation = {
+    footnoteId: number;
+    pmPos: number;
+    tableBlockId?: BlockId;
+    rowIndex?: number;
+};
+
+// @public
 export function footnoteReservedHeightsEqual(a: Map<number, number>, b: Map<number, number>): boolean;
 
 // @public
@@ -475,10 +480,7 @@ export function isBlockLikeFloatingTable(block: TableBlock, contentWidth: number
 export function isMultiPageSelection(rects: SelectionRect[]): boolean;
 
 // @public
-export function mapFootnotesToPages(pages: Page[], footnoteRefs: Array<{
-    footnoteId: number;
-    pmPos: number;
-}>): Map<number, number[]>;
+export function mapFootnotesToPages(pages: Page[], footnoteRefs: FootnoteRefLocation[]): Map<number, number[]>;
 
 // @public
 export const MAX_FOOTNOTE_LAYOUT_PASSES = 6;
@@ -662,10 +664,7 @@ export interface StabilizeFootnoteLayoutArgs {
     // (undocumented)
     footnoteContentMap: Map<number, FootnoteContent>;
     // (undocumented)
-    footnoteRefs: Array<{
-        footnoteId: number;
-        pmPos: number;
-    }>;
+    footnoteRefs: FootnoteRefLocation[];
     initialLayout: Layout;
     // (undocumented)
     layoutOpts: LayoutOptions;

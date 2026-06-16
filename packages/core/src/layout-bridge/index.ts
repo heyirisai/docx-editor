@@ -100,6 +100,7 @@ export {
   MAX_FOOTNOTE_LAYOUT_PASSES,
 } from './footnoteLayout';
 export type {
+  FootnoteRefLocation,
   MeasureBlocksFn,
   ConvertFootnoteOptions,
   StabilizeFootnoteLayoutArgs,

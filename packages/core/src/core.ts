@@ -374,6 +374,7 @@ export {
 } from './layout-bridge';
 
 export type {
+  FootnoteRefLocation,
   MeasureBlocksFn,
   ConvertFootnoteOptions,
   StabilizeFootnoteLayoutArgs,

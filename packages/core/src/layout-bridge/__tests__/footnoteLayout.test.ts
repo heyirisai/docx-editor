@@ -1,17 +1,21 @@
 import { describe, expect, test } from 'bun:test';
 import {
+  applyFootnotePresentation,
   calculateFootnoteReservedHeights,
   collectFootnoteRefs,
   FOOTNOTE_SEPARATOR_HEIGHT,
   mapFootnotesToPages,
 } from '../footnoteLayout';
+import type { FootnoteRefLocation } from '../footnoteLayout';
 import type {
   FlowBlock,
   ParagraphBlock,
   ParagraphFragment,
   Page,
   TableBlock,
+  TableFragment,
   TextBoxBlock,
+  TextRun,
 } from '../../layout-engine/types';
 
 function paragraphWithFootnote(id: string, footnoteId: number, pmStart: number): ParagraphBlock {
@@ -45,6 +49,43 @@ describe('footnote layout reservation', () => {
 
     expect(reserved.get(1)).toBe(14 + 18 + FOOTNOTE_SEPARATOR_HEIGHT);
     expect(reserved.get(3)).toBe(9 + FOOTNOTE_SEPARATOR_HEIGHT);
+  });
+});
+
+describe('applyFootnotePresentation', () => {
+  test('the synthetic marker run inherits the footnote text font', () => {
+    // Regression: the prepended number run carried no fontFamily, so the
+    // painter fell back to the inherited container default and the footnote
+    // number rendered in a different font than the note text. The marker must
+    // match the note's font (Word renders the number in the FootnoteText face;
+    // the FootnoteReference char style only adds superscript, not a face).
+    const blocks: FlowBlock[] = [
+      {
+        kind: 'paragraph',
+        id: 'fn1',
+        runs: [{ kind: 'text', text: 'See note.', fontFamily: 'Cambria', fontSize: 10 }],
+      },
+    ];
+
+    const out = applyFootnotePresentation(blocks, 3);
+    const marker = (out[0] as ParagraphBlock).runs[0] as TextRun;
+
+    expect(marker.text).toBe('3  ');
+    expect(marker.superscript).toBe(true);
+    expect(marker.fontFamily).toBe('Cambria');
+  });
+
+  test('leaves the marker font unset when the note text has no explicit font', () => {
+    // Both marker and note text then inherit the same container font, so they
+    // still match; we must not invent a divergent family.
+    const blocks: FlowBlock[] = [
+      { kind: 'paragraph', id: 'fn1', runs: [{ kind: 'text', text: 'See note.' }] },
+    ];
+
+    const out = applyFootnotePresentation(blocks, 1);
+    const marker = (out[0] as ParagraphBlock).runs[0] as TextRun;
+
+    expect(marker.fontFamily).toBeUndefined();
   });
 });
 
@@ -111,8 +152,11 @@ describe('collectFootnoteRefs', () => {
 
     expect(collectFootnoteRefs(blocks)).toEqual([
       { footnoteId: 1, pmPos: 10 },
-      { footnoteId: 7, pmPos: 100 },
-      { footnoteId: 8, pmPos: 200 },
+      // In-table refs carry the outermost table id + row index so a split
+      // table can distribute its footnotes per page. The nested-table ref (8)
+      // keeps the OUTER table's context (t1, row 0), not the inner table's.
+      { footnoteId: 7, pmPos: 100, tableBlockId: 't1', rowIndex: 0 },
+      { footnoteId: 8, pmPos: 200, tableBlockId: 't1', rowIndex: 0 },
       { footnoteId: 2, pmPos: 300 },
     ]);
   });
@@ -181,6 +225,55 @@ describe('mapFootnotesToPages', () => {
       new Map([
         [1, [1]],
         [2, [2]],
+      ])
+    );
+  });
+
+  test('distributes a multi-page table’s footnotes by the page holding each row', () => {
+    // Regression: a table split across pages keeps the WHOLE table's pm range
+    // on every fragment, so pm-position matching dumped all footnote refs on
+    // the first table page. Row-index attribution sends each ref to the page
+    // that actually laid out its row. Both fragments below deliberately carry
+    // the same pm range (5..80) to prove the fix does not rely on it.
+    const tableFragment = (pageRows: [fromRow: number, toRow: number]): TableFragment => ({
+      kind: 'table',
+      blockId: 't1',
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 40,
+      fromRow: pageRows[0],
+      toRow: pageRows[1],
+      pmStart: 5,
+      pmEnd: 80,
+    });
+
+    const pages: Page[] = [
+      {
+        number: 1,
+        fragments: [tableFragment([0, 2])],
+        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        size: { w: 300, h: 80 },
+      },
+      {
+        number: 2,
+        fragments: [tableFragment([2, 4])],
+        margins: { top: 0, right: 0, bottom: 0, left: 0 },
+        size: { w: 300, h: 80 },
+      },
+    ];
+
+    const refs: FootnoteRefLocation[] = [
+      { footnoteId: 1, pmPos: 10, tableBlockId: 't1', rowIndex: 0 },
+      { footnoteId: 2, pmPos: 12, tableBlockId: 't1', rowIndex: 1 },
+      { footnoteId: 3, pmPos: 40, tableBlockId: 't1', rowIndex: 2 },
+      { footnoteId: 4, pmPos: 60, tableBlockId: 't1', rowIndex: 3 },
+    ];
+
+    expect(mapFootnotesToPages(pages, refs)).toEqual(
+      new Map([
+        [1, [1, 2]],
+        [2, [3, 4]],
       ])
     );
   });
