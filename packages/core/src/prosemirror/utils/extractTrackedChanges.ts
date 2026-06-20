@@ -74,6 +74,7 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
 
   const raw: TrackedChangeEntry[] = [];
   const commentToRevision = new Map<number, number>();
+  const commentMetadata = new Map<number, { revisions: Set<number>; hasCleanText: boolean }>();
   doc.descendants((node, pos) => {
     // Structural revisions on the paragraph mark itself
     // (`<w:pPr><w:rPr><w:ins/>` / `<w:del/>`). Surface as their own entry
@@ -360,15 +361,30 @@ export function extractTrackedChanges(state: EditorState | null): TrackedChanges
         tcMark = mark;
       }
     }
-    if (commentType && tcMark) {
+    if (commentType) {
       const commentMark = node.marks.find((m) => m.type === commentType);
       if (commentMark) {
         const cid = commentMark.attrs.commentId as number;
-        const rid = tcMark.attrs.revisionId as number;
-        if (!commentToRevision.has(cid)) commentToRevision.set(cid, rid);
+        let meta = commentMetadata.get(cid);
+        if (!meta) {
+          meta = { revisions: new Set(), hasCleanText: false };
+          commentMetadata.set(cid, meta);
+        }
+        if (tcMark) {
+          meta.revisions.add(tcMark.attrs.revisionId as number);
+        } else {
+          meta.hasCleanText = true;
+        }
       }
     }
   });
+
+  for (const [cid, meta] of commentMetadata.entries()) {
+    if (!meta.hasCleanText && meta.revisions.size === 1) {
+      const rid = meta.revisions.values().next().value!;
+      commentToRevision.set(cid, rid);
+    }
+  }
 
   // Coalesce structural-revision entries that share a `(id, author, date)`
   // triple across nested nodes. A row-insertion typically produces one

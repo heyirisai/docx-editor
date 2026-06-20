@@ -128,8 +128,8 @@ function createParagraphChangeTrackerPlugin(): Plugin<ParagraphChangeTrackerStat
           };
         }
 
-        // If no doc changes, keep previous state
-        if (!tr.docChanged) {
+        // If no steps, keep previous state
+        if (tr.steps.length === 0) {
           return prevState;
         }
 
