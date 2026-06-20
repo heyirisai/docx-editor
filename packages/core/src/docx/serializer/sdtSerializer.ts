@@ -6,12 +6,11 @@
  * unmodeled features such as data binding, `w14:`/`w15:` extensions, and
  * `@lastValue`), then serializing the child blocks inside `w:sdtContent`.
  *
- * Serialization is intentionally capture-and-replay, not re-synthesis: in
- * this phase the properties block is never edited, so echoing Word's own
- * bytes is both lossless and guaranteed schema-valid. Synthesizing a
- * `w:sdtPr` from the modeled projection will be needed once block SDTs can
- * be *created* in the editor (a follow-up); it is deliberately omitted here
- * rather than carried as untested code.
+ * Serialization is intentionally capture-and-replay, not re-synthesis: the
+ * properties block is never edited here, so echoing Word's own bytes is both
+ * lossless and guaranteed schema-valid. A block SDT created from code (headless
+ * `createContentControl`) carries a synthesized `w:sdtPr` in `rawPropertiesXml`,
+ * which this path replays the same way.
  *
  * Shared by the body serializer and the header/footer serializer so block
  * SDTs round-trip identically wherever block content can appear.

@@ -130,9 +130,18 @@ export {
   ContentControlLockedError,
   ContentControlTypeError,
   ContentControlBoundError,
+  ContentControlKindError,
   type ContentControlFilter,
   type ContentControlInfo,
+  type ContentControlLocation,
+  type FindContentControlsOptions,
 } from './agent/contentControls';
+export {
+  createContentControl,
+  ContentControlCreateError,
+  type CreateContentControlTarget,
+  type NewContentControlProps,
+} from './agent/createContentControl';
 export {
   setContentControlValue,
   formatSdtDate,

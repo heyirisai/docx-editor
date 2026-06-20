@@ -20,6 +20,7 @@ import {
   ContentControlLockedError,
   ContentControlTypeError,
   ContentControlBoundError,
+  ContentControlKindError,
 } from '../contentControls';
 import type { BlockContent, Document } from '../../types/document';
 
@@ -282,5 +283,477 @@ describe('round-2 write guards', () => {
   test('refuses free-text replacement of a group control unless forced', () => {
     const doc = docWith({ sdtType: 'group', tag: 'g' });
     expect(() => setContentControlContent(doc, { tag: 'g' }, 'x')).toThrow(ContentControlTypeError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inline content controls — discovery (Workstream A: read traversal).
+// Built from minimal literals (cast like docWith above; a full Document is heavy).
+// ---------------------------------------------------------------------------
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const mkRun = (text: string, formatting?: Record<string, unknown>): any => ({
+  type: 'run',
+  content: [{ type: 'text', text }],
+  ...(formatting ? { formatting } : {}),
+});
+const mkInlineSdt = (tag: string, text: string, extra: Record<string, unknown> = {}): any => ({
+  type: 'inlineSdt',
+  properties: { sdtType: 'richText', tag, ...extra },
+  content: [mkRun(text)],
+});
+const mkPara = (...content: any[]): any => ({ type: 'paragraph', content });
+const mkBodyDoc = (content: any[]): Document =>
+  ({ package: { document: { content } } }) as unknown as Document;
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+describe('inline content controls — discovery', () => {
+  test('finds an inline control in a body paragraph with kind/location/text', () => {
+    const doc = mkBodyDoc([
+      mkPara(mkRun('Dear '), mkInlineSdt('supplier-name', 'ACME Ltd'), mkRun('.')),
+    ]);
+    const c = findContentControl(doc, { tag: 'supplier-name' })!;
+    expect(c).toBeDefined();
+    expect(c.kind).toBe('inline');
+    expect(c.location).toEqual({ part: 'body' });
+    expect(c.text).toBe('ACME Ltd');
+    expect(c.depth).toBe(0);
+    expect(c.path).toEqual([0]); // block path of the enclosing paragraph
+  });
+
+  test('finds an inline control inside a table cell', () => {
+    const doc = mkBodyDoc([
+      mkPara(mkRun('lead')),
+      {
+        type: 'table',
+        rows: [
+          {
+            type: 'tableRow',
+            cells: [
+              { type: 'tableCell', content: [mkPara(mkRun('label'))] },
+              { type: 'tableCell', content: [mkPara(mkInlineSdt('start-date', '2026-01-01'))] },
+            ],
+          },
+        ],
+      },
+    ]);
+    const c = findContentControl(doc, { tag: 'start-date' })!;
+    expect(c.kind).toBe('inline');
+    expect(c.location).toEqual({ part: 'body' });
+    expect(c.path).toEqual([1, 0]); // table at body index 1, paragraph 0 in the cell
+    expect(c.text).toBe('2026-01-01');
+  });
+
+  test('finds an inline control inside a nested table', () => {
+    const inner = {
+      type: 'table',
+      rows: [
+        {
+          type: 'tableRow',
+          cells: [{ type: 'tableCell', content: [mkPara(mkInlineSdt('deep', 'D'))] }],
+        },
+      ],
+    };
+    const doc = mkBodyDoc([
+      {
+        type: 'table',
+        rows: [{ type: 'tableRow', cells: [{ type: 'tableCell', content: [inner] }] }],
+      },
+    ]);
+    const c = findContentControl(doc, { tag: 'deep' })!;
+    expect(c.kind).toBe('inline');
+    expect(c.path).toEqual([0, 0, 0]); // outer table → inner table → paragraph
+    expect(c.text).toBe('D');
+  });
+
+  test('reports nesting depth = enclosing-control count', () => {
+    const doc = mkBodyDoc([
+      {
+        type: 'blockSdt',
+        properties: { sdtType: 'richText', tag: 'outer' },
+        content: [mkPara(mkInlineSdt('inner', 'x'))],
+      },
+    ]);
+    const all = findContentControls(doc);
+    expect(all.find((c) => c.tag === 'outer')!.depth).toBe(0);
+    const inner = all.find((c) => c.tag === 'inner')!;
+    expect(inner.depth).toBe(1);
+    expect(inner.kind).toBe('inline');
+  });
+
+  test('returns block then inline controls in strict document order', () => {
+    const doc = mkBodyDoc([
+      {
+        type: 'blockSdt',
+        properties: { sdtType: 'richText', tag: 'b1' },
+        content: [mkPara(mkRun('B'))],
+      },
+      mkPara(mkInlineSdt('i1', 'one'), mkInlineSdt('i2', 'two')),
+    ]);
+    expect(findContentControls(doc).map((c) => c.tag)).toEqual(['b1', 'i1', 'i2']);
+  });
+
+  test('getContentControlText flattens runs, hyperlinks, and nested inline SDTs', () => {
+    const doc = mkBodyDoc([
+      mkPara({
+        type: 'inlineSdt',
+        properties: { sdtType: 'richText', tag: 'rich' },
+        content: [
+          mkRun('A'),
+          { type: 'hyperlink', children: [mkRun('B')] },
+          mkInlineSdt('nested', 'C'),
+        ],
+      }),
+    ]);
+    expect(findContentControl(doc, { tag: 'rich' })!.text).toBe('ABC');
+  });
+
+  test('block controls now also carry kind:block and location.body (no regression)', async () => {
+    const doc = await loadFixture();
+    const controls = findContentControls(doc);
+    expect(controls.length).toBe(11); // unchanged
+    for (const c of controls) {
+      expect(c.kind).toBe('block');
+      expect(c.location).toEqual({ part: 'body' });
+    }
+  });
+});
+
+describe('header/footer scope', () => {
+  const hfDoc = (): Document =>
+    ({
+      package: {
+        document: { content: [mkPara(mkInlineSdt('body-ctrl', 'b'))] },
+        headers: new Map([
+          ['rId7', { type: 'header', content: [mkPara(mkInlineSdt('hdr-ctrl', 'H'))] }],
+        ]),
+        footers: new Map([
+          ['rId9', { type: 'footer', content: [mkPara(mkInlineSdt('ftr-ctrl', 'F'))] }],
+        ]),
+      },
+    }) as unknown as Document;
+
+  test('default scope omits header/footer controls', () => {
+    expect(findContentControls(hfDoc()).map((c) => c.tag)).toEqual(['body-ctrl']);
+  });
+
+  test('includeHeadersFooters discovers header/footer controls with rId location, body first', () => {
+    const all = findContentControls(hfDoc(), {}, { includeHeadersFooters: true });
+    expect(all.map((c) => c.tag)).toEqual(['body-ctrl', 'hdr-ctrl', 'ftr-ctrl']);
+    expect(all.find((c) => c.tag === 'hdr-ctrl')!.location).toEqual({
+      part: 'header',
+      rId: 'rId7',
+    });
+    expect(all.find((c) => c.tag === 'ftr-ctrl')!.location).toEqual({
+      part: 'footer',
+      rId: 'rId9',
+    });
+  });
+
+  test('includeHeadersFooters on a bare DocumentBody does not throw and returns body only', () => {
+    const body = { content: [mkPara(mkInlineSdt('only', 'x'))] } as unknown as Parameters<
+      typeof findContentControls
+    >[0];
+    expect(
+      findContentControls(body, {}, { includeHeadersFooters: true }).map((c) => c.tag)
+    ).toEqual(['only']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inline content controls — mutation (Workstream B).
+// ---------------------------------------------------------------------------
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const firstBlock = (doc: Document): any => doc.package.document.content[0];
+
+describe('setContentControlContent — inline', () => {
+  test('fills an inline control with a single run (not a paragraph), siblings untouched', () => {
+    const doc = mkBodyDoc([mkPara(mkRun('Dear '), mkInlineSdt('name', 'OLD'), mkRun('.'))]);
+    const next = setContentControlContent(doc, { tag: 'name' }, 'ACME Ltd');
+    expect(findContentControl(next, { tag: 'name' })!.text).toBe('ACME Ltd');
+
+    const para = firstBlock(next);
+    const sdt = para.content[1];
+    expect(sdt.type).toBe('inlineSdt');
+    expect(sdt.content).toHaveLength(1);
+    expect(sdt.content[0].type).toBe('run');
+    expect(sdt.content[0].content[0]).toEqual({ type: 'text', text: 'ACME Ltd' });
+    expect(para.content[0].content[0].text).toBe('Dear '); // sibling run before
+    expect(para.content[2].content[0].text).toBe('.'); // sibling run after
+
+    // purity — original document unchanged
+    expect(findContentControl(doc, { tag: 'name' })!.text).toBe('OLD');
+  });
+
+  test('the filled run inherits the placeholder run formatting', () => {
+    const doc = mkBodyDoc([
+      mkPara({
+        type: 'inlineSdt',
+        properties: { sdtType: 'richText', tag: 'f' },
+        content: [mkRun('x', { highlight: 'yellow', bold: true, italic: true })],
+      }),
+    ]);
+    const sdt = firstBlock(setContentControlContent(doc, { tag: 'f' }, 'V')).content[0];
+    expect(sdt.content[0].formatting).toEqual({ highlight: 'yellow', bold: true, italic: true });
+  });
+
+  test('preserveSpace is set only when the value has boundary whitespace', () => {
+    const d = () => mkBodyDoc([mkPara(mkInlineSdt('s', 'x'))]);
+    // sdt → run → text node (where preserveSpace lives)
+    const padded = firstBlock(setContentControlContent(d(), { tag: 's' }, ' padded ')).content[0];
+    expect(padded.content[0].content[0].preserveSpace).toBe(true);
+    const tight = firstBlock(setContentControlContent(d(), { tag: 's' }, 'tight')).content[0];
+    expect(tight.content[0].content[0].preserveSpace).toBeUndefined();
+  });
+
+  test('plainText fills as one literal run; richText turns \\n into a w:br', () => {
+    // plainText → one run whose content is a single literal text node (no break).
+    const pt = firstBlock(
+      setContentControlContent(
+        mkBodyDoc([mkPara(mkInlineSdt('p', 'x', { sdtType: 'plainText' }))]),
+        { tag: 'p' },
+        'a\nb'
+      )
+    ).content[0];
+    expect(pt.content).toHaveLength(1);
+    expect(pt.content[0].content).toEqual([{ type: 'text', text: 'a\nb' }]);
+
+    // richText → one run whose content interleaves text and a w:br.
+    const rt = firstBlock(
+      setContentControlContent(mkBodyDoc([mkPara(mkInlineSdt('r', 'x'))]), { tag: 'r' }, 'a\nb')
+    ).content[0];
+    expect(rt.content).toHaveLength(1);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(rt.content[0].content.map((c: any) => c.type)).toEqual(['text', 'break', 'text']);
+  });
+
+  test('fills an inline control inside a table cell, leaving sibling cells alone', () => {
+    const tableDoc = () =>
+      mkBodyDoc([
+        {
+          type: 'table',
+          rows: [
+            {
+              type: 'tableRow',
+              cells: [
+                { type: 'tableCell', content: [mkPara(mkRun('label'))] },
+                { type: 'tableCell', content: [mkPara(mkInlineSdt('cell-ctrl', 'OLD'))] },
+              ],
+            },
+          ],
+        },
+      ]);
+    const next = setContentControlContent(tableDoc(), { tag: 'cell-ctrl' }, 'VAL');
+    expect(findContentControl(next, { tag: 'cell-ctrl' })!.text).toBe('VAL');
+    const tbl = firstBlock(next);
+    expect(tbl.rows[0].cells[0].content[0].content[0].content[0].text).toBe('label');
+  });
+
+  test('rejects block content for an inline control, but flattens a single all-inline paragraph', () => {
+    const d = () => mkBodyDoc([mkPara(mkInlineSdt('k', 'x'))]);
+    expect(() =>
+      setContentControlContent(d(), { tag: 'k' }, [
+        { type: 'paragraph', content: [mkRun('a')] },
+        { type: 'paragraph', content: [mkRun('b')] },
+      ] as never)
+    ).toThrow(ContentControlKindError);
+
+    const flat = setContentControlContent(d(), { tag: 'k' }, [
+      { type: 'paragraph', content: [mkRun('flat')] },
+    ] as never);
+    expect(findContentControl(flat, { tag: 'k' })!.text).toBe('flat');
+    expect(firstBlock(flat).content[0].content[0].type).toBe('run'); // not a paragraph
+
+    // a paragraph carrying a non-inline marker (comment range) is rejected, not silently dropped
+    expect(() =>
+      setContentControlContent(d(), { tag: 'k' }, [
+        { type: 'paragraph', content: [{ type: 'commentRangeStart', id: '1' }, mkRun('a')] },
+      ] as never)
+    ).toThrow(ContentControlKindError);
+  });
+
+  test('applies the lock/type/data-bound guards to inline controls', () => {
+    expect(() =>
+      setContentControlContent(
+        mkBodyDoc([mkPara(mkInlineSdt('l', 'x', { lock: 'sdtContentLocked' }))]),
+        { tag: 'l' },
+        'v'
+      )
+    ).toThrow(ContentControlLockedError);
+    expect(() =>
+      setContentControlContent(
+        mkBodyDoc([mkPara(mkInlineSdt('dd', 'x', { sdtType: 'dropDownList' }))]),
+        { tag: 'dd' },
+        'v'
+      )
+    ).toThrow(ContentControlTypeError);
+    expect(() =>
+      setContentControlContent(
+        mkBodyDoc([mkPara(mkInlineSdt('b', 'x', { dataBinding: { xpath: '/x' } }))]),
+        { tag: 'b' },
+        'v'
+      )
+    ).toThrow(ContentControlBoundError);
+    const forced = setContentControlContent(
+      mkBodyDoc([mkPara(mkInlineSdt('dd2', 'x', { sdtType: 'dropDownList' }))]),
+      { tag: 'dd2' },
+      'v',
+      { force: true }
+    );
+    expect(findContentControl(forced, { tag: 'dd2' })!.text).toBe('v');
+  });
+
+  test('clears showingPlcHdr (projection and raw) on an inline placeholder write', () => {
+    const phDoc = mkBodyDoc([
+      mkPara({
+        type: 'inlineSdt',
+        properties: {
+          sdtType: 'richText',
+          tag: 'ph',
+          showingPlaceholder: true,
+          rawPropertiesXml: '<w:sdtPr><w:tag w:val="ph"/><w:showingPlcHdr/></w:sdtPr>',
+        },
+        content: [mkRun('Click here')],
+      }),
+    ]);
+    const sdt = firstBlock(setContentControlContent(phDoc, { tag: 'ph' }, 'Filled')).content[0];
+    expect(sdt.properties.showingPlaceholder).toBe(false);
+    expect(sdt.properties.rawPropertiesXml).not.toContain('showingPlcHdr');
+  });
+
+  test('includeHeadersFooters writes an inline control in a header, immutably', () => {
+    const hfWrite = (): Document =>
+      ({
+        package: {
+          document: { content: [mkPara(mkRun('body'))] },
+          headers: new Map([
+            ['rId7', { type: 'header', content: [mkPara(mkInlineSdt('h', 'OLD'))] }],
+          ]),
+        },
+      }) as unknown as Document;
+
+    expect(() => setContentControlContent(hfWrite(), { tag: 'h' }, 'v')).toThrow(
+      ContentControlNotFoundError
+    );
+
+    const doc0 = hfWrite();
+    const next = setContentControlContent(doc0, { tag: 'h' }, 'NEW', {
+      includeHeadersFooters: true,
+    });
+    expect(findContentControl(next, { tag: 'h' }, { includeHeadersFooters: true })!.text).toBe(
+      'NEW'
+    );
+    expect(findContentControl(doc0, { tag: 'h' }, { includeHeadersFooters: true })!.text).toBe(
+      'OLD'
+    ); // original intact
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect((next as any).package.headers).not.toBe((doc0 as any).package.headers);
+  });
+});
+
+describe('removeContentControl — inline', () => {
+  const rmDoc = () => mkBodyDoc([mkPara(mkRun('A '), mkInlineSdt('r', 'KEEP'), mkRun(' B'))]);
+
+  test('keepContent unwraps the runs inline and removes the box', () => {
+    const kept = removeContentControl(rmDoc(), { tag: 'r' }, { keepContent: true });
+    expect(findContentControl(kept, { tag: 'r' })).toBeUndefined();
+    const para = firstBlock(kept);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(para.content.some((n: any) => n.type === 'inlineSdt')).toBe(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(para.content.some((n: any) => n.type === 'run' && n.content[0]?.text === 'KEEP')).toBe(
+      true
+    );
+  });
+
+  test('delete removes the control and its content, preserving surrounding runs', () => {
+    const del = removeContentControl(rmDoc(), { tag: 'r' });
+    const para = firstBlock(del);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(para.content.some((n: any) => n.type === 'inlineSdt')).toBe(false);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    expect(para.content.map((n: any) => n.content?.[0]?.text)).toEqual(['A ', ' B']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// { all: true } — apply a mutation to every matching control, not just the first.
+// ---------------------------------------------------------------------------
+
+describe('setContentControlContent / removeContentControl — { all: true }', () => {
+  // Same tag recurring three times: two in the body (one in a table cell), and
+  // — for scope — one in a header and one in a footer.
+  const repeatedDoc = (extras: Record<string, unknown> = {}): Document =>
+    ({
+      package: {
+        document: {
+          content: [
+            mkPara(mkRun('Dear '), mkInlineSdt('name', 'OLD', extras), mkRun(',')),
+            {
+              type: 'table',
+              rows: [
+                {
+                  type: 'tableRow',
+                  cells: [{ type: 'tableCell', content: [mkPara(mkInlineSdt('name', 'OLD'))] }],
+                },
+              ],
+            },
+          ],
+        },
+        headers: new Map([
+          ['rId7', { type: 'header', content: [mkPara(mkInlineSdt('name', 'OLD'))] }],
+        ]),
+        footers: new Map([
+          ['rId9', { type: 'footer', content: [mkPara(mkInlineSdt('name', 'OLD'))] }],
+        ]),
+      },
+    }) as unknown as Document;
+
+  test('default (first-match) fills only the first; { all } fills every body match', () => {
+    const first = setContentControlContent(repeatedDoc(), { tag: 'name' }, 'NEW');
+    expect(findContentControls(first, { tag: 'name' }).map((c) => c.text)).toEqual(['NEW', 'OLD']);
+
+    const all = setContentControlContent(repeatedDoc(), { tag: 'name' }, 'NEW', { all: true });
+    expect(findContentControls(all, { tag: 'name' }).map((c) => c.text)).toEqual(['NEW', 'NEW']);
+  });
+
+  test('{ all } with includeHeadersFooters fills body, header, and footer matches', () => {
+    const all = setContentControlContent(repeatedDoc(), { tag: 'name' }, 'NEW', {
+      all: true,
+      includeHeadersFooters: true,
+    });
+    expect(
+      findContentControls(all, { tag: 'name' }, { includeHeadersFooters: true }).map((c) => c.text)
+    ).toEqual(['NEW', 'NEW', 'NEW', 'NEW']);
+  });
+
+  test('{ all } is atomic — a locked match aborts the whole write, input untouched', () => {
+    const doc = repeatedDoc({ lock: 'contentLocked' }); // the first 'name' is locked
+    expect(() => setContentControlContent(doc, { tag: 'name' }, 'NEW', { all: true })).toThrow(
+      ContentControlLockedError
+    );
+    // nothing was written — the original is unchanged
+    expect(findContentControls(doc, { tag: 'name' }).map((c) => c.text)).toEqual(['OLD', 'OLD']);
+  });
+
+  test('{ all } with force overrides the lock and fills every match', () => {
+    const doc = repeatedDoc({ lock: 'contentLocked' });
+    const forced = setContentControlContent(doc, { tag: 'name' }, 'NEW', {
+      all: true,
+      force: true,
+    });
+    expect(findContentControls(forced, { tag: 'name' }).map((c) => c.text)).toEqual(['NEW', 'NEW']);
+  });
+
+  test('{ all } with no match still throws ContentControlNotFoundError', () => {
+    expect(() =>
+      setContentControlContent(repeatedDoc(), { tag: 'absent' }, 'NEW', { all: true })
+    ).toThrow(ContentControlNotFoundError);
+  });
+
+  test('removeContentControl { all } removes every matching control', () => {
+    const all = removeContentControl(repeatedDoc(), { tag: 'name' }, { all: true });
+    expect(findContentControls(all, { tag: 'name' })).toHaveLength(0);
   });
 });

@@ -12,18 +12,17 @@
  * same capture-and-replay contract used everywhere else for SDTs.
  */
 
-import type { Document, BlockContent, SdtProperties, Run } from '../types/document';
+import type { Document, BlockContent, SdtProperties, Run, InlineSdt } from '../types/document';
 import {
-  ContentControlNotFoundError,
   ContentControlLockedError,
   ContentControlBoundError,
   isContentLocked,
   isDataBound,
   clearShowingPlaceholderXml,
-  applyToFirst,
-  rebuild,
+  applyControlMutation,
   type ContentControlFilter,
-  type ControlOp,
+  type BlockControlOp,
+  type InlineControlOp,
 } from './contentControls';
 
 /** A typed value to apply to a content control. */
@@ -176,11 +175,13 @@ export function applyContentControlValue(
           `'${value.value}' is not one of the control's list items.`
         );
       }
+      // Always write `w:lastValue` (the stored selection): a dropdown/combo box
+      // that has never been picked has no such attribute, and without it Word
+      // loses the structured selection on reload even though the display text is
+      // right. `setAttr` adds it when absent and is a no-op if the element is
+      // missing entirely (e.g. an empty raw), so this is safe.
       const element = props.sdtType === 'comboBox' ? 'w:comboBox' : 'w:dropDownList';
-      const nextRaw =
-        readAttr(raw, element, 'w:lastValue') != null
-          ? setAttr(raw, element, 'w:lastValue', escapeXmlAttr(item.value))
-          : raw;
+      const nextRaw = setAttr(raw, element, 'w:lastValue', escapeXmlAttr(item.value));
       return {
         properties: withoutPlaceholder(props, nextRaw),
         content: [paragraph(item.displayText)],
@@ -228,10 +229,17 @@ export function applyContentControlValue(
 
 /**
  * Set a typed value (dropdown selection / checkbox / date) on the first control
- * matching `filter`, returning a new {@link Document}. Updates both the visible
- * content and the structured raw state, so the result round-trips and Word
- * shows the new value. Throws {@link ContentControlNotFoundError} if nothing
- * matches, {@link ContentControlLockedError} if content-locked,
+ * matching `filter` — **block-level OR inline** (inline includes controls inside
+ * table cells, and with `includeHeadersFooters: true`, headers/footers) — returning a new
+ * {@link Document}. Updates both the visible content and the structured raw
+ * state (dropdown `w:lastValue`, `w14:checked`, `w:date/@w:fullDate`), so the
+ * result round-trips and Word shows the new value.
+ *
+ * Pass `{ all: true }` to set the value on **every** control matching `filter`
+ * (a value shared across duplicated controls) instead of just the first.
+ *
+ * Throws `ContentControlNotFoundError` if nothing matches,
+ * {@link ContentControlLockedError} if content-locked,
  * {@link ContentControlBoundError} if data-bound (the store would override the
  * write), and {@link ContentControlValueError} if the value doesn't fit the
  * control type. The lock/bound guards are overridable with `{ force: true }`.
@@ -240,20 +248,40 @@ export function setContentControlValue(
   doc: Document,
   filter: ContentControlFilter,
   value: ContentControlValue,
-  options: { force?: boolean } = {}
+  options: { force?: boolean; includeHeadersFooters?: boolean; all?: boolean } = {}
 ): Document {
-  const state = { done: false };
-  const op: ControlOp = (control) => {
-    if (!options.force && isContentLocked(control.properties.lock)) {
-      throw new ContentControlLockedError(control.properties.lock, 'edit');
+  const guard = (props: SdtProperties): void => {
+    if (!options.force && isContentLocked(props.lock)) {
+      throw new ContentControlLockedError(props.lock, 'edit');
     }
-    if (!options.force && isDataBound(control.properties)) {
+    if (!options.force && isDataBound(props)) {
       throw new ContentControlBoundError();
     }
+  };
+  const blockOp: BlockControlOp = (control) => {
+    guard(control.properties);
     const { properties, content } = applyContentControlValue(control.properties, value);
     return [{ ...control, properties, content }];
   };
-  const content = applyToFirst(doc.package.document.content, filter, op, state);
-  if (!state.done) throw new ContentControlNotFoundError(filter);
-  return rebuild(doc, content);
+  const inlineOp: InlineControlOp = (control) => {
+    guard(control.properties);
+    // The typed setters render their display value as a single paragraph of
+    // runs; lift those runs into the inline control's inline content (mirroring
+    // how setContentControlContent fills an inline control).
+    const { properties, content } = applyContentControlValue(control.properties, value);
+    const display = content[0];
+    const inlineContent = (
+      display && display.type === 'paragraph' ? display.content : []
+    ) as InlineSdt['content'];
+    return [{ ...control, properties, content: inlineContent }];
+  };
+  return applyControlMutation(
+    doc,
+    filter,
+    blockOp,
+    inlineOp,
+    options.includeHeadersFooters ?? false,
+    undefined,
+    options.all ?? false
+  );
 }

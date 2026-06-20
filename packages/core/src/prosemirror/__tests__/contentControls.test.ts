@@ -263,3 +263,56 @@ describe('PM content-control addressing', () => {
     expect(String(next.doc.firstChild!.attrs.rawPropertiesXml)).not.toContain('showingPlcHdr');
   });
 });
+
+describe('PM inline content controls (write/remove)', () => {
+  function inlineState() {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.text('Dear '),
+        inlineSdt({ sdtType: 'richText', tag: 'name', alias: 'Name' }, 'OLD'),
+        schema.text('.'),
+      ]),
+    ]);
+    return EditorState.create({ schema, doc });
+  }
+
+  test('fills an inline control with inline content (no paragraph), siblings intact', () => {
+    const state = inlineState();
+    // If this built a paragraph inside the paragraph, replaceWith/apply would throw.
+    const next = state.apply(setContentControlContentTr(state, { tag: 'name' }, 'ACME'));
+    const ctrl = findContentControlsInPM(next.doc, { tag: 'name' })[0];
+    expect(ctrl.text).toBe('ACME');
+
+    const node = next.doc.nodeAt(ctrl.pos)!;
+    expect(node.type.name).toBe('sdt');
+    node.content.forEach((child) => expect(child.isInline).toBe(true)); // no block children
+    expect(next.doc.childCount).toBe(1); // paragraph not split
+    expect(next.doc.textContent).toBe('Dear ACME.'); // surrounding text preserved
+  });
+
+  test('richText inline fill turns \\n into a hardBreak (not a new paragraph)', () => {
+    const state = inlineState();
+    const next = state.apply(setContentControlContentTr(state, { tag: 'name' }, 'a\nb'));
+    const node = next.doc.nodeAt(findContentControlPos(next.doc, { tag: 'name' })!)!;
+    let hasBreak = false;
+    node.descendants((n) => {
+      if (n.type.name === 'hardBreak') hasBreak = true;
+    });
+    expect(hasBreak).toBe(true);
+    expect(next.doc.childCount).toBe(1);
+  });
+
+  test('keepContent unwraps inline content in place; delete removes it', () => {
+    const state = inlineState();
+    const unwrapped = state.apply(
+      removeContentControlTr(state, { tag: 'name' }, { keepContent: true })
+    );
+    expect(findContentControlsInPM(unwrapped.doc, { tag: 'name' })).toHaveLength(0);
+    expect(unwrapped.doc.textContent).toBe('Dear OLD.'); // runs stay inline
+    expect(unwrapped.doc.childCount).toBe(1);
+
+    const deleted = state.apply(removeContentControlTr(state, { tag: 'name' }));
+    expect(findContentControlsInPM(deleted.doc, { tag: 'name' })).toHaveLength(0);
+    expect(deleted.doc.textContent).toBe('Dear .'); // control content gone, siblings intact
+  });
+});

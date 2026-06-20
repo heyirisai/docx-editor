@@ -8,7 +8,7 @@
  */
 
 import type { EditorState, Transaction } from 'prosemirror-state';
-import type { Node as PMNode, Schema } from 'prosemirror-model';
+import type { Node as PMNode, Mark, Schema } from 'prosemirror-model';
 
 import {
   ContentControlNotFoundError,
@@ -131,26 +131,6 @@ export function findContentControlPos(doc: PMNode, filter: ContentControlFilter)
   return findContentControlsInPM(doc, filter)[0]?.pos ?? null;
 }
 
-/** Locate the first matching blockSdt node + its position in the PM doc. */
-function locateBlockSdt(
-  doc: PMNode,
-  filter: ContentControlFilter
-): { node: PMNode; pos: number } | null {
-  let found: { node: PMNode; pos: number } | null = null;
-  doc.descendants((node, pos) => {
-    if (found) return false;
-    if (
-      node.type.name === 'blockSdt' &&
-      attrsMatch(node.attrs as Record<string, unknown>, filter)
-    ) {
-      found = { node, pos };
-      return false;
-    }
-    return true;
-  });
-  return found;
-}
-
 /** Locate the first matching block or inline SDT node + its position in the PM doc. */
 function locateValueControl(
   doc: PMNode,
@@ -173,13 +153,52 @@ function locateContentControlAtPos(doc: PMNode, pos: number): { node: PMNode; po
   return node && isContentControlNode(node) ? { node, pos } : null;
 }
 
+/** Marks of the first text leaf inside `node` (so a filled inline control keeps its formatting). */
+function firstTextMarks(node: PMNode): readonly Mark[] | undefined {
+  let marks: readonly Mark[] | undefined;
+  node.descendants((n) => {
+    if (marks) return false;
+    if (n.isText) {
+      marks = n.marks;
+      return false;
+    }
+    return true;
+  });
+  return marks;
+}
+
+/**
+ * Inline nodes for filling an inline (`sdt`) control with `text`, carrying the
+ * existing content's marks. A `plainText` control becomes a single text node;
+ * a `richText` control turns `\n` into a `hardBreak`. Empty text → no content.
+ */
+function inlineTextNodes(
+  schema: Schema,
+  text: string,
+  sdtType: SdtType,
+  marks: readonly Mark[] | undefined
+): PMNode[] {
+  if (!text) return [];
+  if (sdtType === 'plainText' || !text.includes('\n')) return [schema.text(text, marks)];
+  const hardBreak = schema.nodes.hardBreak;
+  const out: PMNode[] = [];
+  text.split('\n').forEach((line, i) => {
+    if (i > 0 && hardBreak) out.push(hardBreak.create());
+    if (line) out.push(schema.text(line, marks));
+  });
+  return out;
+}
+
 /**
  * Build a transaction that replaces the first matching control's content with
- * `text` (newlines become paragraphs; a `plainText` control stays one
- * paragraph). Throws if nothing matches, the control is content-locked, a typed
- * (dropdown/date/…) control, or data-bound (unless `force`). The control's
- * identity/raw props are kept; a `w:showingPlcHdr` placeholder flag is cleared
- * so the new content isn't rendered as placeholder.
+ * `text` — block OR inline. For a block control newlines become paragraphs (a
+ * `plainText` control stays one paragraph); for an inline control the text is
+ * written as inline runs carrying the existing formatting, with `\n` as a line
+ * break (a `plainText` inline control gets a single text node). Throws if
+ * nothing matches, the control is content-locked, a typed (dropdown/date/…)
+ * control, or data-bound (unless `force`). The control's identity/raw props are
+ * kept; a `w:showingPlcHdr` placeholder flag is cleared so the new content isn't
+ * rendered as placeholder.
  */
 export function setContentControlContentTr(
   state: EditorState,
@@ -187,7 +206,7 @@ export function setContentControlContentTr(
   text: string,
   options: { force?: boolean } = {}
 ): Transaction {
-  const target = locateBlockSdt(state.doc, filter);
+  const target = locateValueControl(state.doc, filter);
   if (!target) throw new ContentControlNotFoundError(filter);
   const attrs = target.node.attrs as Record<string, unknown>;
   if (!options.force && isContentLocked(attrs.lock as SdtProperties['lock'])) {
@@ -201,13 +220,18 @@ export function setContentControlContentTr(
     throw new ContentControlBoundError();
   }
   const { schema } = state;
-  const lines = sdtType === 'plainText' ? [text] : text.split('\n');
-  const paragraphs = lines.map((line) =>
-    schema.nodes.paragraph.create(null, line ? schema.text(line) : null)
-  );
+  // Splice the result at the control's own content level: inline runs for an
+  // inline `sdt` (never a paragraph — that would corrupt the doc), paragraphs
+  // for a block `blockSdt`.
+  const replacement =
+    target.node.type.name === 'sdt'
+      ? inlineTextNodes(schema, text, sdtType, firstTextMarks(target.node))
+      : (sdtType === 'plainText' ? [text] : text.split('\n')).map((line) =>
+          schema.nodes.paragraph.create(null, line ? schema.text(line) : null)
+        );
   const from = target.pos + 1;
   const to = target.pos + 1 + target.node.content.size;
-  const tr = state.tr.replaceWith(from, to, paragraphs);
+  const tr = state.tr.replaceWith(from, to, replacement);
   // Clear placeholder state so the written content isn't styled as placeholder.
   // The node's own start position is unaffected by the inner content replace.
   if (attrs.showingPlaceholder || /showingPlcHdr/.test(String(attrs.rawPropertiesXml ?? ''))) {
@@ -223,9 +247,10 @@ export function setContentControlContentTr(
 }
 
 /**
- * Build a transaction that removes the first matching control. With
- * `keepContent` the inner blocks are unwrapped in place; otherwise the whole
- * region is deleted. Throws if nothing matches or the control is
+ * Build a transaction that removes the first matching control — block OR inline.
+ * With `keepContent` the inner content is unwrapped in place (block content to
+ * its block siblings, inline content into the enclosing paragraph); otherwise
+ * the whole region is deleted. Throws if nothing matches or the control is
  * deletion-locked (unless `force`).
  */
 export function removeContentControlTr(
@@ -233,7 +258,7 @@ export function removeContentControlTr(
   filter: ContentControlFilter,
   options: { force?: boolean; keepContent?: boolean } = {}
 ): Transaction {
-  const target = locateBlockSdt(state.doc, filter);
+  const target = locateValueControl(state.doc, filter);
   if (!target) throw new ContentControlNotFoundError(filter);
   const lock = target.node.attrs.lock as SdtProperties['lock'];
   if (!options.force && isDeletionLocked(lock)) {

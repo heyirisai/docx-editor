@@ -103,7 +103,7 @@ export {
   DEFAULT_AI_ACTIONS,
 } from '../types/agentApi';
 
-// Content-control (SDT) addressing — discover and edit block controls by tag.
+// Content-control (SDT) addressing — discover and edit block + inline controls by tag.
 export {
   findContentControls,
   findContentControl,
@@ -114,9 +114,18 @@ export {
   ContentControlLockedError,
   ContentControlTypeError,
   ContentControlBoundError,
+  ContentControlKindError,
   type ContentControlFilter,
   type ContentControlInfo,
+  type ContentControlLocation,
+  type FindContentControlsOptions,
 } from './contentControls';
+export {
+  createContentControl,
+  ContentControlCreateError,
+  type CreateContentControlTarget,
+  type NewContentControlProps,
+} from './createContentControl';
 export {
   setContentControlValue,
   formatSdtDate,

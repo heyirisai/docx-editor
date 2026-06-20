@@ -15,6 +15,7 @@ import type {
   SimpleField,
   ComplexField,
   InlineSdt,
+  SdtProperties,
   Insertion,
   Deletion,
   MoveFrom,
@@ -204,15 +205,31 @@ export function serializeComplexField(field: ComplexField): string {
 }
 
 /**
- * Serialize an inline SDT (w:sdt)
+ * Synthesize a `<w:sdtPr>` element from the modeled {@link SdtProperties}.
+ *
+ * Used for SDTs created programmatically (no captured `rawPropertiesXml`) —
+ * both by {@link serializeInlineSdt} on save and by the headless
+ * `createContentControl` to seed a control's raw properties. The element order
+ * follows the `CT_SdtPr` sequence (alias, tag, id, lock, placeholder,
+ * showingPlcHdr, then the type marker) so Word accepts the result without repair.
+ *
+ * The `id` is emitted so a created control keeps a stable, unique `w:id` across
+ * the round trip; without it `findContentControl(doc, { id })` would not resolve
+ * the control after a save/reload.
  */
-export function serializeInlineSdt(sdt: InlineSdt): string {
-  const props = sdt.properties;
+export function synthesizeSdtPr(props: SdtProperties): string {
   const prParts: string[] = [];
 
   if (props.alias) prParts.push(`<w:alias w:val="${escapeXml(props.alias)}"/>`);
   if (props.tag) prParts.push(`<w:tag w:val="${escapeXml(props.tag)}"/>`);
+  if (props.id != null) prParts.push(`<w:id w:val="${props.id}"/>`);
   if (props.lock && props.lock !== 'unlocked') prParts.push(`<w:lock w:val="${props.lock}"/>`);
+  // `placeholder` precedes `showingPlcHdr` in the CT_SdtPr sequence (ECMA-376
+  // §17.5.2.38); emit it so a synthesized control keeps a valid element order.
+  if (props.placeholder)
+    prParts.push(
+      `<w:placeholder><w:docPart w:val="${escapeXml(props.placeholder)}"/></w:placeholder>`
+    );
   if (props.showingPlaceholder) prParts.push('<w:showingPlcHdr/>');
 
   // Type-specific properties
@@ -221,8 +238,11 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
       prParts.push('<w:text/>');
       break;
     case 'date':
+      // The display format is the child `<w:dateFormat w:val="…"/>`; the
+      // `w:date/@w:fullDate` slot holds the *value* (the picked date), which a
+      // typed value setter fills in later — never the format.
       if (props.dateFormat) {
-        prParts.push(`<w:date w:fullDate="${escapeXml(props.dateFormat)}"/>`);
+        prParts.push(`<w:date><w:dateFormat w:val="${escapeXml(props.dateFormat)}"/></w:date>`);
       } else {
         prParts.push('<w:date/>');
       }
@@ -234,7 +254,9 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
             `<w:listItem w:displayText="${escapeXml(i.displayText)}" w:value="${escapeXml(i.value)}"/>`
         )
         .join('');
-      prParts.push(`<w:dropDownList>${items}</w:dropDownList>`);
+      // Emit an empty `w:lastValue` (the stored selection slot) so a typed value
+      // setter can later populate it — Word treats an empty value as "no choice".
+      prParts.push(`<w:dropDownList w:lastValue="">${items}</w:dropDownList>`);
       break;
     }
     case 'comboBox': {
@@ -244,18 +266,32 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
             `<w:listItem w:displayText="${escapeXml(i.displayText)}" w:value="${escapeXml(i.value)}"/>`
         )
         .join('');
-      prParts.push(`<w:comboBox>${items}</w:comboBox>`);
+      prParts.push(`<w:comboBox w:lastValue="">${items}</w:comboBox>`);
       break;
     }
     case 'checkbox':
+      // Emit the default glyph states (Word's MS Gothic ☒/☐) so a created
+      // checkbox renders correctly and the value setter reads the symbol font
+      // instead of falling back to a bare code point.
       prParts.push(
-        `<w14:checkbox><w14:checked w14:val="${props.checked ? '1' : '0'}"/></w14:checkbox>`
+        `<w14:checkbox><w14:checked w14:val="${props.checked ? '1' : '0'}"/>` +
+          '<w14:checkedState w14:val="2612" w14:font="MS Gothic"/>' +
+          '<w14:uncheckedState w14:val="2610" w14:font="MS Gothic"/></w14:checkbox>'
       );
       break;
     case 'picture':
       prParts.push('<w:picture/>');
       break;
   }
+
+  return `<w:sdtPr>${prParts.join('')}</w:sdtPr>`;
+}
+
+/**
+ * Serialize an inline SDT (w:sdt)
+ */
+export function serializeInlineSdt(sdt: InlineSdt): string {
+  const props = sdt.properties;
 
   const contentXml = sdt.content
     .map((item) => {
@@ -285,7 +321,7 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
     })
     .join('');
 
-  const sdtPrXml = props.rawPropertiesXml ?? `<w:sdtPr>${prParts.join('')}</w:sdtPr>`;
+  const sdtPrXml = props.rawPropertiesXml ?? synthesizeSdtPr(props);
   const sdtEndPrXml = props.rawEndPropertiesXml ?? '';
   return `<w:sdt>${sdtPrXml}${sdtEndPrXml}<w:sdtContent>${contentXml}</w:sdtContent></w:sdt>`;
 }

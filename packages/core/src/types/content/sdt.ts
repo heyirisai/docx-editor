@@ -84,7 +84,7 @@ export interface SdtProperties {
   placeholder?: string;
   /** Whether the control is currently showing its placeholder (`w:showingPlcHdr`). */
   showingPlaceholder?: boolean;
-  /** Date format for date controls (`w:date@w:fullDate`). */
+  /** Date display format for date controls (`w:date/w:dateFormat@w:val`). */
   dateFormat?: string;
   /** Dropdown/combobox list items. */
   listItems?: { displayText: string; value: string }[];
