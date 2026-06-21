@@ -8,8 +8,20 @@
  * - Ctrl+C, Ctrl+V, Ctrl+X keyboard shortcuts
  */
 
+import createDOMPurify from 'dompurify';
+
 import type { Run, TextFormatting, Paragraph, Theme } from '../types/document';
 import { resolveColorToHex } from './colorResolver';
+
+// dompurify's default export only auto-binds `sanitize` to a `window` that
+// exists at import time (always true in the browser). Bind explicitly to the
+// live window on first use so it also works when a DOM is installed after this
+// module is evaluated (e.g. test environments). The default export is callable
+// as a factory whether it is the bare factory or an already-bound instance.
+let domPurify: ReturnType<typeof createDOMPurify> | undefined;
+function getDomPurify(): ReturnType<typeof createDOMPurify> {
+  return (domPurify ??= createDOMPurify(window));
+}
 
 // ============================================================================
 // TYPES
@@ -413,24 +425,95 @@ export function isEditorHtml(html: string): boolean {
 }
 
 /**
+ * Strip every HTML comment, including downlevel conditional comments
+ * (`<!--[if ...]> ... <![endif]-->`).
+ *
+ * Uses a single linear scan instead of a regex: clipboard HTML is
+ * attacker-controlled, and a lazy `<!--[\s\S]*?-->` against a multi-character
+ * terminator backtracks polynomially. The scan also guarantees no stray
+ * `<!--` survives (an unterminated comment is dropped through end-of-string),
+ * which a single regex pass cannot promise.
+ */
+function stripHtmlComments(html: string): string {
+  let result = '';
+  let i = 0;
+  while (i < html.length) {
+    const start = html.indexOf('<!--', i);
+    if (start === -1) {
+      result += html.slice(i);
+      break;
+    }
+    result += html.slice(i, start);
+    const end = html.indexOf('-->', start + 4);
+    if (end === -1) {
+      // Unterminated comment: drop the remainder so no `<!--` can leak through.
+      break;
+    }
+    i = end + 3;
+  }
+  return result;
+}
+
+/**
+ * Remove `<prefix...> ... </prefix...>` element blocks (e.g. Office `<o:...>`
+ * and Word `<w:...>` namespaced tags) from attacker-controlled clipboard HTML.
+ *
+ * Linear scan instead of `/<prefix[^>]*>[\s\S]*?<\/prefix[^>]*>/gi`: that lazy
+ * pattern backtracks polynomially (O(n^2)) on hostile input with many openers
+ * and no close tag. Mirrors the regex's first-close-wins semantics — each
+ * opener is paired with the next close tag anywhere ahead; an opener with no
+ * close tag anywhere is left intact (exactly what the lazy regex did).
+ */
+function stripPairedNamespaceTags(html: string, prefix: string): string {
+  const open = '<' + prefix;
+  const close = '</' + prefix;
+  // Search case-insensitively to match the `/gi` regex this replaced (Word can
+  // emit `<o:p>` in any case). Tag markers are located in a lowercased copy;
+  // slices are taken from the original `html` so kept text keeps its casing.
+  const lower = html.toLowerCase();
+  let result = '';
+  let i = 0;
+  while (i < html.length) {
+    const start = lower.indexOf(open, i);
+    if (start === -1) {
+      result += html.slice(i);
+      break;
+    }
+    const openTagEnd = html.indexOf('>', start);
+    const closeStart = openTagEnd === -1 ? -1 : lower.indexOf(close, openTagEnd + 1);
+    const closeTagEnd = closeStart === -1 ? -1 : html.indexOf('>', closeStart);
+    if (closeTagEnd === -1) {
+      // No complete `<prefix...>...</prefix...>` remains anywhere ahead, so no
+      // later opener can be paired either. Keep the rest verbatim and stop —
+      // this is what makes the scan linear (no rescanning for every opener).
+      result += html.slice(i);
+      break;
+    }
+    // Drop the whole block, keeping the text before this opener.
+    result += html.slice(i, start);
+    i = closeTagEnd + 1;
+  }
+  return result;
+}
+
+/**
  * Clean Microsoft Word HTML
  */
 export function cleanWordHtml(html: string): string {
   let cleaned = html;
 
-  // Remove Word-specific comments
-  cleaned = cleaned.replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, '');
-  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, '');
+  // Remove Word-specific (and all other) HTML comments
+  cleaned = stripHtmlComments(cleaned);
 
   // Remove XML declarations
   cleaned = cleaned.replace(/<\?xml[^>]*>/gi, '');
 
-  // Remove o: (Office) namespace tags
-  cleaned = cleaned.replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/gi, '');
+  // Remove o: (Office) namespace tags (linear scan; see stripPairedNamespaceTags)
+  cleaned = stripPairedNamespaceTags(cleaned, 'o:');
   cleaned = cleaned.replace(/<o:[^>]*\/>/gi, '');
 
   // Remove w: (Word) namespace tags
-  cleaned = cleaned.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, '');
+  cleaned = stripPairedNamespaceTags(cleaned, 'w:');
   cleaned = cleaned.replace(/<w:[^>]*\/>/gi, '');
 
   // Remove mso styles but keep other styles
@@ -463,8 +546,14 @@ export function htmlToRuns(html: string, plainTextFallback: string): Run[] {
     return plainTextFallback ? [createTextRun(plainTextFallback)] : [];
   }
 
-  const container = document.createElement('div');
-  container.innerHTML = html;
+  // Sanitize the attacker-controlled clipboard HTML at this trust boundary
+  // (scripts, event handlers, javascript: URLs, dangerous tags all stripped),
+  // then parse the cleaned markup into an inert document. We only walk the
+  // resulting node tree for text and formatting — nothing is ever inserted
+  // into the live DOM.
+  const sanitized = getDomPurify().sanitize(html);
+  const parsed = new DOMParser().parseFromString(sanitized, 'text/html');
+  const container = parsed.body;
 
   const runs: Run[] = [];
   processNode(container, runs, {});
