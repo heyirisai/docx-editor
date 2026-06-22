@@ -9,18 +9,18 @@ import type {
   SectionProperties,
   HeaderFooter,
   BlockContent,
-} from '@eigenpal/docx-editor-core/types/document';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+} from '@heyirisai/docx-editor-core/types/document';
+import type { Comment } from '@heyirisai/docx-editor-core/types/content';
 import type { Plugin } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
   computeHfSelectionRectsFromView,
   invalidateHfDomCache,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@heyirisai/docx-editor-core/layout-bridge';
 import { applyCellSelectionHighlight } from './internals/domSelection';
-import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
-import type { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import type { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import { extractSelectionState } from '@heyirisai/docx-editor-core/prosemirror';
+import type { ExtensionManager } from '@heyirisai/docx-editor-core/prosemirror/extensions';
+import type { SelectionState } from '@heyirisai/docx-editor-core/prosemirror';
 import { PagedEditor, type PagedEditorRef } from './PagedEditor';
 import {
   InlineHeaderFooterEditor,
@@ -32,7 +32,7 @@ import { Tooltip } from '../ui/Tooltip';
 import { MaterialSymbol } from '../ui/Icons';
 import { PENDING_COMMENT_ID } from './commentFactories';
 import type { HyperlinkPopupData } from '../ui/HyperlinkPopup';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
+import type { WrapType } from '@heyirisai/docx-editor-core/docx/wrapTypes';
 import type { ReactSidebarItem } from '../../plugin-api/types';
 import type { RenderedDomContext } from '../../plugin-api/types';
 

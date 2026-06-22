@@ -7,7 +7,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { EditorState } from 'prosemirror-state';
 import type { Decoration, EditorView } from 'prosemirror-view';
 import { createRenderedDomContext } from '../plugin-api/RenderedDomContext';
-import type { LayoutSelectionGate } from '@eigenpal/docx-editor-core/prosemirror';
+import type { LayoutSelectionGate } from '@heyirisai/docx-editor-core/prosemirror';
 
 const props = defineProps<{
   getView: () => EditorView | null;

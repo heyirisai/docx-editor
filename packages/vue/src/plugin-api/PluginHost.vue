@@ -26,7 +26,7 @@ import {
   PluginLifecycleManager,
   injectStyles,
   type PluginLifecycleConfig,
-} from '@eigenpal/docx-editor-core';
+} from '@heyirisai/docx-editor-core';
 import type { Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 
@@ -77,7 +77,7 @@ function assertVueCompatiblePlugin(plugin: unknown) {
     value?.requiresAdapter ?? value?.requiresFramework ?? value?.adapter ?? value?.framework;
   if (typeof requested === 'string' && requested.toLowerCase() === 'react') {
     throw new Error(
-      `Plugin "${value.id ?? 'unknown'}" requires the React adapter and cannot be mounted in @eigenpal/docx-editor-vue. Use @eigenpal/docx-editor-react/plugin-api or a Vue-compatible plugin.`
+      `Plugin "${value.id ?? 'unknown'}" requires the React adapter and cannot be mounted in @heyirisai/docx-editor-vue. Use @heyirisai/docx-editor-react/plugin-api or a Vue-compatible plugin.`
     );
   }
 }

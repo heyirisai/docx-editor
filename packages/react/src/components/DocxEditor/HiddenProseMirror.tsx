@@ -34,16 +34,16 @@ import {
   createDocumentStylesPlugin,
   createDocumentContextPlugin,
   ensureParaIdsInState,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import { toProseDoc, createEmptyDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
-import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion';
-import type { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import { stripScrollFlag } from '@eigenpal/docx-editor-core/editor';
-import type { Document, Theme, StyleDefinitions } from '@eigenpal/docx-editor-core/types/document';
+} from '@heyirisai/docx-editor-core/prosemirror';
+import { toProseDoc, createEmptyDoc } from '@heyirisai/docx-editor-core/prosemirror/conversion';
+import { fromProseDoc } from '@heyirisai/docx-editor-core/prosemirror/conversion';
+import type { ExtensionManager } from '@heyirisai/docx-editor-core/prosemirror/extensions';
+import { stripScrollFlag } from '@heyirisai/docx-editor-core/editor';
+import type { Document, Theme, StyleDefinitions } from '@heyirisai/docx-editor-core/types/document';
 
 // Import ProseMirror CSS
 import 'prosemirror-view/style/prosemirror.css';
-import '@eigenpal/docx-editor-core/prosemirror/editor.css';
+import '@heyirisai/docx-editor-core/prosemirror/editor.css';
 
 // ============================================================================
 // TYPES

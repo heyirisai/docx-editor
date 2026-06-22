@@ -2,42 +2,42 @@
 
 ### Requirement: Framework-agnostic EditorPluginCore interface in core
 
-The `@eigenpal/docx-editor-core` package SHALL export an `EditorPluginCore` interface containing all framework-agnostic plugin fields: `id`, `name`, `proseMirrorPlugins`, `onStateChange`, `initialize`, `destroy`, `styles`, and `panelConfig`.
+The `@heyirisai/docx-editor-core` package SHALL export an `EditorPluginCore` interface containing all framework-agnostic plugin fields: `id`, `name`, `proseMirrorPlugins`, `onStateChange`, `initialize`, `destroy`, `styles`, and `panelConfig`.
 
 #### Scenario: Define a plugin with core logic only
 
-- **WHEN** a plugin author imports `EditorPluginCore` from `@eigenpal/docx-editor-core`
+- **WHEN** a plugin author imports `EditorPluginCore` from `@heyirisai/docx-editor-core`
 - **AND** creates a plugin with `id`, `proseMirrorPlugins`, `onStateChange`, and `styles`
 - **THEN** the plugin definition SHALL compile without React or Vue as dependencies
 
 #### Scenario: EditorPluginCore has no framework types
 
-- **WHEN** inspecting the `EditorPluginCore` interface in `@eigenpal/docx-editor-core`
+- **WHEN** inspecting the `EditorPluginCore` interface in `@heyirisai/docx-editor-core`
 - **THEN** it SHALL NOT reference `ReactNode`, `React.ComponentType`, `DefineComponent`, `VNode`, or any framework-specific types
 
 ### Requirement: PluginPanelProps exported from core without framework types
 
-The `@eigenpal/docx-editor-core` package SHALL export a `PluginPanelProps` interface containing the framework-agnostic fields: `editorView`, `doc`, `scrollToPosition`, `selectRange`, `pluginState`, `panelWidth`, and `renderedDomContext`.
+The `@heyirisai/docx-editor-core` package SHALL export a `PluginPanelProps` interface containing the framework-agnostic fields: `editorView`, `doc`, `scrollToPosition`, `selectRange`, `pluginState`, `panelWidth`, and `renderedDomContext`.
 
 #### Scenario: PluginPanelProps usable by any framework
 
-- **WHEN** a framework adapter imports `PluginPanelProps` from `@eigenpal/docx-editor-core`
+- **WHEN** a framework adapter imports `PluginPanelProps` from `@heyirisai/docx-editor-core`
 - **THEN** it SHALL be able to extend or use it as props for its own component type
 - **AND** `PluginPanelProps` SHALL NOT contain any framework-specific fields
 
 ### Requirement: RenderedDomContext exported from core
 
-The `@eigenpal/docx-editor-core` package SHALL export the `RenderedDomContext` interface and its implementation, as it uses only vanilla DOM APIs.
+The `@heyirisai/docx-editor-core` package SHALL export the `RenderedDomContext` interface and its implementation, as it uses only vanilla DOM APIs.
 
 #### Scenario: RenderedDomContext available to plugin overlays
 
 - **WHEN** a plugin overlay (in any framework) needs to map ProseMirror positions to pixel coordinates
-- **THEN** it SHALL import `RenderedDomContext` from `@eigenpal/docx-editor-core`
+- **THEN** it SHALL import `RenderedDomContext` from `@heyirisai/docx-editor-core`
 - **AND** use `getCoordinatesForPosition()`, `getRectsForRange()`, and `findElementsForRange()` without any framework dependency
 
 ### Requirement: PanelConfig exported from core
 
-The `@eigenpal/docx-editor-core` package SHALL export the `PanelConfig` type (position, default width, collapsible settings).
+The `@heyirisai/docx-editor-core` package SHALL export the `PanelConfig` type (position, default width, collapsible settings).
 
 #### Scenario: Plugin specifies panel position
 
@@ -46,7 +46,7 @@ The `@eigenpal/docx-editor-core` package SHALL export the `PanelConfig` type (po
 
 ### Requirement: ReactEditorPlugin extends EditorPluginCore
 
-The `@eigenpal/docx-editor-react` package SHALL export a `ReactEditorPlugin` interface that extends `EditorPluginCore` with React-specific fields: `Panel` (React.ComponentType) and `renderOverlay` (returns ReactNode).
+The `@heyirisai/docx-editor-react` package SHALL export a `ReactEditorPlugin` interface that extends `EditorPluginCore` with React-specific fields: `Panel` (React.ComponentType) and `renderOverlay` (returns ReactNode).
 
 #### Scenario: Existing React plugins remain compatible
 
@@ -61,7 +61,7 @@ The `@eigenpal/docx-editor-react` package SHALL export a `ReactEditorPlugin` int
 
 ### Requirement: ReactPluginHost renders ReactEditorPlugin panels and overlays
 
-The `@eigenpal/docx-editor-react` package SHALL contain a `PluginHost` (or `ReactPluginHost`) component that accepts `ReactEditorPlugin[]` and renders panels/overlays using React.
+The `@heyirisai/docx-editor-react` package SHALL contain a `PluginHost` (or `ReactPluginHost`) component that accepts `ReactEditorPlugin[]` and renders panels/overlays using React.
 
 #### Scenario: PluginHost manages plugin lifecycle
 
@@ -72,18 +72,18 @@ The `@eigenpal/docx-editor-react` package SHALL contain a `PluginHost` (or `Reac
 
 ### Requirement: VueEditorPlugin interface scaffolded in Vue package
 
-The `@eigenpal/docx-editor-vue` package SHALL export a `VueEditorPlugin` interface that extends `EditorPluginCore` with Vue-specific fields for panel and overlay rendering.
+The `@heyirisai/docx-editor-vue` package SHALL export a `VueEditorPlugin` interface that extends `EditorPluginCore` with Vue-specific fields for panel and overlay rendering.
 
 #### Scenario: Vue plugin interface mirrors React adapter pattern
 
-- **WHEN** inspecting `VueEditorPlugin` in `@eigenpal/docx-editor-vue`
-- **THEN** it SHALL extend `EditorPluginCore` from `@eigenpal/docx-editor-core`
+- **WHEN** inspecting `VueEditorPlugin` in `@heyirisai/docx-editor-vue`
+- **THEN** it SHALL extend `EditorPluginCore` from `@heyirisai/docx-editor-core`
 - **AND** it SHALL define `Panel` using Vue's `DefineComponent` (or equivalent)
 - **AND** it SHALL define `renderOverlay` returning Vue's `VNode` (or equivalent)
 
 ### Requirement: CorePlugin system unchanged
 
-The existing `CorePlugin` interface and `PluginRegistry` in `@eigenpal/docx-editor-core` SHALL remain unchanged, as they are already framework-agnostic.
+The existing `CorePlugin` interface and `PluginRegistry` in `@heyirisai/docx-editor-core` SHALL remain unchanged, as they are already framework-agnostic.
 
 #### Scenario: CorePlugin continues to work headlessly
 

@@ -10,15 +10,15 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { WrapType } from '@heyirisai/docx-editor-core/docx/wrapTypes';
+import type { ImageLayoutTarget } from '@heyirisai/docx-editor-core/prosemirror/commands';
 import {
   IMAGE_LAYOUT_OPTIONS,
   deriveLayoutChoice,
   isImageLayoutOptionEnabled,
   type ImageLayoutIconHint,
   type ImageLayoutOptionDef,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@heyirisai/docx-editor-core/layout-painter';
 import { Z_INDEX } from '../styles/zIndex';
 import { useTranslation } from '../i18n';
 import { MaterialSymbol } from './ui/Icons';

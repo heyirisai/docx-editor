@@ -387,9 +387,9 @@ import { TextSelection } from 'prosemirror-state';
 import {
   computeHfCaretRectFromView,
   computeHfSelectionRectsFromView,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@heyirisai/docx-editor-core/layout-bridge';
 import { getSelectionInfo as getSelectionInfoImpl } from '../utils/refApiQueries';
-import { extractSelectionState } from '@eigenpal/docx-editor-core/prosemirror';
+import { extractSelectionState } from '@heyirisai/docx-editor-core/prosemirror';
 import { nearestHfHostEl } from '../utils/domQueries';
 import Toolbar from './Toolbar.vue';
 import TableToolbar from './ui/TableToolbar.vue';
@@ -433,17 +433,17 @@ import { useMenuActions } from '../composables/useMenuActions';
 import { useDocumentLifecycle } from '../composables/useDocumentLifecycle';
 import { useDocxEditorRefApi } from '../composables/useDocxEditorRefApi';
 import { useControllableBoolean } from '../composables/useControllableBoolean';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import type { Comment } from '@eigenpal/docx-editor-core/types/content';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils/headingCollector';
+import type { Document } from '@heyirisai/docx-editor-core/types/document';
+import type { Comment } from '@heyirisai/docx-editor-core/types/content';
+import type { HeadingInfo } from '@heyirisai/docx-editor-core/utils/headingCollector';
 import { createTranslator, provideLocale } from '../i18n';
-import { twipsToPixels } from '@eigenpal/docx-editor-core/utils/units';
-import { SIDEBAR_DOCUMENT_SHIFT } from '@eigenpal/docx-editor-core/utils';
+import { twipsToPixels } from '@heyirisai/docx-editor-core/utils/units';
+import { SIDEBAR_DOCUMENT_SHIFT } from '@heyirisai/docx-editor-core/utils';
 import { useColorMode } from '../composables/useColorMode';
 import { useFontLifecycle } from '../composables/useFontLifecycle';
-import { LayoutSelectionGate } from '@eigenpal/docx-editor-core/prosemirror';
-import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
-import { createCommentIdAllocator } from '@eigenpal/docx-editor-core/prosemirror/commentIdAllocator';
+import { LayoutSelectionGate } from '@heyirisai/docx-editor-core/prosemirror';
+import { extractSelectionContext } from '@heyirisai/docx-editor-core/prosemirror/plugins/selectionTracker';
+import { createCommentIdAllocator } from '@heyirisai/docx-editor-core/prosemirror/commentIdAllocator';
 
 const props = withDefaults(defineProps<DocxEditorProps>(), {
   documentBuffer: null,

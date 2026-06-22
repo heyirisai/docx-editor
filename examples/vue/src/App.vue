@@ -105,13 +105,13 @@
 
 <script setup lang="ts">
 import { computed, ref, onBeforeUnmount, onMounted } from 'vue';
-import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-vue';
-import { de as deLocale } from '@eigenpal/docx-editor-i18n';
+import { DocxEditor, type DocxEditorRef } from '@heyirisai/docx-editor-vue';
+import { de as deLocale } from '@heyirisai/docx-editor-i18n';
 import ExampleSwitcher from '../../shared/ExampleSwitcher.vue';
 import BrandLogo from '../../shared/BrandLogo.vue';
-import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { createEmptyDocument, findStartPosForParaId } from '@heyirisai/docx-editor-core';
+import type { Document } from '@heyirisai/docx-editor-core/types/document';
+import { setSuggestionMode } from '@heyirisai/docx-editor-core/prosemirror/plugins';
 import {
   acceptChangeById,
   rejectChangeById,
@@ -119,7 +119,7 @@ import {
   rejectAllChanges,
   addRowBelow,
   deleteRow,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
+} from '@heyirisai/docx-editor-core/prosemirror/commands';
 import type { Node as PMNode } from 'prosemirror-model';
 
 const randomAuthorVue = `Docx Editor User ${Math.floor(Math.random() * 900) + 100}`;
@@ -128,8 +128,8 @@ import {
   AgentChatLog,
   AgentComposer,
   type AgentMessage,
-} from '@eigenpal/docx-editor-agents/vue';
-import { getToolDisplayName } from '@eigenpal/docx-editor-agents/vue';
+} from '@heyirisai/docx-editor-agents/vue';
+import { getToolDisplayName } from '@heyirisai/docx-editor-agents/vue';
 
 function extractDocumentText(value: unknown): string {
   if (!value || typeof value !== 'object') return '';

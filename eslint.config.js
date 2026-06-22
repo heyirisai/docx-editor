@@ -18,27 +18,27 @@ const REACT_GROUP = [
   'react-dom',
   'react-dom/*',
   '@vitejs/plugin-react',
-  '@eigenpal/docx-editor-react',
-  '@eigenpal/docx-editor-react/*',
+  '@heyirisai/docx-editor-react',
+  '@heyirisai/docx-editor-react/*',
 ];
 
 const VUE_GROUP = [
   'vue',
   '@vue/*',
   '@vitejs/plugin-vue',
-  '@eigenpal/docx-editor-vue',
-  '@eigenpal/docx-editor-vue/*',
+  '@heyirisai/docx-editor-vue',
+  '@heyirisai/docx-editor-vue/*',
 ];
 
 // Dynamic-import specifiers — listed explicitly because AST `ImportExpression`
 // selectors compare against literal source values, not glob patterns. The
 // static rule still covers `react-dom/*` etc. via minimatch; dynamic catches
 // the bare-specifier hot path.
-const REACT_DYNAMIC = ['react', 'react-dom', 'react-dom/client', '@eigenpal/docx-editor-react'];
-const VUE_DYNAMIC = ['vue', '@eigenpal/docx-editor-vue'];
+const REACT_DYNAMIC = ['react', 'react-dom', 'react-dom/client', '@heyirisai/docx-editor-react'];
+const VUE_DYNAMIC = ['vue', '@heyirisai/docx-editor-vue'];
 
-const NO_REACT_MSG = `Vue/core files cannot import React. Use @eigenpal/docx-editor-core for shared logic. ${SPEC}`;
-const NO_VUE_MSG = `React/core files cannot import Vue. Use @eigenpal/docx-editor-core for shared logic. ${SPEC}`;
+const NO_REACT_MSG = `Vue/core files cannot import React. Use @heyirisai/docx-editor-core for shared logic. ${SPEC}`;
+const NO_VUE_MSG = `React/core files cannot import Vue. Use @heyirisai/docx-editor-core for shared logic. ${SPEC}`;
 const NO_BOTH_MSG = `Core stays UI-framework-agnostic. ${SPEC}`;
 
 // Helpers compose into a `rules` object. Keys are disjoint by design —

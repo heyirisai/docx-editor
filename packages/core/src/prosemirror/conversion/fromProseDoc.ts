@@ -12,7 +12,7 @@
  * This file owns the top-level orchestrator (`fromProseDoc`) plus block
  * extraction and the page-break paragraph factory. Per-domain converters
  * live under ./fromProseDoc/ (marks, runs, paragraph, tables, textbox).
- * The deep import `@eigenpal/.../prosemirror/conversion/fromProseDoc` is
+ * The deep import `@heyirisai/.../prosemirror/conversion/fromProseDoc` is
  * a tsup entry consumed by the Vue adapter — the barrel re-exports
  * preserve that surface.
  * @packageDocumentation

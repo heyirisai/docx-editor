@@ -8,7 +8,7 @@
  * The named exports below are the public API contract. Adding a parser
  * helper to a source module does not automatically make it public — it
  * must be added to this barrel to be reachable from
- * `@eigenpal/docx-editor-core/docx`.
+ * `@heyirisai/docx-editor-core/docx`.
  * @packageDocumentation
  * @public
  */

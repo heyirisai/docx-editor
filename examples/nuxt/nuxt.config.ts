@@ -1,8 +1,8 @@
-// Nuxt example for @eigenpal/nuxt-docx-editor. Registering the module is the
+// Nuxt example for @heyirisai/nuxt-docx-editor. Registering the module is the
 // whole integration — it auto-imports an SSR-safe <DocxEditor> component and
 // injects the editor stylesheet.
 export default defineNuxtConfig({
-  modules: ['@eigenpal/nuxt-docx-editor'],
+  modules: ['@heyirisai/nuxt-docx-editor'],
   compatibilityDate: '2025-07-01',
   devtools: { enabled: false },
   app: {

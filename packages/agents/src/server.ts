@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-agents/server
+ * @heyirisai/docx-editor-agents/server
  *
  * Server entry for API routes, Node.js, serverless functions, and Workers.
  *
@@ -9,7 +9,7 @@
  *
  * @example
  * ```ts
- * import { getToolSchemas } from '@eigenpal/docx-editor-agents/server';
+ * import { getToolSchemas } from '@heyirisai/docx-editor-agents/server';
  * import { streamText, jsonSchema, convertToModelMessages } from 'ai';
  *
  * // `getToolSchemas()` returns OpenAI function-calling format. For Vercel

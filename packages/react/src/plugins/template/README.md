@@ -34,8 +34,8 @@ Both share the same `Document` model — they don't depend on each other directl
 ## Usage
 
 ```tsx
-import { DocxEditor, PluginHost, templatePlugin } from '@eigenpal/docx-js-editor';
-import '@eigenpal/docx-js-editor/styles.css';
+import { DocxEditor, PluginHost, templatePlugin } from '@heyirisai/docx-js-editor';
+import '@heyirisai/docx-js-editor/styles.css';
 
 function Editor({ file }: { file: ArrayBuffer }) {
   return (
@@ -51,8 +51,8 @@ function Editor({ file }: { file: ArrayBuffer }) {
 Use `createTemplatePlugin` for more control:
 
 ```tsx
-import { DocxEditor, PluginHost } from '@eigenpal/docx-js-editor';
-import { createPlugin } from '@eigenpal/docx-js-editor';
+import { DocxEditor, PluginHost } from '@heyirisai/docx-js-editor';
+import { createPlugin } from '@heyirisai/docx-js-editor';
 
 const myTemplatePlugin = createPlugin({
   panelPosition: 'left', // 'left' | 'right' (default: 'right')
@@ -74,7 +74,7 @@ function Editor({ file }: { file: ArrayBuffer }) {
 To fill a template with data (outside the editor):
 
 ```tsx
-import { processTemplate } from '@eigenpal/docx-js-editor';
+import { processTemplate } from '@heyirisai/docx-js-editor';
 
 const filled = await processTemplate(docxBuffer, {
   name: 'Jane Doe',

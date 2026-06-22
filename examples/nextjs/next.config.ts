@@ -10,7 +10,10 @@ const nextConfig: NextConfig = {
   outputFileTracingRoot: monorepoRoot,
   webpack: (config, { webpack }) => {
     if (isMonorepo) {
-      config.resolve.alias['@eigenpal/docx-editor-react'] = path.join(monorepoRoot, 'src/index.ts');
+      config.resolve.alias['@heyirisai/docx-editor-react'] = path.join(
+        monorepoRoot,
+        'src/index.ts'
+      );
     }
     config.plugins.push(
       new webpack.DefinePlugin({

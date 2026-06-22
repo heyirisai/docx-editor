@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import dts from 'vite-plugin-dts';
 import { resolve } from 'path';
 
-// Library build for @eigenpal/docx-editor-vue. Vite (not tsup) because the
+// Library build for @heyirisai/docx-editor-vue. Vite (not tsup) because the
 // package ships .vue SFCs that need the @vitejs/plugin-vue compiler step.
 // External: vue, prosemirror-*, and the editor core — consumers bring those.
 export default defineConfig({
@@ -19,8 +19,8 @@ export default defineConfig({
       // to dist/index.d.ts + dist/ui.d.ts (auto-detect drifts to a parent
       // dir once core's workspace types enter the graph).
       entryRoot: 'src',
-      // Keep workspace package names (`@eigenpal/docx-editor-core`,
-      // `@eigenpal/docx-editor-i18n`) intact in published declarations.
+      // Keep workspace package names (`@heyirisai/docx-editor-core`,
+      // `@heyirisai/docx-editor-i18n`) intact in published declarations.
       // Otherwise tsconfig.json's `paths` field rewrites them to
       // `../../core/src/*.ts` — valid in this repo but broken once
       // consumers install from npm, and a hard fail for API Extractor's
@@ -48,7 +48,7 @@ export default defineConfig({
       cssFileName: 'docx-editor-vue',
     },
     rollupOptions: {
-      external: ['vue', /^@eigenpal\/docx-editor-core(\/.*)?$/, /^prosemirror-/],
+      external: ['vue', /^@heyirisai\/docx-editor-core(\/.*)?$/, /^prosemirror-/],
     },
     emptyOutDir: true,
   },

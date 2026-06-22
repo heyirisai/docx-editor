@@ -9,14 +9,14 @@
 
 import React, { useState, useCallback } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import type { ParagraphAlignment } from '@eigenpal/docx-editor-core/types/document';
+import type { ParagraphAlignment } from '@heyirisai/docx-editor-core/types/document';
 import { MaterialSymbol } from './MaterialSymbol';
 import { Button } from './Button';
 import { Tooltip } from './Tooltip';
 import { cn } from '../../lib/utils';
 import { useFixedDropdown } from '../../hooks/useFixedDropdown';
 import { useTranslation } from '../../i18n';
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { TranslationKey } from '@heyirisai/docx-editor-i18n';
 
 // ============================================================================
 // TYPES

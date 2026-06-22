@@ -2,7 +2,7 @@
  * DOM-based selection / caret helpers for PagedEditor.
  *
  * The core DOM walks (`getCaretPositionFromDom` / `getSelectionRectsFromDom`)
- * live in `@eigenpal/docx-editor-core/layout-bridge` and are shared with the
+ * live in `@heyirisai/docx-editor-core/layout-bridge` and are shared with the
  * Vue adapter. These thin React wrappers resolve the selection-overlay rect,
  * call the core walk, then divide by `zoom` so the result lands in the
  * React overlay's own (unscaled-but-CSS-scaled) coordinate space. React's
@@ -17,9 +17,9 @@ import {
   getSelectionRectsFromDom,
   type CaretPosition,
   type SelectionRect,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@heyirisai/docx-editor-core/layout-bridge';
 
-export { applyCellSelectionHighlight } from '@eigenpal/docx-editor-core/layout-bridge';
+export { applyCellSelectionHighlight } from '@heyirisai/docx-editor-core/layout-bridge';
 
 /**
  * Resolve a caret position by measuring the rendered DOM. Delegates the walk

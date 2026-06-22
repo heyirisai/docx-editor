@@ -5,7 +5,7 @@
  *
  * @example
  * ```ts
- * import { createMcpServer, startStdioServer } from '@eigenpal/docx-editor/mcp';
+ * import { createMcpServer, startStdioServer } from '@heyirisai/docx-editor/mcp';
  *
  * // Create server instance
  * const server = createMcpServer({ debug: true });

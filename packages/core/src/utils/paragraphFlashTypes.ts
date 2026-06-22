@@ -2,7 +2,7 @@
  * Option shapes for `scrollToParaId(paraId, { highlight })`.
  *
  * Kept in a DOM-free module (no imports, no browser globals) so non-browser
- * consumers like `@eigenpal/docx-editor-agents` can type-import them without
+ * consumers like `@heyirisai/docx-editor-agents` can type-import them without
  * pulling `paragraphFlash`'s DOM code into their type-check surface.
  */
 

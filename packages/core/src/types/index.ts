@@ -1,5 +1,5 @@
 /**
- * Type exports for @eigenpal/docx-editor
+ * Type exports for @heyirisai/docx-editor
  *
  * Re-exports all public TypeScript types from the split type modules.
  */

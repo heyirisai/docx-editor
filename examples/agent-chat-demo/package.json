@@ -9,9 +9,9 @@
   "dependencies": {
     "@ai-sdk/openai": "^3.0.54",
     "@ai-sdk/react": "^3.0.171",
-    "@eigenpal/docx-editor-core": "workspace:*",
-    "@eigenpal/docx-editor-agents": "workspace:*",
-    "@eigenpal/docx-editor-react": "workspace:*",
+    "@heyirisai/docx-editor-core": "workspace:*",
+    "@heyirisai/docx-editor-agents": "workspace:*",
+    "@heyirisai/docx-editor-react": "workspace:*",
     "ai": "^6.0.169",
     "next": "^16.2.4",
     "react": "^19.0.0",

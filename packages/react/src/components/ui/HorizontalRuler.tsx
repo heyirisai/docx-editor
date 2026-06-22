@@ -12,8 +12,8 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import type { CSSProperties } from 'react';
-import type { SectionProperties, TabStop } from '@eigenpal/docx-editor-core/types/document';
-import { twipsToPixels, pixelsToTwips, formatPx } from '@eigenpal/docx-editor-core/utils';
+import type { SectionProperties, TabStop } from '@heyirisai/docx-editor-core/types/document';
+import { twipsToPixels, pixelsToTwips, formatPx } from '@heyirisai/docx-editor-core/utils';
 import { useTranslation } from '../../i18n';
 
 // ============================================================================

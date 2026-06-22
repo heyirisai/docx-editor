@@ -84,8 +84,8 @@ function markComposedAsInsertion(
 /**
  * Create the suggestion-mode ProseMirror plugin. **Must be mounted on
  * the editor view for `setSuggestionMode` and `toggleSuggestionMode`
- * to do anything** — both adapters (`@eigenpal/docx-editor-react`,
- * `@eigenpal/docx-editor-vue`) auto-mount this inside the `DocxEditor`
+ * to do anything** — both adapters (`@heyirisai/docx-editor-react`,
+ * `@heyirisai/docx-editor-vue`) auto-mount this inside the `DocxEditor`
  * component, so consumers using the bundled components don't need to
  * register it themselves.
  *
@@ -100,7 +100,7 @@ function markComposedAsInsertion(
  *
  * @example
  * ```ts
- * import { createSuggestionModePlugin } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+ * import { createSuggestionModePlugin } from '@heyirisai/docx-editor-core/prosemirror/plugins';
  *
  * const plugin = createSuggestionModePlugin(false, 'Jane');
  * EditorState.create({ doc, plugins: [plugin, ...other] });

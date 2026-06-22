@@ -4,7 +4,7 @@ import {
   resolveIsDark,
   subscribeSystemDark,
   type ColorMode,
-} from '@eigenpal/docx-editor-core/utils';
+} from '@heyirisai/docx-editor-core/utils';
 
 /**
  * Resolve the effective dark flag from a reactive `colorMode`. `'system'`

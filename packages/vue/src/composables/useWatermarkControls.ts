@@ -11,11 +11,11 @@
 
 import { ref, computed, type Ref, type ComputedRef } from 'vue';
 import type { EditorView } from 'prosemirror-view';
-import type { Watermark } from '@eigenpal/docx-editor-core/types/document';
+import type { Watermark } from '@heyirisai/docx-editor-core/types/document';
 import {
   setWatermark,
   getWatermarkFromState,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
+} from '@heyirisai/docx-editor-core/prosemirror/commands';
 
 export interface UseWatermarkControlsOptions {
   editorView: Ref<EditorView | null>;

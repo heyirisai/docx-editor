@@ -5,7 +5,7 @@
 // The option shapes live in a DOM-free sibling module so non-browser consumers
 // (e.g. the agents package) can type-import them without dragging this file's
 // DOM code into their type-check surface. Re-exported here so the public
-// `@eigenpal/docx-editor-core/utils` barrel surface is unchanged.
+// `@heyirisai/docx-editor-core/utils` barrel surface is unchanged.
 export type { ParagraphHighlightOptions, ScrollToParaIdOptions } from './paragraphFlashTypes';
 import type { ParagraphHighlightOptions } from './paragraphFlashTypes';
 

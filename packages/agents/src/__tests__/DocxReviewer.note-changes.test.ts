@@ -4,7 +4,7 @@ import type {
   DocumentBody,
   Footnote,
   Endnote,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@heyirisai/docx-editor-core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import { makeParagraph, makeParagraphFrom, makeInsertion, makeDeletion } from './_helpers';
 

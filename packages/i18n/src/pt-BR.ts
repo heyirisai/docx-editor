@@ -1,14 +1,14 @@
 /**
- * @eigenpal/docx-editor-i18n/pt-BR
+ * @heyirisai/docx-editor-i18n/pt-BR
  *
  * Portuguese (Brazil) (`pt-BR`) — direct locale subpath for per-locale code-splitting.
  *
  * ```ts
  * // Static — bundler ships only this locale's strings
- * import ptBR from '@eigenpal/docx-editor-i18n/pt-BR';
+ * import ptBR from '@heyirisai/docx-editor-i18n/pt-BR';
  *
  * // Dynamic — splits into its own chunk, loaded on demand
- * const ptBR = (await import('@eigenpal/docx-editor-i18n/pt-BR')).default;
+ * const ptBR = (await import('@heyirisai/docx-editor-i18n/pt-BR')).default;
  * ```
  *
  * For multi-locale apps, prefer the per-locale subpaths over importing

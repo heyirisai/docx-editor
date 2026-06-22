@@ -10,15 +10,15 @@ Releases follow the canonical [`changesets/action@v1`](https://github.com/change
 
 ## Packages
 
-| Package                        | Path              | Published?               |
-| ------------------------------ | ----------------- | ------------------------ |
-| `@eigenpal/docx-editor-react`  | `packages/react`  | ✅                       |
-| `@eigenpal/docx-editor-core`   | `packages/core`   | ✅                       |
-| `@eigenpal/docx-editor-agents` | `packages/agents` | ✅                       |
-| `@eigenpal/docx-editor-vue`    | `packages/vue`    | ✅                       |
-| `@eigenpal/docx-editor-i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
+| Package                         | Path              | Published?               |
+| ------------------------------- | ----------------- | ------------------------ |
+| `@heyirisai/docx-editor-react`  | `packages/react`  | ✅                       |
+| `@heyirisai/docx-editor-core`   | `packages/core`   | ✅                       |
+| `@heyirisai/docx-editor-agents` | `packages/agents` | ✅                       |
+| `@heyirisai/docx-editor-vue`    | `packages/vue`    | ✅                       |
+| `@heyirisai/docx-editor-i18n`   | `packages/i18n`   | ✅ (shared locale JSONs) |
 
-All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@eigenpal/docx-editor-i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@eigenpal/docx-editor-i18n` (the consumers pick it up at build time).
+All five packages are in a **fixed group** in `.changeset/config.json` — they always ship the same version. A changeset only needs to declare the bump for one; the others follow automatically. `@heyirisai/docx-editor-i18n` ships the locale JSONs that the React and Vue adapters both consume, so adding a new key to `en.json` only needs a changeset on `@heyirisai/docx-editor-i18n` (the consumers pick it up at build time).
 
 ## Author flow (every contributor, every code PR)
 
@@ -45,7 +45,7 @@ The summary you write (`Add foo prop to DocxEditor`) goes verbatim into `CHANGEL
 1. **Look for an open PR titled `chore: release`** on `main`. The bot opens it automatically the first time a changeset lands; subsequent changeset-bearing PRs update the same PR with the latest bumps and CHANGELOG entries.
 2. **Review the PR.** It shows: version bumps in `package.json`s, new CHANGELOG sections, and the `.md` files being drained from `.changeset/`. Treat it like any other PR — CI runs on it.
 3. **Merge it.** Standard merge. No bypass, no manual workflow trigger needed.
-4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@eigenpal/docx-editor-react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
+4. **Wait ~3 minutes.** The post-merge workflow run sees an empty changeset queue, runs `changeset publish` against npm via OIDC Trusted Publishing (no `NPM_TOKEN`), creates per-package git tags (`@heyirisai/docx-editor-react@X.Y.Z`), and creates a GitHub Release with the new CHANGELOG section.
 
 That's the entire release. One PR merge.
 

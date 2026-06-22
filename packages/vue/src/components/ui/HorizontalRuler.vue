@@ -101,8 +101,8 @@
 
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, type CSSProperties } from 'vue';
-import type { SectionProperties, TabStop } from '@eigenpal/docx-editor-core/types/document';
-import { twipsToPixels, pixelsToTwips } from '@eigenpal/docx-editor-core/utils/units';
+import type { SectionProperties, TabStop } from '@heyirisai/docx-editor-core/types/document';
+import { twipsToPixels, pixelsToTwips } from '@heyirisai/docx-editor-core/utils/units';
 
 type MarkerType =
   | 'leftMargin'

@@ -1,7 +1,7 @@
 /**
- * @eigenpal/nuxt-docx-editor
+ * @heyirisai/nuxt-docx-editor
  *
- * Nuxt module that wraps the `@eigenpal/docx-editor-vue` adapter so Nuxt apps
+ * Nuxt module that wraps the `@heyirisai/docx-editor-vue` adapter so Nuxt apps
  * get a zero-config, SSR-safe `<DocxEditor>` component.
  *
  * The editor is browser-only (it drives a hidden ProseMirror instance and
@@ -15,10 +15,10 @@
 import { defineNuxtModule, createResolver, addComponent, addImports } from '@nuxt/kit';
 import type { NuxtModule } from '@nuxt/schema';
 
-const COMPOSABLES_SUBPATH = '@eigenpal/docx-editor-vue/composables';
-const STYLES_SUBPATH = '@eigenpal/docx-editor-vue/styles.css';
+const COMPOSABLES_SUBPATH = '@heyirisai/docx-editor-vue/composables';
+const STYLES_SUBPATH = '@heyirisai/docx-editor-vue/styles.css';
 
-// Public composables re-exported by `@eigenpal/docx-editor-vue/composables`.
+// Public composables re-exported by `@heyirisai/docx-editor-vue/composables`.
 // Kept as a static list because the runtime bundle can't be imported in the
 // module's Node context (it transitively imports a `.css` file). When the
 // adapter adds a composable to that barrel, add its name here too.
@@ -54,7 +54,7 @@ export interface ModuleOptions {
   prefix?: string;
   /**
    * Whether the module pushes the editor stylesheet into `nuxt.options.css`.
-   * Set to `false` to import `@eigenpal/docx-editor-vue/styles.css` yourself.
+   * Set to `false` to import `@heyirisai/docx-editor-vue/styles.css` yourself.
    * Defaults to `true`.
    */
   injectStyles?: boolean;
@@ -64,7 +64,7 @@ export interface ModuleOptions {
 // inferring a non-portable type that references a hoisted `@nuxt/schema` path.
 const module: NuxtModule<ModuleOptions> = defineNuxtModule<ModuleOptions>({
   meta: {
-    name: '@eigenpal/nuxt-docx-editor',
+    name: '@heyirisai/nuxt-docx-editor',
     configKey: 'docxEditor',
     compatibility: {
       nuxt: '>=3.0.0',
@@ -90,8 +90,8 @@ const module: NuxtModule<ModuleOptions> = defineNuxtModule<ModuleOptions>({
     const optimizeDeps = (nuxt.options.vite.optimizeDeps ??= {});
     optimizeDeps.include = [
       ...(optimizeDeps.include ?? []),
-      '@eigenpal/docx-editor-core',
-      '@eigenpal/docx-editor-vue',
+      '@heyirisai/docx-editor-core',
+      '@heyirisai/docx-editor-vue',
     ];
 
     // Client-only registration — never executes during SSR.

@@ -52,8 +52,8 @@
 import { ref, computed, watch, onBeforeUnmount, nextTick } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { NodeSelection } from 'prosemirror-state';
-import { pixelsToEmu } from '@eigenpal/docx-editor-core/utils';
-import { clickToPositionDom } from '@eigenpal/docx-editor-core/layout-bridge/clickToPositionDom';
+import { pixelsToEmu } from '@heyirisai/docx-editor-core/utils';
+import { clickToPositionDom } from '@heyirisai/docx-editor-core/layout-bridge/clickToPositionDom';
 import {
   isFloatingImage,
   commitImageResize,
@@ -61,9 +61,9 @@ import {
   commitImageInlineMove,
   calculateResizedImageDimensions,
   type ImageResizeHandle,
-} from '@eigenpal/docx-editor-core/prosemirror/imageCommit';
-import { findBodyPmAnchor } from '@eigenpal/docx-editor-core/layout-bridge';
-import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
+} from '@heyirisai/docx-editor-core/prosemirror/imageCommit';
+import { findBodyPmAnchor } from '@heyirisai/docx-editor-core/layout-bridge';
+import { findImageElement } from '@heyirisai/docx-editor-core/layout-painter';
 import { Z_INDEX } from '../styles/zIndex';
 import { computeImageOverlayRect } from '../composables/imageOverlayRect';
 import { useTranslation } from '../i18n';

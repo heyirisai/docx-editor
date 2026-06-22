@@ -112,7 +112,7 @@ function resolveChange(from: number, to: number, mode: 'accept' | 'reject'): Com
  *
  * @example
  * ```ts
- * import { acceptChange } from '@eigenpal/docx-editor-core/prosemirror/commands';
+ * import { acceptChange } from '@heyirisai/docx-editor-core/prosemirror/commands';
  * acceptChange(from, to)(view.state, view.dispatch);
  * ```
  */
@@ -204,7 +204,7 @@ function collectAllRevisionIds(state: EditorState): number[] {
  *
  * @example
  * ```ts
- * import { acceptAllChanges } from '@eigenpal/docx-editor-core/prosemirror/commands';
+ * import { acceptAllChanges } from '@heyirisai/docx-editor-core/prosemirror/commands';
  * acceptAllChanges()(view.state, view.dispatch);
  * ```
  */
@@ -833,7 +833,7 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
  *
  * @example
  * ```ts
- * import { acceptChangeById } from '@eigenpal/docx-editor-core/prosemirror/commands';
+ * import { acceptChangeById } from '@heyirisai/docx-editor-core/prosemirror/commands';
  * acceptChangeById(revisionId)(view.state, view.dispatch);
  * ```
  */

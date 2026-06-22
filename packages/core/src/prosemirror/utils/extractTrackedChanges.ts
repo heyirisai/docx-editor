@@ -8,8 +8,8 @@
  * Pure function — no React, no Vue, no side effects. Single O(N) walk
  * over text nodes. Consumers building custom sidebars should prefer the
  * adapter-specific wrappers (`useTrackedChanges` in
- * `@eigenpal/docx-editor-react/hooks` and
- * `@eigenpal/docx-editor-vue/composables`), which add the memoization
+ * `@heyirisai/docx-editor-react/hooks` and
+ * `@heyirisai/docx-editor-vue/composables`), which add the memoization
  * and reactivity layer. Reach for the core function directly for
  * server-side analysis or test fixtures.
  *
@@ -54,7 +54,7 @@ const EMPTY_RESULT: TrackedChangesResult = {
  *
  * @example
  * ```ts
- * import { extractTrackedChanges } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+ * import { extractTrackedChanges } from '@heyirisai/docx-editor-core/prosemirror/utils/extractTrackedChanges';
  *
  * const { entries, commentToRevision } = extractTrackedChanges(view.state);
  * for (const e of entries) {

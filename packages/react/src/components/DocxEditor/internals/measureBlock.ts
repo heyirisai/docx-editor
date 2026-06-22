@@ -15,7 +15,7 @@ import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
   assertExhaustiveFlowBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
+} from '@heyirisai/docx-editor-core/layout-engine';
 import type {
   FlowBlock,
   ImageBlock,
@@ -24,7 +24,7 @@ import type {
   TableBlock,
   TableMeasure,
   TextBoxBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
+} from '@heyirisai/docx-editor-core/layout-engine';
 import {
   type FloatingImageZone,
   type FloatPageGeometry,
@@ -33,7 +33,7 @@ import {
   measureParagraph,
   measureTableBlock,
   setCachedParagraphMeasure,
-} from '@eigenpal/docx-editor-core/layout-bridge';
+} from '@heyirisai/docx-editor-core/layout-bridge';
 
 /**
  * Measure a block based on its type.

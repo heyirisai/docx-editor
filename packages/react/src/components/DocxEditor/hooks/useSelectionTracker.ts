@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
-import type { Theme, TabStop } from '@eigenpal/docx-editor-core/types/document';
+import type { Theme, TabStop } from '@heyirisai/docx-editor-core/types/document';
 import {
   getTableContext,
   type SelectionState,
   type TableContextInfo,
   createStyleResolver,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
+} from '@heyirisai/docx-editor-core/prosemirror';
+import { resolveColorToHex } from '@heyirisai/docx-editor-core/utils';
 import type { EditorView } from 'prosemirror-view';
 import type { SelectionFormatting } from '../../Toolbar';
 

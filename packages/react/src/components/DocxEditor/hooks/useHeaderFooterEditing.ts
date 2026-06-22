@@ -4,9 +4,9 @@ import type {
   HeaderFooter,
   BlockContent,
   SectionProperties,
-} from '@eigenpal/docx-editor-core/types/document';
-import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
-import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+} from '@heyirisai/docx-editor-core/types/document';
+import { resolveHeaderFooter } from '@heyirisai/docx-editor-core/layout-bridge';
+import { proseDocToBlocks } from '@heyirisai/docx-editor-core/prosemirror/conversion';
 import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor';
 
 /**

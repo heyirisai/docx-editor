@@ -2,4 +2,4 @@
 export {
   normalizeFontFamilies,
   type FontOption,
-} from '@eigenpal/docx-editor-core/utils/fontOptions';
+} from '@heyirisai/docx-editor-core/utils/fontOptions';

@@ -1,5 +1,5 @@
 /**
- * @eigenpal/docx-editor-core/headless
+ * @heyirisai/docx-editor-core/headless
  *
  * Headless aggregate for Node.js scripts, CLI tools, and server-side
  * processing. Same surface as the default `.` entry, named to make the
@@ -8,8 +8,8 @@
  *
  * @example
  * ```ts
- * import { DocumentAgent, parseDocx, pluginRegistry } from '@eigenpal/docx-editor-core/headless';
- * import { docxtemplaterPlugin } from '@eigenpal/docx-editor-core/core-plugins';
+ * import { DocumentAgent, parseDocx, pluginRegistry } from '@heyirisai/docx-editor-core/headless';
+ * import { docxtemplaterPlugin } from '@heyirisai/docx-editor-core/core-plugins';
  *
  * // Register plugins
  * pluginRegistry.register(docxtemplaterPlugin);

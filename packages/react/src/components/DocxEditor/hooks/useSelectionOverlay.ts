@@ -22,9 +22,9 @@ import {
   selectionToRects,
   type CaretPosition,
   type SelectionRect,
-} from '@eigenpal/docx-editor-core/layout-bridge';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
-import { enclosingSdtGroupIds, applySdtFocus } from '@eigenpal/docx-editor-core/layout-painter';
+} from '@heyirisai/docx-editor-core/layout-bridge';
+import type { FlowBlock, Layout, Measure } from '@heyirisai/docx-editor-core/layout-engine';
+import { enclosingSdtGroupIds, applySdtFocus } from '@heyirisai/docx-editor-core/layout-painter';
 
 import type { HiddenProseMirrorRef } from '../HiddenProseMirror';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';

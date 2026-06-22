@@ -8,11 +8,11 @@ import type { EditorView } from 'prosemirror-view';
 import {
   extractTrackedChanges,
   type TrackedChangesResult,
-} from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+} from '@heyirisai/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 
 export type { TrackedChangesResult };
 export { extractTrackedChanges };
-export type { TrackedChangeEntry } from '@eigenpal/docx-editor-core/utils/comments';
+export type { TrackedChangeEntry } from '@heyirisai/docx-editor-core/utils/comments';
 
 /**
  * Pass the editor view ref + a stateTick that bumps on every PM

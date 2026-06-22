@@ -6,8 +6,8 @@
  */
 
 import { watch, onMounted, nextTick, type Ref } from 'vue';
-import type { Document } from '@eigenpal/docx-editor-core/types/document';
-import type { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import type { Document } from '@heyirisai/docx-editor-core/types/document';
+import type { DocxInput } from '@heyirisai/docx-editor-core/utils';
 
 export interface UseDocumentLifecycleOptions {
   documentBuffer: () => DocxInput | null;

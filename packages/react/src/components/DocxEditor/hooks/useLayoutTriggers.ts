@@ -16,8 +16,8 @@
 
 import { useEffect, useRef } from 'react';
 
-import { clearAllCaches, resetCanvasContext } from '@eigenpal/docx-editor-core/layout-bridge';
-import type { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
+import { clearAllCaches, resetCanvasContext } from '@heyirisai/docx-editor-core/layout-bridge';
+import type { HeaderFooter } from '@heyirisai/docx-editor-core/types/document';
 import type { EditorState } from 'prosemirror-state';
 
 import type { HiddenProseMirrorRef } from '../HiddenProseMirror';

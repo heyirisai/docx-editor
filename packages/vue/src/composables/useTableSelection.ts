@@ -8,8 +8,8 @@ import { ref, onBeforeUnmount, type Ref } from 'vue';
 import {
   TableSelectionManager,
   findTableFromClick,
-} from '@eigenpal/docx-editor-core/managers/TableSelectionManager';
-import type { CellCoordinates } from '@eigenpal/docx-editor-core/managers/types';
+} from '@heyirisai/docx-editor-core/managers/TableSelectionManager';
+import type { CellCoordinates } from '@heyirisai/docx-editor-core/managers/types';
 
 export interface UseTableSelectionReturn {
   selectedCell: Ref<CellCoordinates | null>;

@@ -1,4 +1,4 @@
-# @eigenpal/docx-editor-vue
+# @heyirisai/docx-editor-vue
 
 ## 1.9.0
 
@@ -14,9 +14,9 @@
 - Updated dependencies [9454c9a]
 - Updated dependencies [f61435b]
 - Updated dependencies [28876a2]
-  - @eigenpal/docx-editor-core@1.9.0
-  - @eigenpal/docx-editor-i18n@1.9.0
-  - @eigenpal/docx-editor-agents@1.9.0
+  - @heyirisai/docx-editor-core@1.9.0
+  - @heyirisai/docx-editor-i18n@1.9.0
+  - @heyirisai/docx-editor-agents@1.9.0
 
 ## 1.8.3
 
@@ -28,9 +28,9 @@
 - Updated dependencies [673e917]
 - Updated dependencies [74e36ef]
 - Updated dependencies [447d5b0]
-  - @eigenpal/docx-editor-core@1.8.3
-  - @eigenpal/docx-editor-agents@1.8.3
-  - @eigenpal/docx-editor-i18n@1.8.3
+  - @heyirisai/docx-editor-core@1.8.3
+  - @heyirisai/docx-editor-agents@1.8.3
+  - @heyirisai/docx-editor-i18n@1.8.3
 
 ## 1.8.2
 
@@ -51,18 +51,18 @@
 - Updated dependencies [4f183b3]
 - Updated dependencies [0c233db]
 - Updated dependencies [7811a73]
-  - @eigenpal/docx-editor-core@1.8.2
-  - @eigenpal/docx-editor-agents@1.8.2
-  - @eigenpal/docx-editor-i18n@1.8.2
+  - @heyirisai/docx-editor-core@1.8.2
+  - @heyirisai/docx-editor-agents@1.8.2
+  - @heyirisai/docx-editor-i18n@1.8.2
 
 ## 1.8.1
 
 ### Patch Changes
 
 - Updated dependencies [6047f84]
-  - @eigenpal/docx-editor-core@1.8.1
-  - @eigenpal/docx-editor-agents@1.8.1
-  - @eigenpal/docx-editor-i18n@1.8.1
+  - @heyirisai/docx-editor-core@1.8.1
+  - @heyirisai/docx-editor-agents@1.8.1
+  - @heyirisai/docx-editor-i18n@1.8.1
 
 ## 1.8.0
 
@@ -72,9 +72,9 @@
 - Updated dependencies [a1f4537]
 - Updated dependencies [27740e1]
 - Updated dependencies [114e83e]
-  - @eigenpal/docx-editor-agents@1.8.0
-  - @eigenpal/docx-editor-core@1.8.0
-  - @eigenpal/docx-editor-i18n@1.8.0
+  - @heyirisai/docx-editor-agents@1.8.0
+  - @heyirisai/docx-editor-core@1.8.0
+  - @heyirisai/docx-editor-i18n@1.8.0
 
 ## 1.7.0
 
@@ -103,9 +103,9 @@
 - Updated dependencies [fc95983]
 - Updated dependencies [edd0bc2]
 - Updated dependencies [d4a27d4]
-  - @eigenpal/docx-editor-core@1.7.0
-  - @eigenpal/docx-editor-agents@1.7.0
-  - @eigenpal/docx-editor-i18n@1.7.0
+  - @heyirisai/docx-editor-core@1.7.0
+  - @heyirisai/docx-editor-agents@1.7.0
+  - @heyirisai/docx-editor-i18n@1.7.0
 
 ## 1.6.2
 
@@ -115,9 +115,9 @@
 - 0ac0a4f: Localize the document outline toggle button's tooltip and label so they follow the editor's `i18n` prop instead of always showing English.
 - Updated dependencies [a8bce7a]
 - Updated dependencies [768b10e]
-  - @eigenpal/docx-editor-core@1.6.2
-  - @eigenpal/docx-editor-agents@1.6.2
-  - @eigenpal/docx-editor-i18n@1.6.2
+  - @heyirisai/docx-editor-core@1.6.2
+  - @heyirisai/docx-editor-agents@1.6.2
+  - @heyirisai/docx-editor-i18n@1.6.2
 
 ## 1.6.1
 
@@ -130,9 +130,9 @@
 - Updated dependencies [a89af59]
 - Updated dependencies [6550426]
 - Updated dependencies [4a75c5e]
-  - @eigenpal/docx-editor-agents@1.6.1
-  - @eigenpal/docx-editor-i18n@1.6.1
-  - @eigenpal/docx-editor-core@1.6.1
+  - @heyirisai/docx-editor-agents@1.6.1
+  - @heyirisai/docx-editor-i18n@1.6.1
+  - @heyirisai/docx-editor-core@1.6.1
 
 ## 1.6.0
 
@@ -144,12 +144,12 @@
 
 - 3a4a03f: Fix toolbar dropdowns closing when you scroll inside them. Scrolling the font size picker's preset list now keeps the dropdown open instead of dismissing it. Fixes #808.
 - bbda628: Apply selected font picker options by their primary family name so CSS fallback stacks like Lato, sans-serif do not get stored as document font names.
-- 7fe09f0: Share the paragraph-style-picker preview logic between the React and Vue toolbars. The filter/sort and per-style preview CSS now live once in `@eigenpal/docx-editor-core/utils/stylePreview` (`resolveParagraphStyleOptions` + `getStylePreviewProps`), which both adapters call, so the style dropdown can no longer drift between them. Also fixes a Vue toolbar bug where typing a font size and then clicking a preset could re-commit the typed value over the preset.
+- 7fe09f0: Share the paragraph-style-picker preview logic between the React and Vue toolbars. The filter/sort and per-style preview CSS now live once in `@heyirisai/docx-editor-core/utils/stylePreview` (`resolveParagraphStyleOptions` + `getStylePreviewProps`), which both adapters call, so the style dropdown can no longer drift between them. Also fixes a Vue toolbar bug where typing a font size and then clicking a preset could re-commit the typed value over the preset.
 - 7fe09f0: Align the React and Vue toolbar controls. The Vue font-size control is now an editable, clearly-bordered input box (matching React) instead of a plain button, and React's zoom control is now a − / + stepper around the level dropdown (matching Vue), so both adapters present the same editable zoom and font-size controls.
-- 7fe09f0: Unify the editor UI colors onto one CSS-variable token palette. The canonical chrome stylesheet now lives in `@eigenpal/docx-editor-core` (`packages/core/src/styles/editor.css`) and both adapters import it, so React and Vue can never drift. Component styles reference `--doc-*` tokens instead of hardcoded colors, and the shadcn HSL tokens are aligned to the same palette and support opacity modifiers. A commented `.ep-root.dark` scaffold is included as the structure for a future dark theme (no dark values are shipped yet — adding the `dark` class has no visual effect until they are filled in). Light-mode appearance is unchanged apart from minor consolidation of near-duplicate grays/blues. As part of this, the Vue full-screen loading overlay now uses the same dark backdrop with light text as React (previously a light backdrop), and the Vue editing-mode chip and toolbar dropdown elevation share React's hover/shadow tokens. The Vue toolbar buttons, dropdown triggers, menu items, and steppers now reference the same shadcn `foreground`/`muted-foreground`/`muted`/`border` tokens React uses (previously the `--doc-*` family), so the toolbar matches React in both light and dark mode; the dropdown triggers also render at React's normal weight (they previously looked bold), and the selected menu item uses React's grey highlight instead of an indigo tint.
+- 7fe09f0: Unify the editor UI colors onto one CSS-variable token palette. The canonical chrome stylesheet now lives in `@heyirisai/docx-editor-core` (`packages/core/src/styles/editor.css`) and both adapters import it, so React and Vue can never drift. Component styles reference `--doc-*` tokens instead of hardcoded colors, and the shadcn HSL tokens are aligned to the same palette and support opacity modifiers. A commented `.ep-root.dark` scaffold is included as the structure for a future dark theme (no dark values are shipped yet — adding the `dark` class has no visual effect until they are filled in). Light-mode appearance is unchanged apart from minor consolidation of near-duplicate grays/blues. As part of this, the Vue full-screen loading overlay now uses the same dark backdrop with light text as React (previously a light backdrop), and the Vue editing-mode chip and toolbar dropdown elevation share React's hover/shadow tokens. The Vue toolbar buttons, dropdown triggers, menu items, and steppers now reference the same shadcn `foreground`/`muted-foreground`/`muted`/`border` tokens React uses (previously the `--doc-*` family), so the toolbar matches React in both light and dark mode; the dropdown triggers also render at React's normal weight (they previously looked bold), and the selected menu item uses React's grey highlight instead of an indigo tint.
 - b8011f8: Focus the Vue editor on load so you can start typing immediately, without first clicking into the page. Matches the React adapter.
 - 7fe09f0: More React parity for the Vue editor: clicking the empty sidebar background now collapses an expanded comment/tracked-change card (it previously stayed open); the zoom control offers the same 50%–200% range and presets as React (was 25%–400%); and the toolbar dropdown triggers expose `aria-haspopup`/`aria-expanded` for screen readers.
-- 7fe09f0: Ship Tailwind utility classes in the Vue package's `styles.css`. The Vue build now runs Tailwind (via its own `tailwind.config.js` + PostCSS), so utility classes used by components like `Button` and `Toolbar` are styled out of the box for consumers who import `@eigenpal/docx-editor-vue/styles.css`, without needing their own Tailwind config. Fixes #594.
+- 7fe09f0: Ship Tailwind utility classes in the Vue package's `styles.css`. The Vue build now runs Tailwind (via its own `tailwind.config.js` + PostCSS), so utility classes used by components like `Button` and `Toolbar` are styled out of the box for consumers who import `@heyirisai/docx-editor-vue/styles.css`, without needing their own Tailwind config. Fixes #594.
 - 7fe09f0: The Vue toolbar's paragraph-style picker now reflects the loaded document's real styles (names and order) instead of a fixed preset list, matching React's behaviour (e.g. it shows the document's "Normal" style name). Falls back to the built-in presets when a document has no styles. Also aligns the toolbar's font-size box border and active-button colour exactly with React.
 - 7fe09f0: Bring the Vue toolbar's visual styling closer to React: toolbar controls now use the inherited system font (instead of the browser default Arial), the dropdown menus match React's border/radius/shadow, and the style-picker dropdown no longer balloons in width (the per-style preview is applied to an inner span and the menu is width-capped). Also extracts the font-size and style-option logic into composables to keep Toolbar.vue maintainable.
 - 7fe09f0: Polish the Vue toolbar and comment cards to match React. The toolbar font-size box is now correctly editable (typing commits on Enter/blur; +/− and arrow steppers no longer revert; the preset dropdown opens positioned), is the same height as React's, and steps by 1 beyond the preset list; the style-picker dropdown previews match React's sizes/weights and the menu is the same compact width instead of ballooning. Comment and tracked-change cards now use the shared near-white card color and drop shadow (new `--doc-card`/`--doc-card-shadow` tokens, sourced once in core) in both collapsed and expanded states, instead of a blue tint and a divergent shadow, matching React.
@@ -164,9 +164,9 @@
 - Updated dependencies [7fe09f0]
 - Updated dependencies [f50a3c7]
 - Updated dependencies [7fe09f0]
-  - @eigenpal/docx-editor-agents@1.6.0
-  - @eigenpal/docx-editor-core@1.6.0
-  - @eigenpal/docx-editor-i18n@1.6.0
+  - @heyirisai/docx-editor-agents@1.6.0
+  - @heyirisai/docx-editor-core@1.6.0
+  - @heyirisai/docx-editor-i18n@1.6.0
 
 ## 1.5.0
 
@@ -195,9 +195,9 @@
 - Updated dependencies [7d6daeb]
 - Updated dependencies [5cdfa5c]
 - Updated dependencies [44161e5]
-  - @eigenpal/docx-editor-core@1.5.0
-  - @eigenpal/docx-editor-agents@1.5.0
-  - @eigenpal/docx-editor-i18n@1.5.0
+  - @heyirisai/docx-editor-core@1.5.0
+  - @heyirisai/docx-editor-agents@1.5.0
+  - @heyirisai/docx-editor-i18n@1.5.0
 
 ## 1.4.0
 
@@ -211,9 +211,9 @@
 - 92690d6: Fix the Vue formatting toolbar not applying to a header or footer while editing it. Bold, italic, font, size, color, paragraph style, and clear-formatting now target the header/footer being edited instead of the document body. Fixes #749.
 - Updated dependencies [28a521a]
 - Updated dependencies [1ab8b30]
-  - @eigenpal/docx-editor-core@1.4.0
-  - @eigenpal/docx-editor-agents@1.4.0
-  - @eigenpal/docx-editor-i18n@1.4.0
+  - @heyirisai/docx-editor-core@1.4.0
+  - @heyirisai/docx-editor-agents@1.4.0
+  - @heyirisai/docx-editor-i18n@1.4.0
 
 ## 1.3.3
 
@@ -226,9 +226,9 @@
 - Updated dependencies [06fa96b]
 - Updated dependencies [bd704e2]
 - Updated dependencies [30df527]
-  - @eigenpal/docx-editor-core@1.3.3
-  - @eigenpal/docx-editor-agents@1.3.3
-  - @eigenpal/docx-editor-i18n@1.3.3
+  - @heyirisai/docx-editor-core@1.3.3
+  - @heyirisai/docx-editor-agents@1.3.3
+  - @heyirisai/docx-editor-i18n@1.3.3
 
 ## 1.3.2
 
@@ -240,9 +240,9 @@
 - Updated dependencies [3bd7bf7]
 - Updated dependencies [0ded2a1]
 - Updated dependencies [58e3a7e]
-  - @eigenpal/docx-editor-core@1.3.2
-  - @eigenpal/docx-editor-agents@1.3.2
-  - @eigenpal/docx-editor-i18n@1.3.2
+  - @heyirisai/docx-editor-core@1.3.2
+  - @heyirisai/docx-editor-agents@1.3.2
+  - @heyirisai/docx-editor-i18n@1.3.2
 
 ## 1.3.1
 
@@ -255,9 +255,9 @@
 - Updated dependencies [d100115]
 - Updated dependencies [db75f4f]
 - Updated dependencies [66cf3a8]
-  - @eigenpal/docx-editor-core@1.3.1
-  - @eigenpal/docx-editor-agents@1.3.1
-  - @eigenpal/docx-editor-i18n@1.3.1
+  - @heyirisai/docx-editor-core@1.3.1
+  - @heyirisai/docx-editor-agents@1.3.1
+  - @heyirisai/docx-editor-i18n@1.3.1
 
 ## 1.3.0
 
@@ -297,9 +297,9 @@
 - Updated dependencies [f3d6861]
 - Updated dependencies [0f3eb97]
 - Updated dependencies [eaa6f7f]
-  - @eigenpal/docx-editor-core@1.3.0
-  - @eigenpal/docx-editor-agents@1.3.0
-  - @eigenpal/docx-editor-i18n@1.3.0
+  - @heyirisai/docx-editor-core@1.3.0
+  - @heyirisai/docx-editor-agents@1.3.0
+  - @heyirisai/docx-editor-i18n@1.3.0
 
 ## 1.2.1
 
@@ -307,9 +307,9 @@
 
 - Updated dependencies [a0adf60]
 - Updated dependencies [1c2b098]
-  - @eigenpal/docx-editor-agents@1.2.1
-  - @eigenpal/docx-editor-core@1.2.1
-  - @eigenpal/docx-editor-i18n@1.2.1
+  - @heyirisai/docx-editor-agents@1.2.1
+  - @heyirisai/docx-editor-core@1.2.1
+  - @heyirisai/docx-editor-i18n@1.2.1
 
 ## 1.2.0
 
@@ -329,16 +329,16 @@
 - Updated dependencies [a60ed77]
 - Updated dependencies [bc67374]
 - Updated dependencies [a60ed77]
-  - @eigenpal/docx-editor-core@1.2.0
-  - @eigenpal/docx-editor-agents@1.2.0
-  - @eigenpal/docx-editor-i18n@1.2.0
+  - @heyirisai/docx-editor-core@1.2.0
+  - @heyirisai/docx-editor-agents@1.2.0
+  - @heyirisai/docx-editor-i18n@1.2.0
 
 ## 1.1.0
 
 ### Minor Changes
 
-- 9d7138e: Add a `fonts` prop on `<DocxEditor>` for declarative custom-font registration — each entry injects an `@font-face` from the URL you provide, and entries sharing a `family` register different weights. Also exposes `loadFontFromUrl`, `loadFontDefinitions`, and the `FontDefinition` type from `@eigenpal/docx-editor-core/utils`. Fixes #620.
-- 9d7138e: Font-load failures now route through the React `onError` prop and the Vue `error` event instead of the console, so you can forward them to your own error tracker; with no subscriber attached they fall back to `console.warn`. Adds `onFontError(callback)` to `@eigenpal/docx-editor-core/utils` for non-adapter hosts.
+- 9d7138e: Add a `fonts` prop on `<DocxEditor>` for declarative custom-font registration — each entry injects an `@font-face` from the URL you provide, and entries sharing a `family` register different weights. Also exposes `loadFontFromUrl`, `loadFontDefinitions`, and the `FontDefinition` type from `@heyirisai/docx-editor-core/utils`. Fixes #620.
+- 9d7138e: Font-load failures now route through the React `onError` prop and the Vue `error` event instead of the console, so you can forward them to your own error tracker; with no subscriber attached they fall back to `console.warn`. Adds `onFontError(callback)` to `@heyirisai/docx-editor-core/utils` for non-adapter hosts.
 - 42ea72d: Track structural edits as OOXML revisions in suggesting mode. Paragraph-break insert/delete, paragraph-property changes, and table row/cell insert/delete/merge are now recorded, round-tripped through DOCX, and shown in the tracked-changes sidebar (React and Vue, localized). Adds `acceptChangeById(id)` / `rejectChangeById(id)`, and `acceptAllChanges` / `rejectAllChanges` now resolve every revision type rather than inline marks only. Fixes #614.
 
 ### Patch Changes
@@ -355,15 +355,15 @@
 - Updated dependencies [ebb85a5]
 - Updated dependencies [137d5de]
 - Updated dependencies [e5e0997]
-  - @eigenpal/docx-editor-i18n@1.1.0
-  - @eigenpal/docx-editor-core@1.1.0
-  - @eigenpal/docx-editor-agents@1.1.0
+  - @heyirisai/docx-editor-i18n@1.1.0
+  - @heyirisai/docx-editor-core@1.1.0
+  - @heyirisai/docx-editor-agents@1.1.0
 
 ## 1.0.3
 
 ### Patch Changes
 
-- 6d56181: Vue now renders documents with stacked floating objects identically to React. Previously, the Vue composable ran a simplified measurement pipeline without floating-zone awareness, so anchored images / floating textboxes / floating tables would not push body text below them in Vue. The float-extraction and per-block orchestration is now shared from `@eigenpal/docx-editor-core/layout-bridge` (`measureBlocksWithFloats`); both adapters call it with their own per-block measure callback.
+- 6d56181: Vue now renders documents with stacked floating objects identically to React. Previously, the Vue composable ran a simplified measurement pipeline without floating-zone awareness, so anchored images / floating textboxes / floating tables would not push body text below them in Vue. The float-extraction and per-block orchestration is now shared from `@heyirisai/docx-editor-core/layout-bridge` (`measureBlocksWithFloats`); both adapters call it with their own per-block measure callback.
 - Updated dependencies [24b31a4]
 - Updated dependencies [ec36a50]
 - Updated dependencies [143c31e]
@@ -371,18 +371,18 @@
 - Updated dependencies [bdd7f50]
 - Updated dependencies [6d56181]
 - Updated dependencies [e80093d]
-  - @eigenpal/docx-editor-core@1.0.3
-  - @eigenpal/docx-editor-agents@1.0.3
-  - @eigenpal/docx-editor-i18n@1.0.3
+  - @heyirisai/docx-editor-core@1.0.3
+  - @heyirisai/docx-editor-agents@1.0.3
+  - @heyirisai/docx-editor-i18n@1.0.3
 
 ## 1.0.2
 
 ### Patch Changes
 
 - Updated dependencies [4e73af5]
-  - @eigenpal/docx-editor-core@1.0.2
-  - @eigenpal/docx-editor-agents@1.0.2
-  - @eigenpal/docx-editor-i18n@1.0.2
+  - @heyirisai/docx-editor-core@1.0.2
+  - @heyirisai/docx-editor-agents@1.0.2
+  - @heyirisai/docx-editor-i18n@1.0.2
 
 ## 1.0.1
 
@@ -392,9 +392,9 @@
 - Updated dependencies [7806b78]
 - Updated dependencies [a193caa]
 - Updated dependencies [fe4cb94]
-  - @eigenpal/docx-editor-core@1.0.1
-  - @eigenpal/docx-editor-i18n@1.0.1
-  - @eigenpal/docx-editor-agents@1.0.1
+  - @heyirisai/docx-editor-core@1.0.1
+  - @heyirisai/docx-editor-i18n@1.0.1
+  - @heyirisai/docx-editor-agents@1.0.1
 
 ## 1.0.0
 
@@ -402,29 +402,29 @@
 
 - 6272b32: # 1.0.0
 
-  First multi-package, multi-framework release. The monolithic `@eigenpal/docx-js-editor` is split into a framework-agnostic core and per-framework adapters, Vue 3 ships as a first-class adapter alongside React, and the license moves to Apache 2.0 across all packages.
+  First multi-package, multi-framework release. The monolithic `@heyirisai/docx-js-editor` is split into a framework-agnostic core and per-framework adapters, Vue 3 ships as a first-class adapter alongside React, and the license moves to Apache 2.0 across all packages.
 
   ## Package restructure (breaking)
 
-  | Old import                                 | New import                                |
-  | ------------------------------------------ | ----------------------------------------- |
-  | `@eigenpal/docx-js-editor`                 | `@eigenpal/docx-editor-react`             |
-  | `@eigenpal/docx-js-editor/react`           | `@eigenpal/docx-editor-react`             |
-  | `@eigenpal/docx-editor-react/core`         | `@eigenpal/docx-editor-core`              |
-  | `@eigenpal/docx-editor-react/headless`     | `@eigenpal/docx-editor-core/headless`     |
-  | `@eigenpal/docx-editor-react/core-plugins` | `@eigenpal/docx-editor-core/core-plugins` |
-  | `@eigenpal/docx-editor-react/mcp`          | `@eigenpal/docx-editor-agents/mcp`        |
-  | `@eigenpal/docx-editor-react/i18n/*.json`  | `@eigenpal/docx-editor-i18n/*.json`       |
+  | Old import                                  | New import                                 |
+  | ------------------------------------------- | ------------------------------------------ |
+  | `@heyirisai/docx-js-editor`                 | `@heyirisai/docx-editor-react`             |
+  | `@heyirisai/docx-js-editor/react`           | `@heyirisai/docx-editor-react`             |
+  | `@heyirisai/docx-editor-react/core`         | `@heyirisai/docx-editor-core`              |
+  | `@heyirisai/docx-editor-react/headless`     | `@heyirisai/docx-editor-core/headless`     |
+  | `@heyirisai/docx-editor-react/core-plugins` | `@heyirisai/docx-editor-core/core-plugins` |
+  | `@heyirisai/docx-editor-react/mcp`          | `@heyirisai/docx-editor-agents/mcp`        |
+  | `@heyirisai/docx-editor-react/i18n/*.json`  | `@heyirisai/docx-editor-i18n/*.json`       |
 
-  The old `@eigenpal/docx-js-editor` package stays on 0.x for legacy maintenance — no 1.x compatibility shim ships. Framework-agnostic utilities (e.g. `createEmptyDocument`) move to core:
+  The old `@heyirisai/docx-js-editor` package stays on 0.x for legacy maintenance — no 1.x compatibility shim ships. Framework-agnostic utilities (e.g. `createEmptyDocument`) move to core:
 
   ```diff
-  - import { DocxEditor, createEmptyDocument } from '@eigenpal/docx-js-editor';
-  + import { DocxEditor } from '@eigenpal/docx-editor-react';
-  + import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+  - import { DocxEditor, createEmptyDocument } from '@heyirisai/docx-js-editor';
+  + import { DocxEditor } from '@heyirisai/docx-editor-react';
+  + import { createEmptyDocument } from '@heyirisai/docx-editor-core';
   ```
 
-  ## Vue 3 adapter (`@eigenpal/docx-editor-vue`)
+  ## Vue 3 adapter (`@heyirisai/docx-editor-vue`)
 
   The Vue package becomes a real adapter (previously a stub). Public API mirrors React:
   - `<DocxEditor>` with matching prop surface
@@ -433,28 +433,28 @@
 
   Parity gates cover insert-table, find/replace, page-setup, context menus, image overlay (resize/move/rotate/aspect-locked corners, dimension tooltip), advanced cell/row options (margins, height rule, text direction, no-wrap), menu-bar icons + shortcuts + carets, toolbar pickers, and the agent UI surface.
 
-  ## Shared i18n package (`@eigenpal/docx-editor-i18n`)
+  ## Shared i18n package (`@heyirisai/docx-editor-i18n`)
 
-  Locale strings move out of `@eigenpal/docx-editor-react` into a dedicated package consumed by both adapters from a single source.
+  Locale strings move out of `@heyirisai/docx-editor-react` into a dedicated package consumed by both adapters from a single source.
 
   ```diff
-  - import de from '@eigenpal/docx-editor-react/i18n/de.json';
-  + import de from '@eigenpal/docx-editor-i18n/de.json';
+  - import de from '@heyirisai/docx-editor-react/i18n/de.json';
+  + import de from '@heyirisai/docx-editor-i18n/de.json';
   ```
 
   The `defaultLocale` value (English) is still re-exported from the adapter packages, unchanged.
 
   ## Agent UI relocation (breaking)
 
-  `AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, `AgentTimeline` no longer ship from `@eigenpal/docx-editor-react`. They live at:
-  - `@eigenpal/docx-editor-agents/react` — React components + `useAgentChat`
-  - `@eigenpal/docx-editor-agents/vue` — Vue 3 twins, plus `AIContextMenu` and `AIResponsePreview`
-  - `@eigenpal/docx-editor-agents/ai-sdk/react` / `/ai-sdk/vue` — `@ai-sdk/*` adapters
-  - `@eigenpal/docx-editor-agents/bridge` — React-free `createEditorBridge`, `agentTools`, `executeToolCall`, `getToolSchemas`, `createReviewerBridge`. Safe for headless / Vue / Node.
+  `AgentPanel`, `AgentChatLog`, `AgentComposer`, `AgentSuggestionChip`, `AgentTimeline` no longer ship from `@heyirisai/docx-editor-react`. They live at:
+  - `@heyirisai/docx-editor-agents/react` — React components + `useAgentChat`
+  - `@heyirisai/docx-editor-agents/vue` — Vue 3 twins, plus `AIContextMenu` and `AIResponsePreview`
+  - `@heyirisai/docx-editor-agents/ai-sdk/react` / `/ai-sdk/vue` — `@ai-sdk/*` adapters
+  - `@heyirisai/docx-editor-agents/bridge` — React-free `createEditorBridge`, `agentTools`, `executeToolCall`, `getToolSchemas`, `createReviewerBridge`. Safe for headless / Vue / Node.
 
   ```diff
-  - import { AgentPanel, AgentChatLog } from '@eigenpal/docx-editor-react';
-  + import { AgentPanel, AgentChatLog } from '@eigenpal/docx-editor-agents/react';
+  - import { AgentPanel, AgentChatLog } from '@heyirisai/docx-editor-react';
+  + import { AgentPanel, AgentChatLog } from '@heyirisai/docx-editor-agents/react';
   ```
 
   The agent components no longer call `useTranslation` directly — pass localized `*Label` props instead. `<DocxEditor>`'s built-in agent panel slot still forwards localized strings automatically.
@@ -486,7 +486,7 @@
 
   ## License moves to Apache 2.0
 
-  All published packages relicense to Apache 2.0. Notably: `@eigenpal/docx-editor-agents` was AGPL-3.0-or-later — the relicense lifts copyleft obligations on agent embedders.
+  All published packages relicense to Apache 2.0. Notably: `@heyirisai/docx-editor-agents` was AGPL-3.0-or-later — the relicense lifts copyleft obligations on agent embedders.
 
 ### Patch Changes
 
@@ -494,7 +494,7 @@
 
   New tooling: `bun run docs:json` regenerates, `bun run docs:check` (in CI) fails on drift. Contract documented in `CLAUDE.md` under `### Docs JSON`. No runtime change to any published package.
 
-- 348fa6b: API Extractor snapshots for the 6 published subpaths of `@eigenpal/docx-editor-react` (root, `/ui`, `/hooks`, `/dialogs`, `/plugin-api`, `/styles`) and `@eigenpal/docx-editor-vue` (root, `/ui`, `/composables`, `/dialogs`, `/plugin-api`, `/styles`). CI now fails on undocumented public-surface drift via `bun run api:check`.
+- 348fa6b: API Extractor snapshots for the 6 published subpaths of `@heyirisai/docx-editor-react` (root, `/ui`, `/hooks`, `/dialogs`, `/plugin-api`, `/styles`) and `@heyirisai/docx-editor-vue` (root, `/ui`, `/composables`, `/dialogs`, `/plugin-api`, `/styles`). CI now fails on undocumented public-surface drift via `bun run api:check`.
 
   Adds `etc/parity.contract.json` — the cross-adapter parity contract listing which `DocxEditorProps` fields and `DocxEditorRef` members are paired between React and Vue, which are deliberately deferred in Vue, and which are Vue-exclusive. `bun run check:parity-contract` (also gated in CI) parses both snapshots and fails on any drift the contract doesn't acknowledge. Adding a new prop or ref method to either adapter forces an explicit classification in the contract.
 
@@ -502,7 +502,7 @@
 
   Vue's `useTableSelection` no longer exposes `manager: TableSelectionManager` in its return — it was unused by any internal consumer and leaked core's `TableSelectionManager` class as part of Vue's public surface.
 
-  Side effect for `@eigenpal/docx-editor-vue`: the build no longer writes workspace-relative source paths (e.g. `../../core/src/core.ts`) into published declarations. Those paths were valid in this repo but unresolvable once installed from npm; setting `pathsToAliases: false` on the dts plugin keeps the package names (`@eigenpal/docx-editor-core`, `@eigenpal/docx-editor-i18n`) intact in `dist/*.d.ts`.
+  Side effect for `@heyirisai/docx-editor-vue`: the build no longer writes workspace-relative source paths (e.g. `../../core/src/core.ts`) into published declarations. Those paths were valid in this repo but unresolvable once installed from npm; setting `pathsToAliases: false` on the dts plugin keeps the package names (`@heyirisai/docx-editor-core`, `@heyirisai/docx-editor-i18n`) intact in `dist/*.d.ts`.
 
   No runtime change for either package.
 
@@ -510,7 +510,7 @@
 
   Renames `VueRenderAsyncOptions` → `RenderAsyncOptions` in `packages/vue/src/renderAsync.ts`. The previous compat alias (`VueRenderAsyncOptions as RenderAsyncOptions`) is dropped — `RenderAsyncOptions` is now the only exported name. Matches React's `RenderAsyncOptions` 1:1.
 
-  Adds `EditorPlugin` as a type alias for `VueEditorPlugin` in `packages/vue/src/plugin-api/types.ts`, mirroring React's `EditorPlugin` / `ReactEditorPlugin` pair. Consumers writing `import { EditorPlugin } from '@eigenpal/docx-editor-vue/plugin-api'` now resolve. `VueEditorPlugin` stays exported for callers who want the framework-explicit name.
+  Adds `EditorPlugin` as a type alias for `VueEditorPlugin` in `packages/vue/src/plugin-api/types.ts`, mirroring React's `EditorPlugin` / `ReactEditorPlugin` pair. Consumers writing `import { EditorPlugin } from '@heyirisai/docx-editor-vue/plugin-api'` now resolve. `VueEditorPlugin` stays exported for callers who want the framework-explicit name.
 
   No runtime change.
 
@@ -525,6 +525,6 @@
 - Updated dependencies [f7b8dc7]
 - Updated dependencies [b2230a3]
 - Updated dependencies [8836214]
-  - @eigenpal/docx-editor-core@1.0.0
-  - @eigenpal/docx-editor-agents@1.0.0
-  - @eigenpal/docx-editor-i18n@1.0.0
+  - @heyirisai/docx-editor-core@1.0.0
+  - @heyirisai/docx-editor-agents@1.0.0
+  - @heyirisai/docx-editor-i18n@1.0.0

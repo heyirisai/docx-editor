@@ -15,8 +15,8 @@ import {
   setContentControlValueAtPosTr,
   addRepeatingSectionItemTr,
   removeRepeatingSectionItemTr,
-} from '@eigenpal/docx-editor-core/prosemirror';
-import type { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
+} from '@heyirisai/docx-editor-core/prosemirror';
+import type { ContentControlValue } from '@heyirisai/docx-editor-core/agent';
 
 const WIDGET_SELECTOR = '.layout-sdt-widget, .layout-inline-sdt-widget';
 

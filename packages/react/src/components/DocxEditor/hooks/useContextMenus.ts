@@ -13,15 +13,15 @@ import {
   selectTable as pmSelectTable,
   deleteTable as pmDeleteTable,
   type TableContextInfo,
-} from '@eigenpal/docx-editor-core/prosemirror';
+} from '@heyirisai/docx-editor-core/prosemirror';
 import {
   setImageWrapType,
   type ImageLayoutTarget,
-} from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
+} from '@heyirisai/docx-editor-core/prosemirror/commands';
+import type { WrapType } from '@heyirisai/docx-editor-core/docx/wrapTypes';
+import { en as defaultLocale } from '@heyirisai/docx-editor-i18n';
 import { useTranslation } from '../../../i18n';
-import type { Translations } from '@eigenpal/docx-editor-i18n';
+import type { Translations } from '@heyirisai/docx-editor-i18n';
 import { useImageContextMenu } from '../../ImageContextMenu';
 import { type TextContextAction, type TextContextMenuItem } from '../../TextContextMenu';
 import { findSelectionYPosition } from '../internals/pmAnchors';

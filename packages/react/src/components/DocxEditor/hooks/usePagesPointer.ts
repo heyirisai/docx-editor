@@ -24,7 +24,7 @@ import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorView } from 'prosemirror-view';
 
-import type { CaretPosition, SelectionRect } from '@eigenpal/docx-editor-core/layout-bridge';
+import type { CaretPosition, SelectionRect } from '@heyirisai/docx-editor-core/layout-bridge';
 import {
   clickToPosition,
   clickToPositionDom,
@@ -32,16 +32,16 @@ import {
   hitTestFragment,
   hitTestTableCell,
   TABLE_INSERT_HIDE_DELAY_MS as TABLE_INSERT_HIDE_DELAY,
-} from '@eigenpal/docx-editor-core/layout-bridge';
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
-import { addColumnRight, addRowBelow } from '@eigenpal/docx-editor-core/prosemirror';
+} from '@heyirisai/docx-editor-core/layout-bridge';
+import type { FlowBlock, Layout, Measure } from '@heyirisai/docx-editor-core/layout-engine';
+import { addColumnRight, addRowBelow } from '@heyirisai/docx-editor-core/prosemirror';
 import {
   captureInlinePositionEmu,
   findImageElement as coreFindImageElement,
   hitTestImage,
-} from '@eigenpal/docx-editor-core/layout-painter';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
-import { findWordBoundaries } from '@eigenpal/docx-editor-core/utils';
+} from '@heyirisai/docx-editor-core/layout-painter';
+import type { WrapType } from '@heyirisai/docx-editor-core/docx/wrapTypes';
+import { findWordBoundaries } from '@heyirisai/docx-editor-core/utils';
 
 import type { HiddenProseMirrorRef } from '../HiddenProseMirror';
 import type { ImageSelectionInfo } from '../overlays/ImageSelectionOverlay';
@@ -50,7 +50,7 @@ import { useTableResizeState } from './useTableResizeState';
 import {
   createCellDragTracker,
   findCellPosFromPmPos as coreFindCellPosFromPmPos,
-} from '@eigenpal/docx-editor-core/prosemirror/cellDragSelection';
+} from '@heyirisai/docx-editor-core/prosemirror/cellDragSelection';
 
 interface TableInsertButtonState {
   type: 'row' | 'column';

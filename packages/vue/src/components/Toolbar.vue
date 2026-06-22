@@ -458,8 +458,8 @@
 import { ref, computed, watch } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import { extractSelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
-import { clearFormatting } from '@eigenpal/docx-editor-core/prosemirror/commands/formatting';
+import { extractSelectionContext } from '@heyirisai/docx-editor-core/prosemirror/plugins/selectionTracker';
+import { clearFormatting } from '@heyirisai/docx-editor-core/prosemirror/commands/formatting';
 import MaterialSymbol from './ui/MaterialSymbol.vue';
 import ColorPicker from './ui/ColorPicker.vue';
 import EditingModeDropdown, { type EditorMode } from './EditingModeDropdown.vue';
@@ -467,13 +467,13 @@ import ImageWrapDropdown from './ui/ImageWrapDropdown.vue';
 import ImageTransformDropdown, {
   type TransformAction as ImageTransformAction,
 } from './ui/ImageTransformDropdown.vue';
-import type { SelectionContext } from '@eigenpal/docx-editor-core/prosemirror/plugins/selectionTracker';
-import type { ColorValue, Theme, Style } from '@eigenpal/docx-editor-core/types/document';
+import type { SelectionContext } from '@heyirisai/docx-editor-core/prosemirror/plugins/selectionTracker';
+import type { ColorValue, Theme, Style } from '@heyirisai/docx-editor-core/types/document';
 import {
   normalizeFontFamilies,
   type FontOption,
-} from '@eigenpal/docx-editor-core/utils/fontOptions';
-import { excludeFontsByName } from '@eigenpal/docx-editor-core/utils';
+} from '@heyirisai/docx-editor-core/utils/fontOptions';
+import { excludeFontsByName } from '@heyirisai/docx-editor-core/utils';
 import {
   defaultFonts,
   fontSizePresets,

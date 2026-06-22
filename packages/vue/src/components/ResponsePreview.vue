@@ -66,7 +66,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { AIAction, AgentResponse } from '@eigenpal/docx-editor-core/types/agentApi';
+import type { AIAction, AgentResponse } from '@heyirisai/docx-editor-core/types/agentApi';
 
 const props = withDefaults(
   defineProps<{

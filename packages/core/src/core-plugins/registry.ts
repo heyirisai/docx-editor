@@ -25,7 +25,7 @@ import type {
  *
  * @example
  * ```ts
- * import { pluginRegistry, docxtemplaterPlugin } from '@eigenpal/docx-editor/core-plugins';
+ * import { pluginRegistry, docxtemplaterPlugin } from '@heyirisai/docx-editor/core-plugins';
  *
  * // Register plugins
  * pluginRegistry.register(docxtemplaterPlugin);

@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import type { ColorValue, Theme } from '@eigenpal/docx-editor-core/types/document';
+import type { ColorValue, Theme } from '@heyirisai/docx-editor-core/types/document';
 import ColorPicker from './ColorPicker.vue';
 import { useTranslation } from '../../i18n';
 

@@ -15,7 +15,7 @@ import { suggestionModeKey, type SuggestionModeState } from './state';
  *
  * @example
  * ```ts
- * import { toggleSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+ * import { toggleSuggestionMode } from '@heyirisai/docx-editor-core/prosemirror/plugins';
  * toggleSuggestionMode(view.state, view.dispatch);
  * ```
  */
@@ -42,7 +42,7 @@ export function toggleSuggestionMode(
  *
  * @example
  * ```ts
- * import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+ * import { setSuggestionMode } from '@heyirisai/docx-editor-core/prosemirror/plugins';
  * setSuggestionMode(true, view.state, view.dispatch, 'Jane');
  * // ... typed text now wraps in <w:ins> with author="Jane"
  * setSuggestionMode(false, view.state, view.dispatch);

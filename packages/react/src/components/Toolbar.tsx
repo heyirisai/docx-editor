@@ -18,8 +18,8 @@ import type {
   ParagraphAlignment,
   Style,
   Theme,
-} from '@eigenpal/docx-editor-core/types/document';
-import { resolveColorToHex } from '@eigenpal/docx-editor-core/utils';
+} from '@heyirisai/docx-editor-core/types/document';
+import { resolveColorToHex } from '@heyirisai/docx-editor-core/utils';
 import { Button } from './ui/Button';
 import { Tooltip } from './ui/Tooltip';
 import { FontPicker } from './ui/FontPicker';

@@ -3,7 +3,7 @@ import type {
   Comment,
   CommentRangeStart,
   CommentRangeEnd,
-} from '@eigenpal/docx-editor-core/headless';
+} from '@heyirisai/docx-editor-core/headless';
 import { DocxReviewer } from '../DocxReviewer';
 import {
   makeRun,

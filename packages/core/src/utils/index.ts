@@ -3,7 +3,7 @@
  *
  * The named exports below are the public API contract. Adding a helper
  * to a source module does not automatically make it public — it must
- * be added to this barrel to be reachable from `@eigenpal/docx-editor-core/utils`.
+ * be added to this barrel to be reachable from `@heyirisai/docx-editor-core/utils`.
  * @packageDocumentation
  * @public
  */

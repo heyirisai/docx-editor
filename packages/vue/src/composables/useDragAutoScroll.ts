@@ -9,11 +9,11 @@
  * the React hook so the two adapters feel identical under drag.
  */
 import { onBeforeUnmount, type Ref } from 'vue';
-import { findVerticalScrollParent } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
+import { findVerticalScrollParent } from '@heyirisai/docx-editor-core/utils/findVerticalScrollParent';
 import {
   AUTO_SCROLL_EDGE_ZONE as EDGE_ZONE,
   computeAutoScrollDelta,
-} from '@eigenpal/docx-editor-core/utils/autoScroll';
+} from '@heyirisai/docx-editor-core/utils/autoScroll';
 
 export interface DragAutoScrollOptions {
   pagesContainer: Ref<HTMLElement | null>;

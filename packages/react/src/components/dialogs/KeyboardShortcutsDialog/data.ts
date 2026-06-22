@@ -4,7 +4,7 @@
  * label them.
  */
 
-import type { TranslationKey } from '@eigenpal/docx-editor-i18n';
+import type { TranslationKey } from '@heyirisai/docx-editor-i18n';
 import type { KeyboardShortcut, ShortcutCategory } from '../KeyboardShortcutsDialog';
 
 /**

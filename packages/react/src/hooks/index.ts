@@ -1,12 +1,12 @@
 /**
- * @eigenpal/docx-editor-react/hooks
+ * @heyirisai/docx-editor-react/hooks
  *
  * React hooks for editor history, table selection, find/replace, autosave,
  * clipboard, and zoom. Use alongside the main `DocxEditor` component.
  *
  * @example
  * ```tsx
- * import { useAutoSave, useFindReplace } from '@eigenpal/docx-editor-react/hooks';
+ * import { useAutoSave, useFindReplace } from '@heyirisai/docx-editor-react/hooks';
  * ```
  *
  * @packageDocumentation

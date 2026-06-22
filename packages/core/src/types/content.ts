@@ -7,7 +7,7 @@
  *
  * The types form a deeply interrelated tree (Paragraph ↔ Table ↔ ShapeTextBody)
  * and are split across `./content/*.ts` by domain. This file re-exports them
- * so existing imports from `@eigenpal/docx-editor-core/types/content` keep
+ * so existing imports from `@heyirisai/docx-editor-core/types/content` keep
  * working unchanged.
  * @packageDocumentation
  * @public

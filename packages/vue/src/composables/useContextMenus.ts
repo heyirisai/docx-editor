@@ -16,10 +16,10 @@ import { TextSelection, NodeSelection } from 'prosemirror-state';
 import {
   captureInlinePositionEmu,
   findImageElement,
-} from '@eigenpal/docx-editor-core/layout-painter';
-import { getTableContext } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension';
-import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
+} from '@heyirisai/docx-editor-core/layout-painter';
+import { getTableContext } from '@heyirisai/docx-editor-core/prosemirror/extensions/nodes/TableExtension';
+import type { ImageLayoutTarget } from '@heyirisai/docx-editor-core/prosemirror/commands';
+import type { WrapType } from '@heyirisai/docx-editor-core/docx/wrapTypes';
 import {
   copyImageToClipboard,
   pasteFromClipboard,

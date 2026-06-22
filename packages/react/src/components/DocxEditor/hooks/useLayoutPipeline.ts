@@ -15,8 +15,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { EditorState } from 'prosemirror-state';
 
-import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
-import { getMargins, getPageSize, getColumns } from '@eigenpal/docx-editor-core/layout-bridge';
+import type { FlowBlock, Layout, Measure } from '@heyirisai/docx-editor-core/layout-engine';
+import { getMargins, getPageSize, getColumns } from '@heyirisai/docx-editor-core/layout-bridge';
 import type { Node as PMNode } from 'prosemirror-model';
 import {
   LayoutPainter,
@@ -25,20 +25,20 @@ import {
   type BlockLookup,
   type FootnoteRenderItem,
   type RenderPageOptions,
-} from '@eigenpal/docx-editor-core/layout-painter';
+} from '@heyirisai/docx-editor-core/layout-painter';
 import {
   computeLayout,
   createLayoutScheduler,
   type LayoutScheduler,
-} from '@eigenpal/docx-editor-core/editor';
-import { findVerticalScrollParentOrRoot } from '@eigenpal/docx-editor-core/utils/findVerticalScrollParent';
+} from '@heyirisai/docx-editor-core/editor';
+import { findVerticalScrollParentOrRoot } from '@heyirisai/docx-editor-core/utils/findVerticalScrollParent';
 import type {
   Document,
   HeaderFooter,
   SectionProperties,
   StyleDefinitions,
   Theme,
-} from '@eigenpal/docx-editor-core/types/document';
+} from '@heyirisai/docx-editor-core/types/document';
 
 import type { HiddenProseMirrorRef } from '../HiddenProseMirror';
 import type { LayoutSelectionGate } from '../internals/LayoutSelectionGate';
@@ -213,7 +213,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       try {
         // Steps 1-3 (PM doc → blocks → measure → HF resolve → margin extend →
         // layout → footnote items) are the shared compute pass, lifted to
-        // `@eigenpal/docx-editor-core/editor`. Paint + scroll/events stay here.
+        // `@heyirisai/docx-editor-core/editor`. Paint + scroll/events stay here.
         const {
           blocks: newBlocks,
           measures: newMeasures,

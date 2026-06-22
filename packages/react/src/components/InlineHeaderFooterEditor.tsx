@@ -24,10 +24,10 @@ import { useTranslation } from '../i18n';
 import { EditorView } from 'prosemirror-view';
 import { undo, redo } from 'prosemirror-history';
 
-import { schema } from '@eigenpal/docx-editor-core/prosemirror';
-import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+import { schema } from '@heyirisai/docx-editor-core/prosemirror';
+import { proseDocToBlocks } from '@heyirisai/docx-editor-core/prosemirror/conversion';
 import { Z_INDEX } from '../styles/zIndex';
-import type { HeaderFooter, BlockContent } from '@eigenpal/docx-editor-core/types/document';
+import type { HeaderFooter, BlockContent } from '@heyirisai/docx-editor-core/types/document';
 
 // ============================================================================
 // TYPES

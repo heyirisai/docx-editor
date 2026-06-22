@@ -3,7 +3,7 @@ import {
   onFontError,
   loadFontDefinitions,
   type FontDefinition,
-} from '@eigenpal/docx-editor-core/utils';
+} from '@heyirisai/docx-editor-core/utils';
 
 /**
  * Vue counterpart to React's `useFontLifecycle`.

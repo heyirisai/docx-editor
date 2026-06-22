@@ -1,2 +1,2 @@
 // Re-export from core where the canonical implementation lives.
-export * from '@eigenpal/docx-editor-core/utils/findReplace';
+export * from '@heyirisai/docx-editor-core/utils/findReplace';

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { createEmptyDocument } from '@heyirisai/docx-editor-core';
+import { DocxEditor } from '@heyirisai/docx-editor-react';
 import { GitHubBadge } from '../../shared/GitHubBadge';
 import { AvatarStack } from './AvatarStack';
 import { useCollaboration } from './useCollaboration';

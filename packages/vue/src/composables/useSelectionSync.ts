@@ -20,12 +20,12 @@ import { NodeSelection } from 'prosemirror-state';
 import {
   getSelectionRectsFromDom,
   getCaretPositionFromDom,
-} from '@eigenpal/docx-editor-core/layout-bridge/clickToPositionDom';
+} from '@heyirisai/docx-editor-core/layout-bridge/clickToPositionDom';
 import {
   findBodyPmAnchor,
   applyCellSelectionHighlight,
-} from '@eigenpal/docx-editor-core/layout-bridge';
-import { findImageElement } from '@eigenpal/docx-editor-core/layout-painter';
+} from '@heyirisai/docx-editor-core/layout-bridge';
+import { findImageElement } from '@heyirisai/docx-editor-core/layout-painter';
 import type { ImageSelectionInfo } from '../components/imageSelectionTypes';
 import { Z_INDEX } from '../styles/zIndex';
 

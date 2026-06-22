@@ -7,7 +7,7 @@ import type { CommentSidebarItem } from '../../composables/useCommentSidebarItem
 import {
   resolveItemPositions as coreResolveItemPositions,
   type ResolvedPosition as CoreResolvedPosition,
-} from '@eigenpal/docx-editor-core/plugin-api/resolveItemPositions';
+} from '@heyirisai/docx-editor-core/plugin-api/resolveItemPositions';
 
 export type ResolvedPosition = CoreResolvedPosition<CommentSidebarItem>;
 export const resolveItemPositions = coreResolveItemPositions<CommentSidebarItem>;

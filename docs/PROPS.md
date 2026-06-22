@@ -3,13 +3,13 @@
 The documented root API shape is shared by the React and Vue packages:
 
 ```ts
-import { DocxEditor, type DocxEditorRef, renderAsync } from '@eigenpal/docx-editor-react';
-import '@eigenpal/docx-editor-react/styles.css';
+import { DocxEditor, type DocxEditorRef, renderAsync } from '@heyirisai/docx-editor-react';
+import '@heyirisai/docx-editor-react/styles.css';
 ```
 
 ```ts
-import { DocxEditor, type DocxEditorRef, renderAsync } from '@eigenpal/docx-editor-vue';
-import '@eigenpal/docx-editor-vue/styles.css';
+import { DocxEditor, type DocxEditorRef, renderAsync } from '@heyirisai/docx-editor-vue';
+import '@heyirisai/docx-editor-vue/styles.css';
 ```
 
 Both packages export `DocxEditor`, `DocxEditorProps`, `DocxEditorRef`,
@@ -111,8 +111,8 @@ Set `externalContent` when something other than the `document` prop is the sourc
 
 ```tsx
 import { useMemo } from 'react';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import { createEmptyDocument } from '@heyirisai/docx-editor-core';
+import { DocxEditor } from '@heyirisai/docx-editor-react';
 import { ySyncPlugin, yUndoPlugin } from 'y-prosemirror';
 
 function CollaborativeEditor({ ydoc }) {
@@ -132,7 +132,7 @@ Comment thread metadata (text, author, replies, resolved status) lives outside t
 ```tsx
 import { useEffect, useState, useCallback } from 'react';
 import * as Y from 'yjs';
-import type { Comment } from '@eigenpal/docx-editor-core';
+import type { Comment } from '@heyirisai/docx-editor-core';
 
 function useSyncedComments(ydoc: Y.Doc): [Comment[], (next: Comment[]) => void] {
   const yComments = ydoc.getArray<Comment>('comments');

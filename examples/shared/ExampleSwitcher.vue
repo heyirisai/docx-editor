@@ -39,7 +39,7 @@
       </a>
       <div class="dropdown-divider" />
       <a
-        href="https://www.npmjs.com/package/@eigenpal/docx-editor-vue"
+        href="https://www.npmjs.com/package/@heyirisai/docx-editor-vue"
         target="_blank"
         rel="noopener noreferrer"
         :style="dropdownItemStyle"

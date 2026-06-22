@@ -1,7 +1,7 @@
 {
-  "name": "@eigenpal/docx-editor-react",
+  "name": "@heyirisai/docx-editor-react",
   "version": "1.9.0",
-  "description": "React DOCX editor adapter for @eigenpal/docx-editor-core.",
+  "description": "React DOCX editor adapter for @heyirisai/docx-editor-core.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -64,11 +64,11 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsup && bun run build:css && node ../../scripts/inject-package-doc.mjs --package @eigenpal/docx-editor-react",
+    "build": "tsup && bun run build:css && node ../../scripts/inject-package-doc.mjs --package @heyirisai/docx-editor-react",
     "build:css": "tailwindcss -c ./tailwind.config.js -i ./src/styles/editor.css -o ./dist/styles.css --minify",
     "typecheck": "tsc --noEmit",
-    "api:extract": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-react --local",
-    "api:check": "node ../../scripts/api-extractor.mjs --package @eigenpal/docx-editor-react"
+    "api:extract": "node ../../scripts/api-extractor.mjs --package @heyirisai/docx-editor-react --local",
+    "api:check": "node ../../scripts/api-extractor.mjs --package @heyirisai/docx-editor-react"
   },
   "peerDependencies": {
     "prosemirror-commands": "^1.5.2",
@@ -92,9 +92,9 @@
     }
   },
   "dependencies": {
-    "@eigenpal/docx-editor-agents": "^1.9.0",
-    "@eigenpal/docx-editor-core": "^1.9.0",
-    "@eigenpal/docx-editor-i18n": "^1.9.0",
+    "@heyirisai/docx-editor-agents": "^1.9.0",
+    "@heyirisai/docx-editor-core": "^1.9.0",
+    "@heyirisai/docx-editor-i18n": "^1.9.0",
     "@radix-ui/react-select": "^2.2.6",
     "clsx": "^2.1.0",
     "sonner": "^2.0.7"

@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
-import type { SectionProperties, TabStop } from '@eigenpal/docx-editor-core/types/document';
-import type { TrackedChangesResult } from '@eigenpal/docx-editor-core/prosemirror/utils/extractTrackedChanges';
+import type { SectionProperties, TabStop } from '@heyirisai/docx-editor-core/types/document';
+import type { TrackedChangesResult } from '@heyirisai/docx-editor-core/prosemirror/utils/extractTrackedChanges';
 import { LocaleProvider } from '../../i18n';
 import { cn } from '../../lib/utils';
 import { ErrorBoundary, ErrorProvider } from '../ErrorBoundary';
@@ -16,7 +16,7 @@ import { PageIndicator } from './PageIndicator';
 import { LocalizedAgentPanel } from './LocalizedAgentPanel';
 import { SIDEBAR_DOCUMENT_SHIFT } from '../sidebar/constants';
 import { Z_INDEX } from '../../styles/zIndex';
-import type { HeadingInfo } from '@eigenpal/docx-editor-core/utils';
+import type { HeadingInfo } from '@heyirisai/docx-editor-core/utils';
 import type { AgentPanelOptions } from './types';
 
 interface ScrollPageInfo {

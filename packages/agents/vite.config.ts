@@ -39,7 +39,7 @@ export default defineConfig({
         'vue',
         '@ai-sdk/vue',
         'ai',
-        /^@eigenpal\/docx-editor-core(\/.*)?$/,
+        /^@heyirisai\/docx-editor-core(\/.*)?$/,
         /^prosemirror-/,
       ],
     },
