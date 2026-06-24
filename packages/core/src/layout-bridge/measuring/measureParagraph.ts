@@ -285,7 +285,14 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
       };
       width += measureTextWidth(next.fallback || '1', style);
     } else if (isImageRun(next)) {
-      width += next.width || 0;
+      // Floating / anchored images are positioned at the page level and
+      // contribute no inline width — counting them (e.g. a footer's decorative
+      // full-width wave images that trail the text) would massively inflate the
+      // reserved width. Mirrors the painter's measureFollowingContentWidth.
+      const isFloating = next.displayMode === 'float' || wrapsAroundText(next.wrapType);
+      if (!(next.position && isFloating)) {
+        width += next.width || 0;
+      }
     }
   }
   return width;
@@ -723,7 +730,41 @@ export function measureParagraph(
         explicitStops: attrs?.tabs,
         leftIndent: pixelsToTwips(indentLeft),
       };
-      let tabWidth = calculateTabWidth(contentX, tabContext, { followingWidth }).width;
+      const tabResult = calculateTabWidth(contentX, tabContext, { followingWidth });
+      let tabWidth = tabResult.width;
+
+      // If this is the LAST tab on the line and it right-anchors the trailing
+      // content — an `end` (right) tab stop, or a tab that overshoots the right
+      // edge (e.g. a footer authored with consecutive tabs where the last lands
+      // past a right tab stop) — reserve exactly enough room so the following
+      // runs end at the right edge, and DON'T let them wrap. The painter
+      // (renderParagraph/line.ts) pins them there by flexing the leading tabs,
+      // so the measurer must keep them on this line or the painter renders only
+      // the sliced fragment (the reported "[Fill In]" truncated to "[").
+      let followingTabOnLine = false;
+      for (let k = runIndex + 1; k < runs.length; k++) {
+        const r = runs[k];
+        if (isLineBreakRun(r)) break;
+        if (isTabRun(r)) {
+          followingTabOnLine = true;
+          break;
+        }
+      }
+      const overshootsRightEdge =
+        lineX + tabWidth >= currentLine.availableWidth - WIDTH_TOLERANCE;
+      if (!followingTabOnLine && (tabResult.alignment === 'end' || overshootsRightEdge)) {
+        // Pull the running width to the reservation point so [reservedStart,
+        // availableWidth] holds the trailing content. May shrink the line below
+        // its current width — that models the painter reclaiming space from the
+        // leading (now-flexing) tabs.
+        const reservedStart = currentLine.availableWidth - followingWidth;
+        if (reservedStart > 0) {
+          currentLine.width = reservedStart;
+          currentLine.toRun = runIndex;
+          currentLine.toChar = 1;
+          continue;
+        }
+      }
 
       // When the tab targets a position past the line edge — Word's TOC
       // styles routinely author right tab stops a hair past the page margin

@@ -413,6 +413,12 @@ export function renderLine(
   let currentX = 0;
   const leftIndentPx = options?.leftIndentPx ?? 0;
 
+  // Tabs appended on the fallback (fixed-width) path. If a later tab right-
+  // anchors the trailing content to the line edge, these earlier tabs must
+  // become flexible too — otherwise a wide leading tab (e.g. the empty segment
+  // before a second tab in a footer) keeps the content pushed past the margin.
+  const priorFixedTabEls: HTMLElement[] = [];
+
   if (options?.isFirstLine) {
     // First line position depends on first-line indent or hanging indent:
     // - With hanging indent (firstLineIndentPx < 0): starts at leftIndent + firstLineIndent
@@ -465,12 +471,24 @@ export function renderLine(
           break;
         }
       }
-      const useRightAnchor =
+      // Pin the trailing content to the line's right edge when the last tab on
+      // the line would otherwise push it past that edge. Two cases:
+      //   1. an `end` (right) tab stop at the right edge — the TOC leader pattern;
+      //   2. any tab that *overshoots* the right edge (e.g. a footer authored with
+      //      consecutive tabs where the last lands past a right tab stop). Without
+      //      this the trailing runs flow off the page / past the right margin.
+      const trailingReachesRightEdge =
         lineRightEdgeX !== undefined &&
-        tabResult.alignment === 'end' &&
-        !hasFollowingTab &&
         currentX + tabResult.width + followingWidthForCheck >=
           lineRightEdgeX - RIGHT_EDGE_EPSILON_PX;
+      const tabReachesRightEdge =
+        lineRightEdgeX !== undefined &&
+        currentX + tabResult.width >= lineRightEdgeX - RIGHT_EDGE_EPSILON_PX;
+      const useRightAnchor =
+        lineRightEdgeX !== undefined &&
+        !hasFollowingTab &&
+        trailingReachesRightEdge &&
+        (tabResult.alignment === 'end' || tabReachesRightEdge);
 
       if (useRightAnchor) {
         // text-indent applies per flex item (not to the group), so a hanging
@@ -492,6 +510,14 @@ export function renderLine(
           // items). Negative margin-left on the first flex item pulls it back
           // into the padding area, matching the original text-indent behaviour.
           lineEl.firstElementChild.style.marginLeft = `${options.firstLineIndentPx}px`;
+        }
+
+        // Earlier fixed-width tabs on this line must flex too, or a wide leading
+        // tab keeps the trailing content overflowing past the right edge.
+        for (const prior of priorFixedTabEls) {
+          prior.style.flex = '1 1 0';
+          prior.style.minWidth = '0';
+          prior.style.width = 'auto';
         }
 
         // The tab — flex-grow to fill remaining line space after the trailing
@@ -541,6 +567,7 @@ export function renderLine(
 
       const tabEl = renderTabRun(run, doc, tabWidth, tabResult.leader);
       lineEl.appendChild(tabEl);
+      priorFixedTabEls.push(tabEl);
       currentX += tabWidth;
     } else if (isTextRun(run)) {
       const runEl = renderTextRun(run, doc, options?.context?.resolvedCommentIds);
