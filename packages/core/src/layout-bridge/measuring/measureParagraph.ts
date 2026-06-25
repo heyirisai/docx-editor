@@ -136,6 +136,7 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     bold: run.bold,
     italic: run.italic,
     letterSpacing: run.letterSpacing,
+    allCaps: run.allCaps,
   };
 }
 

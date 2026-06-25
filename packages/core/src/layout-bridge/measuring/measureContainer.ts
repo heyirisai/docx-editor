@@ -34,6 +34,8 @@ export interface FontStyle {
   bold?: boolean;
   italic?: boolean;
   letterSpacing?: number; // in pixels
+  /** w:caps — glyphs paint uppercase, so measure the uppercased text. */
+  allCaps?: boolean;
 }
 
 /**
@@ -230,10 +232,14 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
 export function measureTextWidth(text: string, style: FontStyle): number {
   if (!text) return 0;
 
+  // w:caps paints glyphs uppercase (text-transform: uppercase), which is wider.
+  // Measure the transformed text so the measure pipeline matches the painter.
+  const measured = style.allCaps ? text.toUpperCase() : text;
+
   const ctx = getCanvasContext();
   ctx.font = buildFontString(style);
 
-  const metrics = ctx.measureText(text);
+  const metrics = ctx.measureText(measured);
 
   // Use advance width for line breaking — this is the standard metric for text flow.
   // Painted width (actualBoundingBox) includes glyph overhang which is visual only
@@ -241,8 +247,8 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   let width = metrics.width;
 
   // Apply letter spacing if specified
-  if (style.letterSpacing && text.length > 1) {
-    width += style.letterSpacing * (text.length - 1);
+  if (style.letterSpacing && measured.length > 1) {
+    width += style.letterSpacing * (measured.length - 1);
   }
 
   return width;
