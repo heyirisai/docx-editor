@@ -37,6 +37,13 @@ import { fileURLToPath } from 'node:url';
 const OLD_SCOPE = '@eigenpal/';
 const NEW_SCOPE = '@heyirisai/';
 
+// The source `repository.url` is left as the upstream `eigenpal/docx-editor` in
+// source (for clean upstream merges). npm provenance REQUIRES `repository.url`
+// to match the repo running the publish workflow, so at publish time we also
+// point it at our fork — otherwise `npm publish` with provenance fails in CI.
+const OLD_REPO_PATH = 'eigenpal/docx-editor';
+const NEW_REPO_PATH = 'heyirisai/docx-editor';
+
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DRY_RUN = process.argv.includes('--dry-run');
 
@@ -79,6 +86,30 @@ function rewriteFile(path) {
   return true;
 }
 
+/**
+ * package.json gets the scope swap PLUS the `repository.url` rewrite (see
+ * OLD_REPO_PATH). Scope is replaced first so the only remaining
+ * `eigenpal/docx-editor` substrings are the repo URLs, not package names.
+ */
+function rewritePackageJson(path) {
+  const before = readFileSync(path, 'utf8');
+  const scopeReplaced = before.split(OLD_SCOPE).join(NEW_SCOPE);
+  const after = scopeReplaced.split(OLD_REPO_PATH).join(NEW_REPO_PATH);
+  if (after === before) return false;
+  const scopeCount = before.split(OLD_SCOPE).length - 1;
+  const repoCount = scopeReplaced.split(OLD_REPO_PATH).length - 1;
+  occurrences += scopeCount + repoCount;
+  filesChanged += 1;
+  if (DRY_RUN) {
+    console.log(
+      `  would rewrite ${(scopeCount + repoCount).toString().padStart(4)}x  ${path.replace(`${repoRoot}/`, '')} (incl. repository.url)`
+    );
+  } else {
+    writeFileSync(path, after);
+  }
+  return true;
+}
+
 /** Recursively rewrite every text file under `dir`. */
 function rewriteDir(dir) {
   if (!existsSync(dir)) return;
@@ -99,7 +130,7 @@ console.log(
 
 for (const pkgDir of PACKAGE_DIRS) {
   const pkgJson = join(pkgDir, 'package.json');
-  if (existsSync(pkgJson)) rewriteFile(pkgJson);
+  if (existsSync(pkgJson)) rewritePackageJson(pkgJson);
   rewriteDir(join(pkgDir, 'dist'));
 }
 
