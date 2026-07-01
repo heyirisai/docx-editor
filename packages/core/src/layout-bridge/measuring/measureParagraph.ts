@@ -751,8 +751,7 @@ export function measureParagraph(
           break;
         }
       }
-      const overshootsRightEdge =
-        lineX + tabWidth >= currentLine.availableWidth - WIDTH_TOLERANCE;
+      const overshootsRightEdge = lineX + tabWidth >= currentLine.availableWidth - WIDTH_TOLERANCE;
       if (!followingTabOnLine && (tabResult.alignment === 'end' || overshootsRightEdge)) {
         // Pull the running width to the reservation point so [reservedStart,
         // availableWidth] holds the trailing content. May shrink the line below

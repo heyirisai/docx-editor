@@ -40,7 +40,11 @@ function waveRun(posOffset: number): ImageRun {
 
 function footerParagraph(runs: ImageRun[]): { block: ParagraphBlock; measure: Measure } {
   return {
-    block: { kind: 'paragraph', id: 'p', runs: [{ kind: 'text', text: '© 2026 HeyIris' }, ...runs] },
+    block: {
+      kind: 'paragraph',
+      id: 'p',
+      runs: [{ kind: 'text', text: '© 2026 HeyIris' }, ...runs],
+    },
     measure: { kind: 'paragraph', lines: [], totalHeight: 20 },
   };
 }
