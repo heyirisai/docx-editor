@@ -31,10 +31,14 @@ export function convertPMTextBoxRun(node: PMNode): Run {
     // Tables inside text boxes are currently not round-tripped
   });
 
-  // Build shape with text body
+  // Build shape with text body. shapeType MUST be 'textBox' (not 'rect') so the
+  // serializer emits the `<wps:txbx><w:txbxContent>` text body — otherwise a
+  // full-repack export writes a plain rect shape with no text, dropping the
+  // text box's content (e.g. the cover title/date). The geometry is still a
+  // rectangle: the serializer maps shapeType 'textBox' -> prstGeom 'rect'.
   const shape: Shape = {
     type: 'shape',
-    shapeType: 'rect',
+    shapeType: 'textBox',
     id: attrs.textBoxId || undefined,
     size: {
       width: attrs.width ? pixelsToEmu(attrs.width) : 0,

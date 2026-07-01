@@ -602,11 +602,18 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
   // which we don't support yet, so treat them as block-level images
   const shouldAnchor = wrapType === 'behind' || wrapType === 'inFront';
 
-  const constrained = constrainImageToPage(
-    (attrs.width as number) || 100,
-    (attrs.height as number) || 100,
-    pageContentHeight
-  );
+  // Anchored (behind/in-front) images are positioned absolutely against the
+  // page/margin and are MEANT to bleed past the content area (e.g. a full-page
+  // cover background whose extent equals the page size). Constraining them to
+  // the content height shrinks them — a discrepancy visible only in this
+  // web-render path, since the serializer keeps the authored extent (so the
+  // exported DOCX is full-bleed while the on-screen viewer was short). Only
+  // constrain in-flow inline/block images, which shouldn't overflow the text area.
+  const rawWidth = (attrs.width as number) || 100;
+  const rawHeight = (attrs.height as number) || 100;
+  const constrained = shouldAnchor
+    ? { width: rawWidth, height: rawHeight }
+    : constrainImageToPage(rawWidth, rawHeight, pageContentHeight);
 
   return {
     kind: 'image',
