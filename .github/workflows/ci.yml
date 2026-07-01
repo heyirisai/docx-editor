@@ -40,6 +40,23 @@ jobs:
       - name: Format check
         run: bun run format:check
 
+      # Guardrail: the @eigenpal -> @heyirisai rebrand happens ONLY at publish
+      # time (scripts/brand-rename.mjs, in the ephemeral CI workspace). Source
+      # on `main` must stay under the upstream @eigenpal scope so upstream
+      # syncs merge cleanly. Fail the build if the branded scope leaks into any
+      # tracked file the rename touches — package manifests + configs + src
+      # under packages/, and the changeset config — not just src/.
+      # `git grep` searches tracked files only, so the (gitignored) dist/ built
+      # artifacts are excluded automatically; the rename tooling under
+      # scripts/ and .github/ is out of scope here so it isn't matched.
+      - name: Guard against branded scope in source
+        run: |
+          if git grep -n '@heyirisai/' -- packages .changeset; then
+            echo "::error::Found '@heyirisai/' in tracked source (packages/ or .changeset/). The rebrand must happen only at publish time (scripts/brand-rename.mjs), never in source — revert these occurrences."
+            exit 1
+          fi
+          echo "OK: no @heyirisai/ in tracked source."
+
   test:
     if: github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest

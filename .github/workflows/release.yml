@@ -157,6 +157,18 @@ jobs:
         if: ${{ steps.pending.outputs.publishing == 'true' }}
         run: bun run parity:prepublish
 
+      # Rebrand the built artifacts to the @heyirisai npm scope just before
+      # publishing. Source on `main` stays @eigenpal/* (so upstream syncs merge
+      # cleanly); this rewrites package.json names + deps, dist/ import
+      # specifiers, and .changeset/config.json IN THE EPHEMERAL CI WORKSPACE
+      # ONLY — it is never committed. Gated to the PUBLISH path: on the
+      # PR-update path `changeset version` runs next and would otherwise bake
+      # the renamed names into the release PR (i.e. into source). See
+      # scripts/brand-rename.mjs.
+      - name: Brand rename (@eigenpal -> @heyirisai) for publish
+        if: ${{ steps.pending.outputs.publishing == 'true' }}
+        run: node scripts/brand-rename.mjs
+
       # The single step that does both PR-management and publishing.
       # - If `.changeset/*.md` are pending: opens / updates a "chore: release X.Y.Z" PR
       #   that runs `version` (drains changesets, bumps versions, writes CHANGELOG).
@@ -173,6 +185,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: 'true'
+          # Skip lifecycle scripts during `npm publish`. Everything is already
+          # built by `build:packages` above and then scope-renamed by the brand
+          # rename step, so a publish-time rebuild is both unnecessary and
+          # harmful: packages/nuxt has a `prepack` (`nuxt-module-build build`)
+          # that would recompile its dist/ from @eigenpal source, overwriting
+          # the rename and shipping @heyirisai/nuxt-docx-editor with runtime
+          # imports still pointing at @eigenpal/*. Ignoring scripts on publish
+          # preserves the renamed artifacts for every package.
+          NPM_CONFIG_IGNORE_SCRIPTS: 'true'
 
       # changesets/action creates per-package tags (e.g. `@eigenpal/docx-editor-react@1.0.1`);
       # also create a single `vX.Y.Z` umbrella tag for Renovate/Dependabot/Releases.
