@@ -56,6 +56,9 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     bold: run.bold,
     italic: run.italic,
     letterSpacing: run.letterSpacing,
+    // Propagate w:caps so measureRun uppercases per-char widths — otherwise
+    // click-to-caret drifts from the painted (uppercased) glyphs for allCaps runs.
+    allCaps: run.allCaps,
   };
 }
 

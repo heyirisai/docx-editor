@@ -297,7 +297,13 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   // Measure each character individually for click positioning
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    const charMetrics = ctx.measureText(char);
+    // w:caps paints uppercase glyphs (text-transform: uppercase), which are
+    // wider. Measure the uppercased form so per-char widths used by hit-testing
+    // (click-to-caret, selection rects) match the painter and `measureTextWidth`.
+    // The width is still attributed to the ORIGINAL character index, so PM
+    // offset mapping stays 1:1 even if toUpperCase() yields multiple code units.
+    const measuredChar = style.allCaps ? char.toUpperCase() : char;
+    const charMetrics = ctx.measureText(measuredChar);
 
     // Use advance width for individual characters
     let charWidth = charMetrics.width;
