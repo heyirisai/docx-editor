@@ -263,6 +263,13 @@ export function calculateHeaderFooterVisualBounds(
   let visualBottom = 0;
   let cursorY = 0;
 
+  // Absolute page Y of the HF flow origin — used to detect floats that resolve
+  // off the page (see the guard in the paragraph branch below).
+  const flowTop =
+    metrics.section === 'header'
+      ? (metrics.margins.header ?? 48)
+      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
+
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
     const measure = measures[i];
@@ -277,6 +284,14 @@ export function calculateHeaderFooterVisualBounds(
       for (const run of block.runs) {
         if (run.kind !== 'image' || !run.position) continue;
         const runTop = resolveHeaderFooterVisualTop(run, paragraphStartY, flowHeight, metrics);
+        // Skip floats that resolve fully off the page: they are not painted
+        // (see the matching guard in renderHeaderFooterContent) so they must
+        // not inflate the visual bounds either — otherwise the footer
+        // container/band sizes to invisible content and shoves the in-flow
+        // footer text onto the next page. Mirrors Word, which clips off-page
+        // header/footer drawings.
+        const absoluteTop = flowTop + runTop;
+        if (absoluteTop >= metrics.pageSize.h || absoluteTop + run.height <= 0) continue;
         visualTop = Math.min(visualTop, runTop);
         visualBottom = Math.max(visualBottom, runTop + run.height);
       }

@@ -479,6 +479,22 @@ export function renderHeaderFooterContent(
 
   // Render floating images with absolute positioning
   for (const floatImg of floatingImages) {
+    const top = resolveHeaderFooterFloatTop(floatImg, layout);
+
+    // Word does not render a header/footer drawing that resolves entirely
+    // outside the page — e.g. a paragraph-anchored image carrying a large
+    // vertical offset that pushes it past the page bottom (some templates
+    // accumulate such stale off-page anchors). The HF container intentionally
+    // does NOT clip (images may bleed past the narrow text band, see below), so
+    // an off-page float would otherwise spill visibly onto the adjacent page.
+    // Cull it here to match Word. Must stay in lockstep with the matching guard
+    // in `calculateHeaderFooterVisualBounds` (layout-bridge) so paint and
+    // measurement agree on which floats exist.
+    const absoluteTop = layout.flowTop + top;
+    if (absoluteTop >= layout.pageHeight || absoluteTop + floatImg.height <= 0) {
+      continue;
+    }
+
     const img = doc.createElement('img');
     img.src = floatImg.src;
     img.width = floatImg.width;
@@ -496,7 +512,7 @@ export function renderHeaderFooterContent(
     img.style.maxHeight = 'none';
 
     applyHeaderFooterFloatHorizontalPosition(img, floatImg, layout);
-    img.style.top = `${resolveHeaderFooterFloatTop(floatImg, layout)}px`;
+    img.style.top = `${top}px`;
 
     containerEl.appendChild(img);
   }

@@ -214,7 +214,9 @@ function measureFollowingContentWidth(
     fontSize?: number,
     fontFamily?: string,
     bold?: boolean,
-    italic?: boolean
+    italic?: boolean,
+    letterSpacing?: number,
+    allCaps?: boolean
   ) => number,
   context?: RenderContext
 ): number {
@@ -223,7 +225,15 @@ function measureFollowingContentWidth(
     const run = runs[i];
     if (isTabRun(run) || isLineBreakRun(run)) break;
     if (isTextRun(run)) {
-      width += measureText(run.text || '', run.fontSize, run.fontFamily, run.bold, run.italic);
+      width += measureText(
+        run.text || '',
+        run.fontSize,
+        run.fontFamily,
+        run.bold,
+        run.italic,
+        run.letterSpacing,
+        run.allCaps
+      );
     } else if (isFieldRun(run)) {
       let fieldText: string;
       if (run.fieldType === 'PAGE' && context) {
@@ -233,7 +243,15 @@ function measureFollowingContentWidth(
       } else {
         fieldText = run.fallback ?? '';
       }
-      width += measureText(fieldText, run.fontSize, run.fontFamily, run.bold, run.italic);
+      width += measureText(
+        fieldText,
+        run.fontSize,
+        run.fontFamily,
+        run.bold,
+        run.italic,
+        run.letterSpacing,
+        run.allCaps
+      );
     } else if (isImageRun(run) && !isFloatingImageRun(run)) {
       // Floating images render at the page level — they contribute 0 inline
       // width, so don't count them in the right-edge clamp budget.
@@ -254,13 +272,30 @@ function createTextMeasurer(
   fontSize?: number,
   fontFamily?: string,
   bold?: boolean,
-  italic?: boolean
+  italic?: boolean,
+  letterSpacing?: number,
+  allCaps?: boolean
 ) => number {
   const canvas = doc.createElement('canvas');
   const ctx = canvas.getContext('2d');
 
-  return (text: string, fontSize = 11, fontFamily = 'Calibri', bold = false, italic = false) => {
-    if (!ctx) return text.length * 7; // Fallback estimate
+  return (
+    text: string,
+    fontSize = 11,
+    fontFamily = 'Calibri',
+    bold = false,
+    italic = false,
+    letterSpacing = 0,
+    allCaps = false
+  ) => {
+    // `applyRunStyles` paints `text-transform: uppercase` for w:caps and
+    // `letter-spacing` for w:spacing. The canvas font string can't express
+    // those, so without replicating them here the measured width is SMALLER
+    // than what's painted — and tab math built on it pushes right-anchored
+    // content (TOC page numbers, footer fields) past the right margin. So
+    // measure the transformed text and add the tracking, matching the paint.
+    const measured = allCaps ? text.toUpperCase() : text;
+    if (!ctx) return measured.length * 7; // Fallback estimate
     // Font resolver for category-appropriate fallback stacks, matching
     // measureContainer.ts. Include weight + style: `applyRunStyles` sets
     // `font-weight: bold` / `font-style: italic` on the painted span, but
@@ -275,7 +310,13 @@ function createTextMeasurer(
     if (bold) parts.push('bold');
     parts.push(`${fontSizePx}px`, cssFallback);
     ctx.font = parts.join(' ');
-    return ctx.measureText(text).width;
+    let width = ctx.measureText(measured).width;
+    // CSS letter-spacing adds tracking between glyphs. Match measureContainer's
+    // `letterSpacing * (length - 1)` so paint and measure agree.
+    if (letterSpacing && measured.length > 1) {
+      width += letterSpacing * (measured.length - 1);
+    }
+    return width;
   };
 }
 
@@ -413,6 +454,12 @@ export function renderLine(
   let currentX = 0;
   const leftIndentPx = options?.leftIndentPx ?? 0;
 
+  // Tabs appended on the fallback (fixed-width) path. If a later tab right-
+  // anchors the trailing content to the line edge, these earlier tabs must
+  // become flexible too — otherwise a wide leading tab (e.g. the empty segment
+  // before a second tab in a footer) keeps the content pushed past the margin.
+  const priorFixedTabEls: HTMLElement[] = [];
+
   if (options?.isFirstLine) {
     // First line position depends on first-line indent or hanging indent:
     // - With hanging indent (firstLineIndentPx < 0): starts at leftIndent + firstLineIndent
@@ -465,12 +512,24 @@ export function renderLine(
           break;
         }
       }
-      const useRightAnchor =
+      // Pin the trailing content to the line's right edge when the last tab on
+      // the line would otherwise push it past that edge. Two cases:
+      //   1. an `end` (right) tab stop at the right edge — the TOC leader pattern;
+      //   2. any tab that *overshoots* the right edge (e.g. a footer authored with
+      //      consecutive tabs where the last lands past a right tab stop). Without
+      //      this the trailing runs flow off the page / past the right margin.
+      const trailingReachesRightEdge =
         lineRightEdgeX !== undefined &&
-        tabResult.alignment === 'end' &&
-        !hasFollowingTab &&
         currentX + tabResult.width + followingWidthForCheck >=
           lineRightEdgeX - RIGHT_EDGE_EPSILON_PX;
+      const tabReachesRightEdge =
+        lineRightEdgeX !== undefined &&
+        currentX + tabResult.width >= lineRightEdgeX - RIGHT_EDGE_EPSILON_PX;
+      const useRightAnchor =
+        lineRightEdgeX !== undefined &&
+        !hasFollowingTab &&
+        trailingReachesRightEdge &&
+        (tabResult.alignment === 'end' || tabReachesRightEdge);
 
       if (useRightAnchor) {
         // text-indent applies per flex item (not to the group), so a hanging
@@ -492,6 +551,14 @@ export function renderLine(
           // items). Negative margin-left on the first flex item pulls it back
           // into the padding area, matching the original text-indent behaviour.
           lineEl.firstElementChild.style.marginLeft = `${options.firstLineIndentPx}px`;
+        }
+
+        // Earlier fixed-width tabs on this line must flex too, or a wide leading
+        // tab keeps the trailing content overflowing past the right edge.
+        for (const prior of priorFixedTabEls) {
+          prior.style.flex = '1 1 0';
+          prior.style.minWidth = '0';
+          prior.style.width = 'auto';
         }
 
         // The tab — flex-grow to fill remaining line space after the trailing
@@ -541,6 +608,7 @@ export function renderLine(
 
       const tabEl = renderTabRun(run, doc, tabWidth, tabResult.leader);
       lineEl.appendChild(tabEl);
+      priorFixedTabEls.push(tabEl);
       currentX += tabWidth;
     } else if (isTextRun(run)) {
       const runEl = renderTextRun(run, doc, options?.context?.resolvedCommentIds);
@@ -565,7 +633,15 @@ export function renderLine(
       // Measure text width for accurate tab position tracking
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || 'Calibri';
-      currentX += measureText(run.text, fontSize, fontFamily, run.bold, run.italic);
+      currentX += measureText(
+        run.text,
+        fontSize,
+        fontFamily,
+        run.bold,
+        run.italic,
+        run.letterSpacing,
+        run.allCaps
+      );
     } else if (isImageRun(run)) {
       // Skip floating images - they're rendered separately at page level.
       // Exception: inside table cells, floating images must render in-flow
@@ -599,7 +675,15 @@ export function renderLine(
       else if (run.fieldType === 'NUMPAGES') fieldText = String(options.context.totalPages);
       const fontSize = run.fontSize || 11;
       const fontFamily = run.fontFamily || 'Calibri';
-      currentX += measureText(fieldText, fontSize, fontFamily, run.bold, run.italic);
+      currentX += measureText(
+        fieldText,
+        fontSize,
+        fontFamily,
+        run.bold,
+        run.italic,
+        run.letterSpacing,
+        run.allCaps
+      );
     } else {
       // Fallback for unknown run types
       const runEl = renderRun(run, doc, options?.context);

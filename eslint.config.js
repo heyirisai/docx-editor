@@ -214,6 +214,19 @@ export default [
     },
   },
 
+  // measureParagraph.ts is the single paragraph-measurement unit (line breaking,
+  // tab-stop resolution, float/anchored-object interaction, per-run font metrics
+  // + caps/letter-spacing width math). It sat at the 1000 default until the
+  // header/footer anchored-object fidelity + w:caps/letter-spacing measurement
+  // work pushed it just over; a split would scatter the shared measurement
+  // geometry across files. Bumped modestly above the default with headroom.
+  {
+    files: ['packages/core/src/layout-bridge/measuring/measureParagraph.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1100, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // DocxEditor.vue is the host component — same role as React's
   // DocxEditor.tsx (which has a 2000-line cap). The React-parity callback
   // props (#720) add per-prop wiring that must live inline in the SFC (the

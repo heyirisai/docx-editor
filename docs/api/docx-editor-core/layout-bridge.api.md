@@ -316,6 +316,7 @@ export interface FontMetrics {
 
 // @public
 export interface FontStyle {
+    allCaps?: boolean;
     // (undocumented)
     bold?: boolean;
     // (undocumented)

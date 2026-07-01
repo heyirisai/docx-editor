@@ -380,11 +380,20 @@ export function paragraphToRuns(
       runs.push(run);
     } else if (child.type.name === 'image') {
       const attrs = child.attrs;
-      const constrained = constrainImageToPage(
-        (attrs.width as number) || 100,
-        (attrs.height as number) || 100,
-        _options.pageContentHeight
-      );
+      // Anchored (behind/in-front) images are positioned absolutely against the
+      // page/margin and are MEANT to bleed past the content area (e.g. a full-
+      // page cover background whose extent equals the page size). Constraining
+      // them to the content height shrinks them — a discrepancy visible only in
+      // this on-screen render path, since the serializer keeps the authored
+      // extent (so the exported DOCX is full-bleed while the viewer was short).
+      // Only constrain genuinely in-flow inline images.
+      const wrapType = attrs.wrapType as string | undefined;
+      const isAnchored = wrapType === 'behind' || wrapType === 'inFront';
+      const rawWidth = (attrs.width as number) || 100;
+      const rawHeight = (attrs.height as number) || 100;
+      const constrained = isAnchored
+        ? { width: rawWidth, height: rawHeight }
+        : constrainImageToPage(rawWidth, rawHeight, _options.pageContentHeight);
       // Carry the image's tracked-change marks so an inserted/deleted picture
       // paints in the revision color and resolves with the rest of the change.
       const changeFmt = extractRunFormatting(child.marks, theme);

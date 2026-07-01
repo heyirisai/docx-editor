@@ -34,6 +34,8 @@ export interface FontStyle {
   bold?: boolean;
   italic?: boolean;
   letterSpacing?: number; // in pixels
+  /** w:caps — glyphs paint uppercase, so measure the uppercased text. */
+  allCaps?: boolean;
 }
 
 /**
@@ -230,10 +232,14 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
 export function measureTextWidth(text: string, style: FontStyle): number {
   if (!text) return 0;
 
+  // w:caps paints glyphs uppercase (text-transform: uppercase), which is wider.
+  // Measure the transformed text so the measure pipeline matches the painter.
+  const measured = style.allCaps ? text.toUpperCase() : text;
+
   const ctx = getCanvasContext();
   ctx.font = buildFontString(style);
 
-  const metrics = ctx.measureText(text);
+  const metrics = ctx.measureText(measured);
 
   // Use advance width for line breaking — this is the standard metric for text flow.
   // Painted width (actualBoundingBox) includes glyph overhang which is visual only
@@ -241,8 +247,8 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   let width = metrics.width;
 
   // Apply letter spacing if specified
-  if (style.letterSpacing && text.length > 1) {
-    width += style.letterSpacing * (text.length - 1);
+  if (style.letterSpacing && measured.length > 1) {
+    width += style.letterSpacing * (measured.length - 1);
   }
 
   return width;
@@ -291,7 +297,13 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   // Measure each character individually for click positioning
   for (let i = 0; i < text.length; i++) {
     const char = text[i];
-    const charMetrics = ctx.measureText(char);
+    // w:caps paints uppercase glyphs (text-transform: uppercase), which are
+    // wider. Measure the uppercased form so per-char widths used by hit-testing
+    // (click-to-caret, selection rects) match the painter and `measureTextWidth`.
+    // The width is still attributed to the ORIGINAL character index, so PM
+    // offset mapping stays 1:1 even if toUpperCase() yields multiple code units.
+    const measuredChar = style.allCaps ? char.toUpperCase() : char;
+    const charMetrics = ctx.measureText(measuredChar);
 
     // Use advance width for individual characters
     let charWidth = charMetrics.width;

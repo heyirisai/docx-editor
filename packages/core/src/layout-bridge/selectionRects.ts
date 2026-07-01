@@ -78,6 +78,9 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     bold: run.bold,
     italic: run.italic,
     letterSpacing: run.letterSpacing,
+    // Propagate w:caps so selection-rect widths match the painted (uppercased)
+    // glyphs for allCaps runs (see measureRun / measureTextWidth).
+    allCaps: run.allCaps,
   };
 }
 
