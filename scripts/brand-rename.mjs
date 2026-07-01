@@ -144,8 +144,16 @@ console.log(
 );
 
 if (!DRY_RUN && filesChanged === 0) {
-  console.warn(
-    'WARNING: no @eigenpal/ occurrences found. Did build:packages run first, ' +
-      'or has the rename already been applied?'
+  // Fail closed. This is a REQUIRED publish-time transformation, not a
+  // best-effort cleanup: if it rewrote nothing, the built dist/ is missing or
+  // the scope-swap coverage has silently drifted, and continuing would publish
+  // un-renamed `@eigenpal/*` artifacts under the wrong scope. Abort so the
+  // release stops here instead of shipping mixed/old-scope packages.
+  console.error(
+    'ERROR: brand-rename made no replacements (0 @eigenpal/ occurrences). ' +
+      'Expected to rewrite built dist/ + package.json — did `build:packages` ' +
+      'run first? Refusing to continue so the publish cannot ship un-renamed ' +
+      'artifacts.'
   );
+  process.exit(1);
 }
