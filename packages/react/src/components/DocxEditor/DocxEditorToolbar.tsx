@@ -11,7 +11,7 @@ import { CommentsSidebarToggle } from './CommentsSidebarToggle';
 import { EditingModeDropdown } from './EditingModeDropdown';
 import { AgentPanelToggle } from './AgentPanelToggle';
 import type { EditorMode } from './internals/editing-modes';
-import type { AgentPanelOptions } from './types';
+import type { AgentPanelOptions, HistoryOverride } from './types';
 
 interface ImageContext {
   pos: number;
@@ -75,6 +75,7 @@ export function DocxEditorToolbar({
   onFormat,
   onUndo,
   onRedo,
+  historyOverride,
   onPrint,
   showFileOpen,
   showHelpMenu,
@@ -124,6 +125,8 @@ export function DocxEditorToolbar({
   onFormat: (action: FormattingAction) => void;
   onUndo: () => void;
   onRedo: () => void;
+  /** When set, drives canUndo/canRedo instead of prosemirror-history depths. */
+  historyOverride?: HistoryOverride;
   onPrint: () => void;
   showFileOpen: boolean;
   showHelpMenu: boolean;
@@ -159,8 +162,20 @@ export function DocxEditorToolbar({
         onFormat={onFormat}
         onUndo={onUndo}
         onRedo={onRedo}
-        canUndo={pmState ? undoDepth(pmState) > 0 : false}
-        canRedo={pmState ? redoDepth(pmState) > 0 : false}
+        canUndo={
+          pmState
+            ? historyOverride
+              ? historyOverride.canUndo(pmState)
+              : undoDepth(pmState) > 0
+            : false
+        }
+        canRedo={
+          pmState
+            ? historyOverride
+              ? historyOverride.canRedo(pmState)
+              : redoDepth(pmState) > 0
+            : false
+        }
         disabled={readOnly}
         documentStyles={document?.package.styles?.styles}
         theme={document?.package.theme || theme}

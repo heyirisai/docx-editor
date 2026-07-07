@@ -3,7 +3,7 @@ import { createEmptyDocument } from '@eigenpal/docx-editor-core';
 import { DocxEditor } from '@eigenpal/docx-editor-react';
 import { GitHubBadge } from '../../shared/GitHubBadge';
 import { AvatarStack } from './AvatarStack';
-import { useCollaboration } from './useCollaboration';
+import { useCollaboration, yHistoryOverride } from './useCollaboration';
 import { getOrCreateRoomFromUrl, loadOrCreateUser } from './identity';
 
 const styles: Record<string, React.CSSProperties> = {
@@ -126,6 +126,7 @@ export function App() {
           document={seedDocument}
           externalContent
           externalPlugins={plugins}
+          historyOverride={yHistoryOverride}
           comments={comments}
           onCommentsChange={setComments}
           author={user.name}

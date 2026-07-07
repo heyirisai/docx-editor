@@ -1,9 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import * as Y from 'yjs';
 import { WebrtcProvider } from 'y-webrtc';
-import { ySyncPlugin, yCursorPlugin, yUndoPlugin } from 'y-prosemirror';
+import {
+  ySyncPlugin,
+  yCursorPlugin,
+  yUndoPlugin,
+  yUndoPluginKey,
+  undo as yUndo,
+  redo as yRedo,
+} from 'y-prosemirror';
 import type { Plugin } from 'prosemirror-state';
 import type { Comment } from '@eigenpal/docx-editor-core/types/content';
+import type { HistoryOverride } from '@eigenpal/docx-editor-react';
+
+/**
+ * Routes the editor's undo/redo (toolbar + Mod-Z) to yUndoPlugin's
+ * UndoManager so each user undoes only their OWN edits. Pass to
+ * DocxEditor's `historyOverride` prop — that also disables the built-in
+ * prosemirror-history plugin, which would otherwise undo across peers.
+ */
+export const yHistoryOverride: HistoryOverride = {
+  undo: (state) => yUndo(state),
+  redo: (state) => yRedo(state),
+  canUndo: (state) => (yUndoPluginKey.getState(state)?.undoManager?.undoStack.length ?? 0) > 0,
+  canRedo: (state) => (yUndoPluginKey.getState(state)?.undoManager?.redoStack.length ?? 0) > 0,
+};
 
 export interface CollaborativeUser {
   clientId: number;

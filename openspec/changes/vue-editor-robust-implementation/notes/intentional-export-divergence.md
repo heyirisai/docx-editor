@@ -17,6 +17,7 @@ Use this for **deliberate** asymmetry. Don't use it to silence drift you should 
 - `i18nPlugin` (vue-only): Vue app plugin install hook. React has no equivalent plugin system.
 - `defaultLocale` (vue-only): Vue-native locale export for app-level plugin setup.
 - `VueRenderAsyncOptions` (vue-only): Framework-specific alias retained for consumers who want explicit Vue naming; `RenderAsyncOptions` is also exported for cross-adapter docs.
+- `HistoryOverride` (react-only): Type for the collab undo/redo override prop (`historyOverride`), which pairs with the React-only `externalContent` mode. Deferred in Vue until Vue collab lands (see `deferredInVue` in the parity contract).
 
 ## Named-export gate mode
 

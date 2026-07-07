@@ -15,7 +15,7 @@ import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document'
 
 import { cn } from '../lib/utils';
 import { type SelectionFormatting } from './Toolbar';
-import type { AgentPanelOptions } from './DocxEditor/types';
+import type { AgentPanelOptions, HistoryOverride } from './DocxEditor/types';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFileIO } from './DocxEditor/hooks/useFileIO';
@@ -36,6 +36,8 @@ import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { useSelectionTracker } from './DocxEditor/hooks/useSelectionTracker';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
+import { useExternalPlugins } from './DocxEditor/hooks/useExternalPlugins';
+import { useStyleResolverCache } from './DocxEditor/hooks/useStyleResolverCache';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
@@ -70,10 +72,7 @@ import { useDocumentHistory } from '../hooks/useHistory';
 // Extension system
 import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import {
-  createSuggestionModePlugin,
-  setSuggestionMode,
-} from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 
 // Conversion (for HF inline editor save)
 
@@ -81,7 +80,6 @@ import {
 import {
   type SelectionState,
   extractSelectionState,
-  createStyleResolver,
   type TableContextInfo,
   type PMContentControl,
 } from '@eigenpal/docx-editor-core/prosemirror';
@@ -147,6 +145,13 @@ export interface DocxEditorProps {
    * editor can build its schema and render the shell.
    */
   externalContent?: boolean;
+  /**
+   * Replaces built-in prosemirror-history undo/redo on the BODY editor with
+   * caller-supplied commands — for collab, where y-prosemirror's yUndoPlugin
+   * must own history so users only undo their own edits. Latched on mount;
+   * see {@link HistoryOverride} for details.
+   */
+  historyOverride?: HistoryOverride;
   /** Callback when editor view is ready (for PluginHost) */
   onEditorViewReady?: (view: import('prosemirror-view').EditorView) => void;
   /** Color theme mode for UI styling. `'system'` follows the OS preference. */
@@ -641,6 +646,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentsSidebarOpenChange,
     externalPlugins,
     externalContent = false,
+    historyOverride,
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
@@ -797,23 +803,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
+  // Suggestion plugin + caller plugins + history-override keymap, and the
+  // mount-latched history override (see useExternalPlugins).
+  const { latchedHistoryOverride, allExternalPlugins } = useExternalPlugins({
+    historyOverride,
+    editingMode,
+    author,
+    externalPlugins,
+  });
+
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
-    const mgr = new ExtensionManager(createStarterKit());
+    const mgr = new ExtensionManager(
+      createStarterKit(latchedHistoryOverride ? { disable: ['history'] } : {})
+    );
     mgr.buildSchema();
     mgr.initializeRuntime();
     return mgr;
-  }, []);
-
-  // Suggestion mode plugin — merged with external plugins
-  const suggestionPlugin = useMemo(
-    () => createSuggestionModePlugin(editingMode === 'suggesting', author),
-    [] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  const allExternalPlugins = useMemo(
-    () => [suggestionPlugin, ...(externalPlugins ?? [])],
-    [suggestionPlugin, externalPlugins]
-  );
+  }, [latchedHistoryOverride]);
 
   // Refs (pagedEditorRef is declared earlier — useCommentManagement needs it)
   const hfEditorRef = useRef<InlineHeaderFooterEditorRef>(null);
@@ -845,28 +852,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
   // Cache style resolver to avoid recreating on every selection change
-  const styleResolverCacheRef = useRef<{
-    styles: unknown;
-    resolver: ReturnType<typeof createStyleResolver>;
-  } | null>(null);
-  const getCachedStyleResolver = useCallback(
-    (styles: Parameters<typeof createStyleResolver>[0]) => {
-      const cached = styleResolverCacheRef.current;
-      if (cached && cached.styles === styles) {
-        return cached.resolver;
-      }
-      const resolver = createStyleResolver(styles);
-      styleResolverCacheRef.current = { styles, resolver };
-      return resolver;
-    },
-    []
-  );
+  const getCachedStyleResolver = useStyleResolverCache();
 
   const { getActiveEditorView, focusActiveEditor, undoActiveEditor, redoActiveEditor } =
     useActiveEditor({
       hfEditPosition,
       hfEditorRef,
       pagedEditorRef,
+      historyOverride: latchedHistoryOverride,
     });
 
   // Find/Replace hook
@@ -1812,6 +1805,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             onFormat={handleFormat}
             onUndo={undoActiveEditor}
             onRedo={redoActiveEditor}
+            historyOverride={latchedHistoryOverride}
             onPrint={handleDirectPrint}
             showFileOpen={showFileOpen}
             showHelpMenu={showHelpMenu}
