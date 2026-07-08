@@ -36,6 +36,7 @@ import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { useSelectionTracker } from './DocxEditor/hooks/useSelectionTracker';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
+import { useDeferredSidebarCollapse } from './DocxEditor/hooks/useDeferredSidebarCollapse';
 import { useExternalPlugins } from './DocxEditor/hooks/useExternalPlugins';
 import { useStyleResolverCache } from './DocxEditor/hooks/useStyleResolverCache';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
@@ -50,7 +51,11 @@ import type { FontOption } from './ui/FontPicker';
 import { OUTLINE_BUTTON_RESERVED_SPACE, OUTLINE_RESERVED_SPACE } from './DocumentOutline';
 import { RULER_WIDTH } from './ui/VerticalRuler';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
-import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
+import {
+  useCommentSidebarItems,
+  useResolvedCommentIds,
+  type CommentCallbacks,
+} from '../hooks/useCommentSidebarItems';
 import { extractTrackedChanges } from '../hooks/useTrackedChanges';
 import { type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
@@ -707,6 +712,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // pagedEditorRef.current.getView() for orphan cleanup) can be wired before
   // the trackedChanges effect that drives `setComments`.
   const pagedEditorRef = useRef<PagedEditorRef>(null);
+  const { applyCursorSidebarItem } =
+    // prettier-ignore
+    useDeferredSidebarCollapse({ setShowCommentsSidebar, setExpandedSidebarItem });
 
   const {
     comments,
@@ -1550,13 +1558,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     ? Math.round(sectionPropsPageWidth / 15)
     : DEFAULT_PAGE_WIDTH;
 
-  const resolvedCommentIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const c of comments) {
-      if (c.done && c.parentId == null) ids.add(c.id);
-    }
-    return ids;
-  }, [comments]);
+  const resolvedCommentIds = useResolvedCommentIds(comments);
 
   // PagedEditor onSelectionChange — runs on every selection movement.
   // Extracts the full selection state for the host callback, then walks the
@@ -1611,10 +1613,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
     }
-    if (cursorSidebarItem) {
-      setShowCommentsSidebar(true);
-    }
-    setExpandedSidebarItem(cursorSidebarItem);
+    // Expand/collapse policy lives in useDeferredSidebarCollapse.
+    applyCursorSidebarItem(cursorSidebarItem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyCursorSidebarItem is a stable useCallback
   }, [handleSelectionChange, resolvedCommentIds, commentSidebarItems, revisionIdAliases]);
 
   // Auto-open the sidebar the first time a comment or tracked-change card

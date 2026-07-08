@@ -151,3 +151,14 @@ export function useCommentSidebarItems({
     addCommentYPosition,
   ]);
 }
+
+/** Ids of resolved top-level comment threads (done, not replies). */
+export function useResolvedCommentIds(comments: Comment[]): Set<number> {
+  return useMemo(() => {
+    const ids = new Set<number>();
+    for (const c of comments) {
+      if (c.done && c.parentId == null) ids.add(c.id);
+    }
+    return ids;
+  }, [comments]);
+}
