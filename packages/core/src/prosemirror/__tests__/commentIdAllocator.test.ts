@@ -13,6 +13,7 @@ import { singletonManager } from '../schema';
 import {
   createCommentIdAllocator,
   seedCommentAllocator,
+  COMMENT_ID_NAMESPACE_STRIDE,
   PENDING_COMMENT_ID,
 } from '../commentIdAllocator';
 import { applyProposedChange } from '../commentOps';
@@ -64,6 +65,53 @@ describe('createCommentIdAllocator', () => {
 
   test('PENDING_COMMENT_ID sentinel is negative', () => {
     expect(PENDING_COMMENT_ID).toBe(-1);
+  });
+});
+
+describe('createCommentIdAllocator with a namespace (collab, issue #257)', () => {
+  test('mints inside the namespace block', () => {
+    const a = createCommentIdAllocator(3);
+    expect(a.next()).toBe(3 * COMMENT_ID_NAMESPACE_STRIDE + 1);
+    expect(a.next()).toBe(3 * COMMENT_ID_NAMESPACE_STRIDE + 2);
+  });
+
+  test('two clients with different namespaces can never collide', () => {
+    const a = createCommentIdAllocator(1);
+    const b = createCommentIdAllocator(2);
+    const minted = new Set<number>();
+    for (let i = 0; i < 100; i++) {
+      minted.add(a.next());
+      minted.add(b.next());
+    }
+    expect(minted.size).toBe(200);
+  });
+
+  test('seedAbove ignores IDs outside the namespace block', () => {
+    const a = createCommentIdAllocator(1);
+    const base = COMMENT_ID_NAMESPACE_STRIDE;
+    // Legacy small ID from a Word document — foreign, must not move the counter.
+    a.seedAbove(42);
+    // Another client's block — foreign, must not spill our counter out of block.
+    a.seedAbove(5 * COMMENT_ID_NAMESPACE_STRIDE + 10);
+    expect(a.next()).toBe(base + 1);
+    // In-block ID (e.g. our own mint round-tripped through a reload) seeds.
+    a.seedAbove(base + 50);
+    expect(a.next()).toBe(base + 51);
+  });
+
+  test('namespace is coerced to uint32 so any Yjs clientID is safe', () => {
+    const a = createCommentIdAllocator(-1); // coerces to 0xFFFFFFFF
+    const id = a.next();
+    expect(id).toBe(0xffffffff * COMMENT_ID_NAMESPACE_STRIDE + 1);
+    expect(Number.isSafeInteger(id)).toBe(true);
+  });
+
+  test('the largest in-block ID of the top namespace is still a safe integer', () => {
+    expect(
+      Number.isSafeInteger(
+        0xffffffff * COMMENT_ID_NAMESPACE_STRIDE + (COMMENT_ID_NAMESPACE_STRIDE - 1)
+      )
+    ).toBe(true);
   });
 });
 

@@ -173,6 +173,40 @@ describe('commentSerializer', () => {
     });
   });
 
+  describe('collab namespaced IDs (issue #257)', () => {
+    // In live collaboration each client mints comment IDs inside a private
+    // 2^21-wide block keyed by its Yjs clientID, so IDs can be up to 2^53−1.
+    // A parent from one client and a reply from another must both serialize,
+    // with threading intact and the large IDs emitted verbatim.
+    const parentId = 0x9abcdef1 * 2 ** 21 + 1; // client A's block
+    const replyId = 0x12345678 * 2 ** 21 + 1; // client B's block
+
+    test('parent and reply with cross-client IDs both serialize', () => {
+      const parent = makeComment({ id: parentId });
+      const reply = makeComment({ id: replyId, author: 'Bob', parentId: parentId });
+      const { xml } = serializeCommentsWithInfo([parent, reply]);
+      expect(xml.match(/<w:comment /g)?.length).toBe(2);
+      expect(xml).toContain(`w:id="${parentId}"`);
+      expect(xml).toContain(`w:id="${replyId}"`);
+    });
+
+    test('reply threading survives cross-client IDs', () => {
+      const parent = makeComment({ id: parentId });
+      const reply = makeComment({ id: replyId, author: 'Bob', parentId: parentId });
+      const { paraInfos } = serializeCommentsWithInfo([parent, reply]);
+      const extended = serializeCommentsExtended(paraInfos);
+      const parentInfo = paraInfos.find((p) => p.commentId === parentId);
+      expect(extended).toContain(`w15:paraIdParent="${parentInfo?.lastParaId}"`);
+    });
+
+    test('the largest possible namespaced ID round-trips through serialization', () => {
+      const maxId = Number.MAX_SAFE_INTEGER; // 2^53 − 1
+      const { xml } = serializeCommentsWithInfo([makeComment({ id: maxId })]);
+      expect(xml).toContain(`w:id="${maxId}"`);
+      expect(String(maxId)).toBe('9007199254740991'); // no precision loss
+    });
+  });
+
   describe('date formatting', () => {
     test('strips milliseconds from w:date', () => {
       const xml = serializeComments([makeComment({ date: '2024-01-01T12:30:45.123Z' })]);

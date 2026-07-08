@@ -49,6 +49,7 @@
     ],
     "deferredInVue": {
       "agentPanel": "AI agent panel UI. Vue adapter ships without the agent surface; React-only until the Vue agent components land.",
+      "commentIdNamespace": "Collab-safe comment/revision ID namespacing (Yjs clientID). Pairs with comments/externalContent — React-only until Vue collab lands.",
       "comments": "Comment threads. Part of the Vue comments API gap.",
       "externalContent": "Sandboxed external-content rendering mode. React-only escape hatch.",
       "historyOverride": "Collab undo/redo override (yUndoPlugin routing). Pairs with externalContent — both React-only until Vue collab lands.",

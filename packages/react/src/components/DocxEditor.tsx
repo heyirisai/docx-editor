@@ -157,6 +157,13 @@ export interface DocxEditorProps {
    * see {@link HistoryOverride} for details.
    */
   historyOverride?: HistoryOverride;
+  /**
+   * Namespaces the comment/tracked-change ID allocator so IDs minted by this
+   * editor never collide with another collaborator's — pass a per-client
+   * unique 32-bit integer (with Yjs, the `doc.clientID`). Omit outside
+   * collaboration for the classic small sequential IDs.
+   */
+  commentIdNamespace?: number;
   /** Callback when editor view is ready (for PluginHost) */
   onEditorViewReady?: (view: import('prosemirror-view').EditorView) => void;
   /** Color theme mode for UI styling. `'system'` follows the OS preference. */
@@ -594,8 +601,8 @@ import {
   PENDING_COMMENT_ID,
   EMPTY_ANCHOR_POSITIONS,
   createComment,
-  createCommentIdAllocator,
 } from './DocxEditor/commentFactories';
+import { useCommentIdAllocator } from './DocxEditor/hooks/useCommentIdAllocator';
 
 /**
  * DocxEditor - Complete DOCX editor component
@@ -652,6 +659,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     externalPlugins,
     externalContent = false,
     historyOverride,
+    commentIdNamespace,
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
@@ -881,10 +889,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const commentsLoadedRef = useRef(false);
   const trackedChangesLoadedRef = useRef(false);
 
-  // One comment/revision ID allocator per editor instance (monotonic, no reuse).
-  // Seeded above the loaded doc's max ID on load; shared by every comment/
-  // tracked-change allocation in this component and its hooks.
-  const commentIdAllocatorRef = useRef(createCommentIdAllocator());
+  const commentIdAllocatorRef = useCommentIdAllocator(commentIdNamespace, comments);
 
   const { resetForNewDocument } = useResetEditorState({
     commentsLoadedRef,

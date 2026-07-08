@@ -6,14 +6,17 @@
 
 import { EditorView } from 'prosemirror-view';
 
+// @public
+export const COMMENT_ID_NAMESPACE_STRIDE: number;
+
 // @public (undocumented)
 export interface CommentIdAllocator {
     next(): number;
-    seedAbove(maxId: number): void;
+    seedAbove(observedId: number): void;
 }
 
 // @public
-export function createCommentIdAllocator(): CommentIdAllocator;
+export function createCommentIdAllocator(namespace?: number): CommentIdAllocator;
 
 // @public
 export const PENDING_COMMENT_ID = -1;
