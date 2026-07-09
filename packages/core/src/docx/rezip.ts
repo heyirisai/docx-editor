@@ -58,6 +58,7 @@ import {
   serializeEndnotesToZip,
 } from './rezip/packaging';
 import { createEmptyDocx } from './rezip/createEmpty';
+import { pruneUnreferencedMedia } from './rezip/mediaGc';
 
 // Public re-exports (preserve historical import surface).
 export { findMaxRId } from './rezip/parts';
@@ -179,6 +180,10 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
     }
   }
 
+  // Drop image rels that no part uses anymore and the media files they kept
+  // alive — must run AFTER every part has its final XML in the zip.
+  await pruneUnreferencedMedia(newZip, compressionLevel);
+
   // Generate the new DOCX file
   const arrayBuffer = await newZip.generateAsync({
     type: 'arraybuffer',
@@ -266,6 +271,10 @@ export async function repackDocxFromRaw(
       compressionOptions: { level: compressionLevel },
     });
   }
+
+  // Drop image rels that no part uses anymore and the media files they kept
+  // alive — must run AFTER every part has its final XML in the zip.
+  await pruneUnreferencedMedia(newZip, compressionLevel);
 
   // Generate the new DOCX file
   const arrayBuffer = await newZip.generateAsync({

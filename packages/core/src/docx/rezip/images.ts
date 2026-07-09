@@ -169,6 +169,18 @@ function findMaxImageNum(zip: JSZip): number {
  *
  * Mutates each image's rId in-place.
  */
+/** Does `rId` resolve to an IMAGE relationship in this rels XML? */
+function relIdResolvesToImage(relsXml: string, rId: string): boolean {
+  const re = /<Relationship\b[^>]*?>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(relsXml)) !== null) {
+    const el = m[0];
+    if (/Id="([^"]*)"/.exec(el)?.[1] !== rId) continue;
+    return /Type="([^"]*)"/.exec(el)?.[1] === RELATIONSHIP_TYPES.image;
+  }
+  return false;
+}
+
 export async function processNewImages(
   parts: Part[],
   zip: JSZip,
@@ -176,6 +188,9 @@ export async function processNewImages(
 ): Promise<void> {
   let maxImageNum = findMaxImageNum(zip);
   const extensionsAdded = new Set<string>();
+  // data URL → media filename: identical bytes are written once per save,
+  // shared across parts (media filenames are a package-wide namespace).
+  const writtenMedia = new Map<string, string>();
 
   for (const { relsPath, blocks } of parts) {
     const images = collectNewImages(blocks);
@@ -184,28 +199,51 @@ export async function processNewImages(
     const relsXml = await readRelsOrStub(zip, relsPath);
     let maxId = findMaxRId(relsXml);
     const relEntries: string[] = [];
+    // media filename → rId added for THIS part in this pass (relEntries are
+    // not in relsXml yet, so findRelIdByMediaTarget can't see them).
+    const pendingRIds = new Map<string, string>();
 
     for (const image of images) {
-      const { data, extension } = decodeDataUrl(image.src!);
+      // Every image loaded from a file carries a data: src (the parser's
+      // render copy) — it is NOT new when its rId already resolves to an
+      // image relationship in this part's rels. Re-registering those wrote a
+      // fresh media copy on every save, compounding the package size (a
+      // 60s-autosaving collab session ballooned a doc by ~1MB per save).
+      if (image.rId && relIdResolvesToImage(relsXml, image.rId)) continue;
 
-      maxImageNum++;
+      const dataUrl = image.src!;
+      let mediaFilename = writtenMedia.get(dataUrl);
+      if (!mediaFilename) {
+        const { data, extension } = decodeDataUrl(dataUrl);
+        maxImageNum++;
+        mediaFilename = `image${maxImageNum}.${extension}`;
+        zip.file(`word/media/${mediaFilename}`, data, {
+          compression: 'DEFLATE',
+          compressionOptions: { level: compressionLevel },
+        });
+        extensionsAdded.add(extension);
+        writtenMedia.set(dataUrl, mediaFilename);
+      }
+
+      // Reuse this part's relationship to that media when one exists (an
+      // earlier duplicate in this pass, or a pre-existing rel).
+      const existingRId =
+        pendingRIds.get(mediaFilename) ?? findRelIdByMediaTarget(relsXml, `media/${mediaFilename}`);
+      if (existingRId) {
+        image.rId = existingRId;
+        continue;
+      }
+
       maxId++;
-      const mediaFilename = `image${maxImageNum}.${extension}`;
       const newRId = `rId${maxId}`;
-
-      zip.file(`word/media/${mediaFilename}`, data, {
-        compression: 'DEFLATE',
-        compressionOptions: { level: compressionLevel },
-      });
-
       relEntries.push(
         `<Relationship Id="${newRId}" Type="${RELATIONSHIP_TYPES.image}" Target="media/${mediaFilename}"/>`
       );
-
-      extensionsAdded.add(extension);
+      pendingRIds.set(mediaFilename, newRId);
       image.rId = newRId;
     }
 
+    if (relEntries.length === 0) continue;
     const updatedRelsXml = relsXml.replace(
       '</Relationships>',
       relEntries.join('') + '</Relationships>'
