@@ -41,8 +41,12 @@ export function useDeferredSidebarCollapse({
         return;
       }
       if (lastItemRef.current === null) return;
+      const cursorItem = lastItemRef.current;
       lastItemRef.current = null;
-      setExpandedSidebarItem(null);
+      // Only collapse the expansion the cursor itself drove — if the user
+      // has since opened a DIFFERENT thread via its card (which doesn't move
+      // the cursor), leave that expansion alone.
+      setExpandedSidebarItem((prev) => (prev === cursorItem ? null : prev));
     },
     [setShowCommentsSidebar, setExpandedSidebarItem]
   );

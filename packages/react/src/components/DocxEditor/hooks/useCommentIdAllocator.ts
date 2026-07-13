@@ -36,7 +36,9 @@ export function useCommentIdAllocator(
 
   useEffect(() => {
     seedCommentAllocator(commentIdAllocatorRef.current, comments, null);
-  }, [comments]);
+    // commentIdNamespace: a namespace change swaps in a FRESH allocator
+    // mid-render above; re-seed it even when the comments identity is stable.
+  }, [comments, commentIdNamespace]);
 
   return commentIdAllocatorRef;
 }
