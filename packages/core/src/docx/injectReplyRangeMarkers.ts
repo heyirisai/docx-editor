@@ -77,6 +77,11 @@ export function injectReplyRangeMarkers(content: BlockContent[], comments: Comme
             walkBlocks(cell.content);
           }
         }
+      } else if (block.type === 'blockSdt') {
+        // Comment anchors inside content controls (e.g. a TOC
+        // buildingBlockGallery) — a skipped container means Word discards
+        // the reply as unanchored on open.
+        walkBlocks(block.content);
       }
     }
   }
@@ -152,6 +157,8 @@ export function injectTCReplyRangeMarkers(content: BlockContent[], comments: Com
             walkBlocks(cell.content);
           }
         }
+      } else if (block.type === 'blockSdt') {
+        walkBlocks(block.content);
       }
     }
   }

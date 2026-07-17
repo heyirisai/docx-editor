@@ -1,4 +1,28 @@
 import type { ReactNode } from 'react';
+import type { Command, EditorState } from 'prosemirror-state';
+
+/**
+ * Replacement undo/redo implementation for the body editor.
+ *
+ * Used with collaborative editing: `yUndoPlugin` from `y-prosemirror` must own
+ * history so a user only undoes their OWN edits — the built-in
+ * `prosemirror-history` plugin would undo remote peers' changes too. Pass the
+ * y-prosemirror `undo`/`redo` commands plus `canUndo`/`canRedo` predicates
+ * reading the yUndoPlugin state.
+ *
+ * Applies to the body ProseMirror doc only. Header/footer editors are
+ * separate, non-collaborative PM docs and keep their local built-in history.
+ */
+export interface HistoryOverride {
+  /** Command executed for undo on the body view (keymap, toolbar, menus). */
+  undo: Command;
+  /** Command executed for redo on the body view. */
+  redo: Command;
+  /** Whether undo is currently available for the given body editor state. */
+  canUndo: (state: EditorState) => boolean;
+  /** Whether redo is currently available for the given body editor state. */
+  canRedo: (state: EditorState) => boolean;
+}
 
 /**
  * Options for the agent panel mount on the right side of the editor.

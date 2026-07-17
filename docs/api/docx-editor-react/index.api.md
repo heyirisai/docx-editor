@@ -4,6 +4,7 @@
 
 ```ts
 
+import { Command } from 'prosemirror-state';
 import { Comment as Comment_2 } from '@eigenpal/docx-editor-core/types/content';
 import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
 import { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
@@ -58,6 +59,7 @@ export interface DocxEditorProps {
     author?: string;
     className?: string;
     colorMode?: 'light' | 'dark' | 'system';
+    commentIdNamespace?: number;
     comments?: Comment_2[];
     commentsSidebarOpen?: boolean;
     disableFindReplaceShortcuts?: boolean;
@@ -69,6 +71,7 @@ export interface DocxEditorProps {
     externalPlugins?: prosemirror_state.Plugin[];
     fontFamilies?: ReadonlyArray<string | FontOption>;
     fonts?: ReadonlyArray<FontDefinition>;
+    historyOverride?: HistoryOverride;
     i18n?: Translations;
     initialZoom?: number;
     loadingIndicator?: ReactNode;
@@ -228,6 +231,14 @@ export interface DocxEditorRef {
 
 // @public
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
+
+// @public
+export interface HistoryOverride {
+    canRedo: (state: EditorState) => boolean;
+    canUndo: (state: EditorState) => boolean;
+    redo: Command;
+    undo: Command;
+}
 
 // @public (undocumented)
 export function LocaleProvider(input: LocaleProviderProps): React_2.JSX.Element;

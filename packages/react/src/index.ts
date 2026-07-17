@@ -24,6 +24,7 @@ export {
   type DocxEditorRef,
   type EditorMode,
 } from './components/DocxEditor';
+export type { HistoryOverride } from './components/DocxEditor/types';
 export { renderAsync, type RenderAsyncOptions, type DocxEditorHandle } from './renderAsync';
 
 // Document factory helpers — re-exported from `@eigenpal/docx-editor-core` so

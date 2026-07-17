@@ -63,6 +63,8 @@ Pull author identity in, push comment state back out.
 | `comments` | `Comment[]` | Controlled comments. Pair with `onCommentsChange`. |
 | `onCommentsChange` | `(comments) => void` | Fires on any comment mutation. Mirror into Y.Array for live sync. |
 | `onCommentAdd` / `onCommentResolve` / `onCommentDelete` / `onCommentReply` | callbacks | Granular events when you want to log or trigger side effects, not own state. |
+| `commentIdNamespace` | `number` | Collab only: per-client unique 32-bit integer (with Yjs, `doc.clientID`). Each client mints comment/tracked-change IDs in a private block, so two peers can never mint the same ID. Omit outside collaboration for the classic small sequential IDs. |
+| `historyOverride` | `HistoryOverride` | Collab only: replaces built-in undo/redo on the body editor with caller-supplied commands, so y-prosemirror's `yUndoPlugin` can own history (users undo only their own edits). Latched on mount. |
 
 ```tsx
 const [comments, setComments] = useState<Comment[]>([]);

@@ -15,7 +15,7 @@ import type { Document, Theme } from '@eigenpal/docx-editor-core/types/document'
 
 import { cn } from '../lib/utils';
 import { type SelectionFormatting } from './Toolbar';
-import type { AgentPanelOptions } from './DocxEditor/types';
+import type { AgentPanelOptions, HistoryOverride } from './DocxEditor/types';
 import { useOutlineSidebar } from './DocxEditor/hooks/useOutlineSidebar';
 import { useKeyboardShortcuts } from './DocxEditor/hooks/useKeyboardShortcuts';
 import { useFileIO } from './DocxEditor/hooks/useFileIO';
@@ -36,6 +36,9 @@ import { useCommentLifecycle } from './DocxEditor/hooks/useCommentLifecycle';
 import { useSelectionTracker } from './DocxEditor/hooks/useSelectionTracker';
 import { useFloatingCommentBtn } from './DocxEditor/hooks/useFloatingCommentBtn';
 import { useActiveEditor } from './DocxEditor/hooks/useActiveEditor';
+import { useDeferredSidebarCollapse } from './DocxEditor/hooks/useDeferredSidebarCollapse';
+import { useExternalPlugins } from './DocxEditor/hooks/useExternalPlugins';
+import { useStyleResolverCache } from './DocxEditor/hooks/useStyleResolverCache';
 import { useScrollPageInfo } from './DocxEditor/hooks/useScrollPageInfo';
 import { DocxEditorOverlays } from './DocxEditor/DocxEditorOverlays';
 import { DocxEditorDialogs } from './DocxEditor/DocxEditorDialogs';
@@ -48,7 +51,11 @@ import type { FontOption } from './ui/FontPicker';
 import { OUTLINE_BUTTON_RESERVED_SPACE, OUTLINE_RESERVED_SPACE } from './DocumentOutline';
 import { RULER_WIDTH } from './ui/VerticalRuler';
 import { SIDEBAR_DOCUMENT_SHIFT } from './sidebar/constants';
-import { useCommentSidebarItems, type CommentCallbacks } from '../hooks/useCommentSidebarItems';
+import {
+  useCommentSidebarItems,
+  useResolvedCommentIds,
+  type CommentCallbacks,
+} from '../hooks/useCommentSidebarItems';
 import { extractTrackedChanges } from '../hooks/useTrackedChanges';
 import { type EditorState as PMEditorState } from 'prosemirror-state';
 import type { ReactSidebarItem } from '../plugin-api/types';
@@ -70,10 +77,7 @@ import { useDocumentHistory } from '../hooks/useHistory';
 // Extension system
 import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
-import {
-  createSuggestionModePlugin,
-  setSuggestionMode,
-} from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 
 // Conversion (for HF inline editor save)
 
@@ -81,7 +85,6 @@ import {
 import {
   type SelectionState,
   extractSelectionState,
-  createStyleResolver,
   type TableContextInfo,
   type PMContentControl,
 } from '@eigenpal/docx-editor-core/prosemirror';
@@ -147,6 +150,20 @@ export interface DocxEditorProps {
    * editor can build its schema and render the shell.
    */
   externalContent?: boolean;
+  /**
+   * Replaces built-in prosemirror-history undo/redo on the BODY editor with
+   * caller-supplied commands — for collab, where y-prosemirror's yUndoPlugin
+   * must own history so users only undo their own edits. Latched on mount;
+   * see {@link HistoryOverride} for details.
+   */
+  historyOverride?: HistoryOverride;
+  /**
+   * Namespaces the comment/tracked-change ID allocator so IDs minted by this
+   * editor never collide with another collaborator's — pass a per-client
+   * unique 32-bit integer (with Yjs, the `doc.clientID`). Omit outside
+   * collaboration for the classic small sequential IDs.
+   */
+  commentIdNamespace?: number;
   /** Callback when editor view is ready (for PluginHost) */
   onEditorViewReady?: (view: import('prosemirror-view').EditorView) => void;
   /** Color theme mode for UI styling. `'system'` follows the OS preference. */
@@ -584,8 +601,8 @@ import {
   PENDING_COMMENT_ID,
   EMPTY_ANCHOR_POSITIONS,
   createComment,
-  createCommentIdAllocator,
 } from './DocxEditor/commentFactories';
+import { useCommentIdAllocator } from './DocxEditor/hooks/useCommentIdAllocator';
 
 /**
  * DocxEditor - Complete DOCX editor component
@@ -641,6 +658,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentsSidebarOpenChange,
     externalPlugins,
     externalContent = false,
+    historyOverride,
+    commentIdNamespace,
     onEditorViewReady,
     onRenderedDomContextReady,
     pluginOverlays,
@@ -701,6 +720,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // pagedEditorRef.current.getView() for orphan cleanup) can be wired before
   // the trackedChanges effect that drives `setComments`.
   const pagedEditorRef = useRef<PagedEditorRef>(null);
+  const { applyCursorSidebarItem } =
+    // prettier-ignore
+    useDeferredSidebarCollapse({ setShowCommentsSidebar, setExpandedSidebarItem });
 
   const {
     comments,
@@ -797,23 +819,24 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     enableKeyboardShortcuts: true,
   });
 
+  // Suggestion plugin + caller plugins + history-override keymap, and the
+  // mount-latched history override (see useExternalPlugins).
+  const { latchedHistoryOverride, allExternalPlugins } = useExternalPlugins({
+    historyOverride,
+    editingMode,
+    author,
+    externalPlugins,
+  });
+
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
-    const mgr = new ExtensionManager(createStarterKit());
+    const mgr = new ExtensionManager(
+      createStarterKit(latchedHistoryOverride ? { disable: ['history'] } : {})
+    );
     mgr.buildSchema();
     mgr.initializeRuntime();
     return mgr;
-  }, []);
-
-  // Suggestion mode plugin — merged with external plugins
-  const suggestionPlugin = useMemo(
-    () => createSuggestionModePlugin(editingMode === 'suggesting', author),
-    [] // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  const allExternalPlugins = useMemo(
-    () => [suggestionPlugin, ...(externalPlugins ?? [])],
-    [suggestionPlugin, externalPlugins]
-  );
+  }, [latchedHistoryOverride]);
 
   // Refs (pagedEditorRef is declared earlier — useCommentManagement needs it)
   const hfEditorRef = useRef<InlineHeaderFooterEditorRef>(null);
@@ -845,28 +868,14 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Track current border color/width for border presets (like Google Docs)
   const borderSpecRef = useRef({ style: 'single', size: 4, color: { rgb: '000000' } });
   // Cache style resolver to avoid recreating on every selection change
-  const styleResolverCacheRef = useRef<{
-    styles: unknown;
-    resolver: ReturnType<typeof createStyleResolver>;
-  } | null>(null);
-  const getCachedStyleResolver = useCallback(
-    (styles: Parameters<typeof createStyleResolver>[0]) => {
-      const cached = styleResolverCacheRef.current;
-      if (cached && cached.styles === styles) {
-        return cached.resolver;
-      }
-      const resolver = createStyleResolver(styles);
-      styleResolverCacheRef.current = { styles, resolver };
-      return resolver;
-    },
-    []
-  );
+  const getCachedStyleResolver = useStyleResolverCache();
 
   const { getActiveEditorView, focusActiveEditor, undoActiveEditor, redoActiveEditor } =
     useActiveEditor({
       hfEditPosition,
       hfEditorRef,
       pagedEditorRef,
+      historyOverride: latchedHistoryOverride,
     });
 
   // Find/Replace hook
@@ -880,10 +889,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   const commentsLoadedRef = useRef(false);
   const trackedChangesLoadedRef = useRef(false);
 
-  // One comment/revision ID allocator per editor instance (monotonic, no reuse).
-  // Seeded above the loaded doc's max ID on load; shared by every comment/
-  // tracked-change allocation in this component and its hooks.
-  const commentIdAllocatorRef = useRef(createCommentIdAllocator());
+  const commentIdAllocatorRef = useCommentIdAllocator(commentIdNamespace, comments);
 
   const { resetForNewDocument } = useResetEditorState({
     commentsLoadedRef,
@@ -1557,13 +1563,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     ? Math.round(sectionPropsPageWidth / 15)
     : DEFAULT_PAGE_WIDTH;
 
-  const resolvedCommentIds = useMemo(() => {
-    const ids = new Set<number>();
-    for (const c of comments) {
-      if (c.done && c.parentId == null) ids.add(c.id);
-    }
-    return ids;
-  }, [comments]);
+  const resolvedCommentIds = useResolvedCommentIds(comments);
 
   // PagedEditor onSelectionChange — runs on every selection movement.
   // Extracts the full selection state for the host callback, then walks the
@@ -1618,10 +1618,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
         }
       }
     }
-    if (cursorSidebarItem) {
-      setShowCommentsSidebar(true);
-    }
-    setExpandedSidebarItem(cursorSidebarItem);
+    // Expand/collapse policy lives in useDeferredSidebarCollapse.
+    applyCursorSidebarItem(cursorSidebarItem);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- applyCursorSidebarItem is a stable useCallback
   }, [handleSelectionChange, resolvedCommentIds, commentSidebarItems, revisionIdAliases]);
 
   // Auto-open the sidebar the first time a comment or tracked-change card
@@ -1812,6 +1811,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             onFormat={handleFormat}
             onUndo={undoActiveEditor}
             onRedo={redoActiveEditor}
+            historyOverride={latchedHistoryOverride}
             onPrint={handleDirectPrint}
             showFileOpen={showFileOpen}
             showHelpMenu={showHelpMenu}

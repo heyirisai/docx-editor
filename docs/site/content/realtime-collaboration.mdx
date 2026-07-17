@@ -11,15 +11,41 @@ Bind `DocxEditor` to a [Yjs](https://github.com/yjs/yjs) document to get live mu
 
 ## How it works
 
-The editor exposes three props that hand off state to a CRDT:
+The editor exposes five props that hand off state to a CRDT:
 
 | Prop | What it does |
 | --- | --- |
 | `externalContent` | Skip the built-in document loader. Yjs will populate the doc instead. |
 | `externalPlugins` | Pass Yjs's ProseMirror plugins (`ySyncPlugin`, `yCursorPlugin`, `yUndoPlugin`). |
 | `comments` + `onCommentsChange` | Controlled comment threads, mirrored to a Y.Array on the same Y.Doc. |
+| `historyOverride` | Route toolbar/keymap undo-redo to `y-prosemirror`'s undo manager, so users undo only their own edits. |
+| `commentIdNamespace` | Pass `ydoc.clientID` so each client mints comment/tracked-change IDs in a private block — no cross-peer ID collisions. |
 
 Tracked changes sync through `ySyncPlugin` because they are stored as ProseMirror marks.
+
+## Collab-safe undo and comment IDs
+
+Two collaboration foot-guns the props above remove:
+
+- **Undo**: prosemirror-history would undo REMOTE peers' edits too. Pass `historyOverride` backed by `y-prosemirror`'s `undo`/`redo` (they apply through the shared `Y.UndoManager`, which scopes history to local edits):
+
+```tsx
+import { undo as yUndo, redo as yRedo, yUndoPluginKey } from 'y-prosemirror';
+
+const historyOverride = {
+  undo: (state) => yUndo(state),
+  redo: (state) => yRedo(state),
+  canUndo: (state) => yUndoPluginKey.getState(state)?.undoManager?.canUndo() ?? false,
+  canRedo: (state) => yUndoPluginKey.getState(state)?.undoManager?.canRedo() ?? false,
+};
+```
+
+- **Comment IDs**: each editor instance allocates comment IDs locally, so two peers commenting before a sync can mint the SAME id — and id-keyed thread stores silently overwrite one thread with the other. Pass `commentIdNamespace={ydoc.clientID}` and every client mints inside its own ID block.
+
+```tsx
+<DocxEditor externalContent externalPlugins={plugins}
+  historyOverride={historyOverride} commentIdNamespace={ydoc.clientID} />
+```
 
 ## Step 1. Install
 
