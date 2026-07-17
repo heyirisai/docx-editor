@@ -1,5 +1,7 @@
 # @eigenpal/docx-editor-core
 
+## 1.10.0
+
 ## 1.9.1
 
 ### Patch Changes
