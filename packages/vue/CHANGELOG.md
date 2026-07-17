@@ -1,5 +1,13 @@
 # @eigenpal/docx-editor-vue
 
+## 1.10.0
+
+### Patch Changes
+
+- @eigenpal/docx-editor-core@1.10.0
+- @eigenpal/docx-editor-agents@1.10.0
+- @eigenpal/docx-editor-i18n@1.10.0
+
 ## 1.9.1
 
 ### Patch Changes
