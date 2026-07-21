@@ -501,23 +501,52 @@ export function renderHeaderFooterContent(
     img.style.maxWidth = 'none';
     img.style.maxHeight = 'none';
 
-    // OOXML srcRect crop / picture opacity / rotation — same treatment as
-    // body images; the header's G2-badge-strip-cropped-from-a-screenshot
-    // case renders as a squashed full screenshot without this. No z-index:
-    // header floats and body floats live in separate DOM containers, so a
-    // raw relativeHeight here escapes the header's stacking level and
-    // paints over HIGHER-z body objects (a cover banner that Word draws
-    // over the header). DOM order already matches Word for the common case.
-    if (hasImageVisualAttrs(floatImg.run)) applyImageVisualAttrs(img, floatImg.run);
-    if (floatImg.run.transform) {
-      img.style.transform = floatImg.run.transform;
+    // OOXML srcRect crop / picture opacity / rotation — the header's
+    // G2-badge-strip-cropped-from-a-screenshot case renders as a squashed
+    // full screenshot without this. Unlike body images (object-fit: cover,
+    // an approximation that leaks a sliver of the source when the display
+    // aspect drifts from the cropped region's), header floats aren't
+    // selectable/resizable, so we can afford the EXACT crop: a scaled
+    // inner img inside an overflow-hidden box. No z-index: header floats
+    // live in a separate stacking container, and a raw relativeHeight
+    // here escapes it and paints over higher-z body objects (a cover
+    // banner that Word draws over the page-1 header).
+    const run = floatImg.run;
+    const cropL = run.cropLeft ?? 0;
+    const cropR = run.cropRight ?? 0;
+    const cropT = run.cropTop ?? 0;
+    const cropB = run.cropBottom ?? 0;
+    let el: HTMLElement = img;
+    if (cropL || cropR || cropT || cropB) {
+      const box = doc.createElement('div');
+      box.style.position = 'absolute';
+      box.style.width = `${floatImg.width}px`;
+      box.style.height = `${floatImg.height}px`;
+      box.style.overflow = 'hidden';
+      const innerW = floatImg.width / Math.max(1e-6, 1 - cropL - cropR);
+      const innerH = floatImg.height / Math.max(1e-6, 1 - cropT - cropB);
+      img.style.position = 'absolute';
+      img.style.width = `${innerW}px`;
+      img.style.height = `${innerH}px`;
+      img.style.left = `${-cropL * innerW}px`;
+      img.style.top = `${-cropT * innerH}px`;
+      box.appendChild(img);
+      el = box;
+      if (run.opacity != null && run.opacity < 1) {
+        img.style.opacity = String(Math.max(0, run.opacity));
+      }
+    } else if (hasImageVisualAttrs(run)) {
+      applyImageVisualAttrs(img, run);
+    }
+    if (run.transform) {
+      img.style.transform = run.transform;
       img.style.transformOrigin = 'center center';
     }
 
-    applyHeaderFooterFloatHorizontalPosition(img, floatImg, layout);
-    img.style.top = `${top}px`;
+    applyHeaderFooterFloatHorizontalPosition(el as HTMLImageElement, floatImg, layout);
+    el.style.top = `${top}px`;
 
-    containerEl.appendChild(img);
+    containerEl.appendChild(el);
   }
 
   return containerEl;
