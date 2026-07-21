@@ -147,6 +147,11 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     fallbackStack: ['Garamond', 'EB Garamond', 'Georgia', 'serif'],
     singleLineRatio: 1.068, // 1068/1000
   },
+  // NOTE: Titillium Web's true OS/2 ratio is 1.521 ((1133+388)/1000) — far
+  // from the 1.15 default. Adding it exposed a font-load race: blocks
+  // measured before the webfont arrives use fallback-font canvas metrics,
+  // and the reflow can leave overlapping fragments when the ratio delta is
+  // this large. Re-add together with a fonts-ready gate on first layout.
   'century gothic': {
     googleFont: 'Questrial',
     category: 'sans-serif',
