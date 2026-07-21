@@ -284,6 +284,11 @@ export interface Shape {
   position?: ImagePosition;
   /** Wrap settings */
   wrap?: ImageWrap;
+  /**
+   * `wp:anchor relativeHeight` — z-order among overlapping anchored
+   * objects (higher paints on top); see `Image.relativeHeight`.
+   */
+  relativeHeight?: number;
   /** Fill */
   fill?: ShapeFill;
   /** Outline/stroke */
@@ -309,6 +314,11 @@ export interface TextBox {
   position?: ImagePosition;
   /** Wrap settings */
   wrap?: ImageWrap;
+  /**
+   * `wp:anchor relativeHeight` — z-order among overlapping anchored
+   * objects (higher paints on top); see `Image.relativeHeight`.
+   */
+  relativeHeight?: number;
   /** Fill */
   fill?: ShapeFill;
   /** Outline */

@@ -248,11 +248,17 @@ export type ImageBlock = {
     height: number;
     alt?: string;
     transform?: string;
+    cropTop?: number;
+    cropRight?: number;
+    cropBottom?: number;
+    cropLeft?: number;
+    opacity?: number;
     anchor?: {
         isAnchored?: boolean;
         offsetH?: number;
         offsetV?: number;
         behindDoc?: boolean;
+        relativeHeight?: number;
     };
     hlinkHref?: string;
     pmStart?: number;
@@ -283,6 +289,7 @@ export type ImageRun = {
     alt?: string;
     transform?: string;
     position?: ImageRunPosition;
+    relativeHeight?: number;
     wrapType?: string;
     displayMode?: 'inline' | 'block' | 'float';
     cssFloat?: 'left' | 'right' | 'none';
@@ -846,6 +853,7 @@ export type TextBoxBlock = {
     wrapType?: string;
     wrapText?: WrapTextDirection;
     anchorTarget?: 'followingBlock';
+    relativeHeight?: number;
     position?: ImageRunPosition;
     distTop?: number;
     distBottom?: number;

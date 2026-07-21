@@ -578,6 +578,10 @@ function parseAnchor(
   const allowOverlapAttr = getAttribute(anchorEl, null, 'allowOverlap');
   const allowOverlap = allowOverlapAttr === null ? undefined : allowOverlapAttr === '1';
 
+  // Z-order among overlapping anchored objects — Word stacks by this value
+  // (e.g. cover title text boxes painted over a banner image).
+  const relativeHeight = parseNumericAttribute(anchorEl, null, 'relativeHeight') ?? undefined;
+
   // Read distance attributes from the wp:anchor element itself (fallback values)
   const anchorDistances = {
     distT: parseNumericAttribute(anchorEl, null, 'distT') ?? undefined,
@@ -639,6 +643,7 @@ function parseAnchor(
   if (opacity !== undefined) image.opacity = opacity;
   if (layoutInCell !== undefined) image.layoutInCell = layoutInCell;
   if (allowOverlap !== undefined) image.allowOverlap = allowOverlap;
+  if (relativeHeight !== undefined) image.relativeHeight = relativeHeight;
 
   // Resolve image hyperlink (a:hlinkClick)
   if (props.hlinkRId && rels) {

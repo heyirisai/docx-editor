@@ -138,6 +138,8 @@ interface PageFloatingImage {
   cropLeft?: number;
   /** a:alphaModFix → opacity. */
   opacity?: number;
+  /** OOXML z-order among overlapping anchored objects (higher on top). */
+  relativeHeight?: number;
 }
 
 /**
@@ -442,6 +444,7 @@ function extractFloatingImagesFromParagraph(
       cropBottom: imgRun.cropBottom,
       cropLeft: imgRun.cropLeft,
       opacity: imgRun.opacity,
+      relativeHeight: imgRun.relativeHeight,
     });
   }
 

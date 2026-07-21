@@ -271,6 +271,8 @@ export interface ImageAttrs {
   layoutInCell?: boolean;
   /** `wp:anchor allowOverlap`. Same tri-state convention as `layoutInCell`. */
   allowOverlap?: boolean;
+  /** `wp:anchor relativeHeight` — z-order among overlapping anchored objects. */
+  relativeHeight?: number;
 }
 
 /**

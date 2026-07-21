@@ -836,7 +836,8 @@ function layoutAnchoredImage(
     pmStart: block.pmStart,
     pmEnd: block.pmEnd,
     isAnchored: true,
-    zIndex: anchor.behindDoc ? -1 : 1,
+    // relativeHeight = OOXML z-order among anchored objects (Word stacking).
+    zIndex: anchor.behindDoc ? -1 : (anchor.relativeHeight ?? 1),
   };
 
   // Add directly to page without affecting cursor
@@ -867,7 +868,8 @@ function layoutTextBox(
       pmStart: block.pmStart,
       pmEnd: block.pmEnd,
       isFloating: true,
-      zIndex: block.wrapType === 'behind' ? -1 : 1,
+      // relativeHeight = OOXML z-order (cover titles stack over the banner).
+      zIndex: block.wrapType === 'behind' ? -1 : (block.relativeHeight ?? 1),
     };
     state.page.fragments.push(fragment);
     return;

@@ -195,6 +195,7 @@ function enrichParagraphTextBoxes(
       size: textBox.size,
       position: textBox.position,
       wrap: textBox.wrap,
+      relativeHeight: textBox.relativeHeight,
       fill: textBox.fill,
       outline: textBox.outline,
       textBody: {

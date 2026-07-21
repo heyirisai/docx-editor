@@ -335,6 +335,9 @@ export function createImageRun(node: PMNode): Run {
   if (attrs.layoutInCell !== undefined && attrs.layoutInCell !== null) {
     image.layoutInCell = attrs.layoutInCell;
   }
+  if (attrs.relativeHeight !== undefined && attrs.relativeHeight !== null) {
+    image.relativeHeight = attrs.relativeHeight;
+  }
   if (attrs.allowOverlap !== undefined && attrs.allowOverlap !== null) {
     image.allowOverlap = attrs.allowOverlap;
   }

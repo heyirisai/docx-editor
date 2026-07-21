@@ -11,6 +11,7 @@
 
 import type {
   FlowBlock,
+  ImageRun,
   Measure,
   ParagraphBlock,
   ParagraphFragment,
@@ -22,7 +23,7 @@ import type {
 import { assertExhaustiveFlowBlock } from '../../layout-engine/types';
 import { renderParagraphFragment } from '../renderParagraph';
 import { renderTableFragment } from '../renderTable';
-import { renderImageFragment } from '../renderImage';
+import { applyImageVisualAttrs, hasImageVisualAttrs, renderImageFragment } from '../renderImage';
 import { renderTextBoxFragment } from '../renderTextBox';
 import { emuToPixels } from '../../utils/units';
 import type { RenderContext, RenderPageOptions } from '../renderPage';
@@ -227,8 +228,14 @@ export function renderHeaderFooterContent(
   // Use content width from context if available, otherwise default to reasonable width
   const contentWidth = context.contentWidth ?? 600;
 
-  // Collect floating images to render separately, with their paragraph's Y position
+  // Collect floating images to render separately, with their paragraph's Y
+  // position. Keep the FULL ImageRun on the record: an earlier narrow
+  // re-pack (src/width/height/alt/position only) silently dropped the
+  // OOXML srcRect crop, opacity, and transform — a badge strip cropped out
+  // of a full-page screenshot rendered as the whole screenshot squashed
+  // into the display box.
   const floatingImages: Array<{
+    run: ImageRun;
     src: string;
     width: number;
     height: number;
@@ -270,28 +277,11 @@ export function renderHeaderFooterContent(
       const inlineRuns: typeof paragraphBlock.runs = [];
       for (const run of paragraphBlock.runs) {
         if (run.kind === 'image' && 'position' in run && run.position) {
-          const imgRun = run as {
-            kind: 'image';
-            src: string;
-            width: number;
-            height: number;
-            alt?: string;
-            position: {
-              horizontal?: {
-                relativeTo?: string;
-                posOffset?: number;
-                align?: string;
-                alignment?: string;
-              };
-              vertical?: {
-                relativeTo?: string;
-                posOffset?: number;
-                align?: string;
-                alignment?: string;
-              };
-            };
+          const imgRun = run as ImageRun & {
+            position: NonNullable<ImageRun['position']>;
           };
           floatingImages.push({
+            run: imgRun,
             src: imgRun.src,
             width: imgRun.width,
             height: imgRun.height,
@@ -510,6 +500,19 @@ export function renderHeaderFooterContent(
     img.style.height = `${floatImg.height}px`;
     img.style.maxWidth = 'none';
     img.style.maxHeight = 'none';
+
+    // OOXML srcRect crop / picture opacity / rotation — same treatment as
+    // body images; the header's G2-badge-strip-cropped-from-a-screenshot
+    // case renders as a squashed full screenshot without this. No z-index:
+    // header floats and body floats live in separate DOM containers, so a
+    // raw relativeHeight here escapes the header's stacking level and
+    // paints over HIGHER-z body objects (a cover banner that Word draws
+    // over the header). DOM order already matches Word for the common case.
+    if (hasImageVisualAttrs(floatImg.run)) applyImageVisualAttrs(img, floatImg.run);
+    if (floatImg.run.transform) {
+      img.style.transform = floatImg.run.transform;
+      img.style.transformOrigin = 'center center';
+    }
 
     applyHeaderFooterFloatHorizontalPosition(img, floatImg, layout);
     img.style.top = `${top}px`;

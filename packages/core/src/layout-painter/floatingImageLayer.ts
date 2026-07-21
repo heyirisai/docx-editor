@@ -21,6 +21,13 @@ export interface FloatingImagePaintRecord {
   cropLeft?: number;
   /** a:alphaModFix -> CSS opacity. */
   opacity?: number;
+  /**
+   * OOXML `wp:anchor relativeHeight` — z-order among overlapping anchored
+   * objects (higher on top). Used directly as the item's CSS z-index in
+   * front mode so images and anchored text boxes stack the way Word does
+   * (e.g. cover title text boxes painted over a banner image).
+   */
+  relativeHeight?: number;
 }
 
 export interface FloatingImagesLayerOptions {
@@ -58,17 +65,29 @@ export function renderFloatingImagesLayer(
     layer.style.overflow = 'hidden';
   }
   layer.style.pointerEvents = 'none';
-  if (options.layerMode === 'front') {
-    layer.style.zIndex = '10';
-  }
 
-  for (const floatImg of floatingImages) {
+  // Behind-mode items must never carry a positive z-index (they'd jump
+  // above body text) — sort them so DOM order matches OOXML z-order.
+  const ordered =
+    options.layerMode === 'behind'
+      ? [...floatingImages].sort((a, b) => (a.relativeHeight ?? 0) - (b.relativeHeight ?? 0))
+      : floatingImages;
+
+  for (const floatImg of ordered) {
     const container = doc.createElement('div');
     container.className = options.itemClass;
     container.style.position = 'absolute';
     container.style.pointerEvents = 'auto';
     container.style.top = `${floatImg.y}px`;
     container.style.left = `${floatImg.x}px`;
+    if (options.layerMode === 'front') {
+      // Per-item z-index (not a flat layer z) so front images stack
+      // against anchored TEXT BOXES by OOXML relativeHeight — a flat
+      // layer z-index of 10 painted every image over every text box,
+      // hiding cover titles behind their banner. The layer itself keeps
+      // z auto so its children join the page stacking context.
+      container.style.zIndex = String(floatImg.relativeHeight ?? 10);
+    }
     if (floatImg.pmStart !== undefined) container.dataset.pmStart = String(floatImg.pmStart);
     if (floatImg.pmEnd !== undefined) container.dataset.pmEnd = String(floatImg.pmEnd);
 

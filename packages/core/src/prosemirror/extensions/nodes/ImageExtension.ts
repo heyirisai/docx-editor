@@ -220,6 +220,7 @@ export const ImageExtension = createNodeExtension({
       effectExtentRight: { default: null },
       layoutInCell: { default: null },
       allowOverlap: { default: null },
+      relativeHeight: { default: null },
     },
     parseDOM: [
       {

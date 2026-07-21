@@ -83,6 +83,7 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
               size: shape.size,
               position: shape.position,
               wrap: shape.wrap,
+              relativeHeight: shape.relativeHeight,
               fill: shape.fill,
               outline: shape.outline,
               content: shape.textBody.content,

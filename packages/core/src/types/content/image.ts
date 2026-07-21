@@ -156,6 +156,13 @@ export interface Image {
    * the author's intent.
    */
   allowOverlap?: boolean;
+  /**
+   * `wp:anchor relativeHeight` — the z-order among overlapping anchored
+   * objects (higher paints on top). Word uses this to stack e.g. cover
+   * title text boxes over a banner image; render honors it and saving
+   * round-trips it.
+   */
+  relativeHeight?: number;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
   /** Image outline/border */

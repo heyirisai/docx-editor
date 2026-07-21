@@ -15,6 +15,7 @@ export type TextBoxAnchorAttrs = Pick<
   | 'distBottom'
   | 'distLeft'
   | 'distRight'
+  | 'relativeHeight'
 >;
 
 /** DOCX text boxes with any non-inline wrap are authored as anchored shapes. */
@@ -39,6 +40,7 @@ export function textBoxAnchorAttrsFromDocx(textBox: TextBox): TextBoxAnchorAttrs
     distBottom: textBox.wrap?.distB != null ? emuToPixels(textBox.wrap.distB) : undefined,
     distLeft: textBox.wrap?.distL != null ? emuToPixels(textBox.wrap.distL) : undefined,
     distRight: textBox.wrap?.distR != null ? emuToPixels(textBox.wrap.distR) : undefined,
+    relativeHeight: textBox.relativeHeight,
   };
 }
 

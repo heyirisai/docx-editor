@@ -43,6 +43,8 @@ export interface TextBoxAttrs {
   wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
   /** Display anchor relationship for exported text boxes */
   anchorTarget?: 'followingBlock';
+  /** `wp:anchor relativeHeight` — z-order among overlapping anchored objects */
+  relativeHeight?: number;
   /** Anchor position copied from wp:positionH/wp:positionV */
   position?: {
     horizontal?: { relativeTo?: string; posOffset?: number; align?: string };
@@ -82,6 +84,7 @@ export const TextBoxExtension = createNodeExtension({
       wrapText: { default: null },
       anchorTarget: { default: null },
       position: { default: null },
+      relativeHeight: { default: null },
       distTop: { default: null },
       distBottom: { default: null },
       distLeft: { default: null },

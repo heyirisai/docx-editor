@@ -412,6 +412,7 @@ export function paragraphToRuns(
         distLeft: attrs.distLeft as number | undefined,
         distRight: attrs.distRight as number | undefined,
         position: attrs.position as ImageRun['position'] | undefined,
+        relativeHeight: (attrs.relativeHeight as number | null) ?? undefined,
         cropTop: attrs.cropTop as number | undefined,
         cropRight: attrs.cropRight as number | undefined,
         cropBottom: attrs.cropBottom as number | undefined,

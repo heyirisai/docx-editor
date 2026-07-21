@@ -623,12 +623,18 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
     height: constrained.height,
     alt: attrs.alt as string | undefined,
     transform: attrs.transform as string | undefined,
+    cropTop: (attrs.cropTop as number | null) ?? undefined,
+    cropRight: (attrs.cropRight as number | null) ?? undefined,
+    cropBottom: (attrs.cropBottom as number | null) ?? undefined,
+    cropLeft: (attrs.cropLeft as number | null) ?? undefined,
+    opacity: (attrs.opacity as number | null) ?? undefined,
     anchor: shouldAnchor
       ? {
           isAnchored: true,
           offsetH: attrs.distLeft as number | undefined,
           offsetV: attrs.distTop as number | undefined,
           behindDoc: wrapType === 'behind',
+          relativeHeight: (attrs.relativeHeight as number | null) ?? undefined,
         }
       : undefined,
     hlinkHref: attrs.hlinkHref as string | undefined,
@@ -678,6 +684,7 @@ function convertTextBoxNode(
     wrapText: attrs.wrapText as TextBoxBlock['wrapText'],
     anchorTarget: attrs.anchorTarget as TextBoxBlock['anchorTarget'],
     position: attrs.position as TextBoxBlock['position'],
+    relativeHeight: (attrs.relativeHeight as number | null) ?? undefined,
     distTop: attrs.distTop as number | undefined,
     distBottom: attrs.distBottom as number | undefined,
     distLeft: attrs.distLeft as number | undefined,

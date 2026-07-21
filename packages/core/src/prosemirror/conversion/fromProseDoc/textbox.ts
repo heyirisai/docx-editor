@@ -65,6 +65,10 @@ export function convertPMTextBoxRun(node: PMNode): Run {
     shape.wrap = wrap;
   }
 
+  if (attrs.relativeHeight != null) {
+    shape.relativeHeight = attrs.relativeHeight;
+  }
+
   // Convert fill color back
   if (attrs.fillColor) {
     shape.fill = {
