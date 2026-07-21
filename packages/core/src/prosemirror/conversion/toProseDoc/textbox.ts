@@ -11,8 +11,9 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../../schema';
-import type { Paragraph, TextBox, Shape } from '../../../types/document';
+import type { Paragraph, TextBox, Shape, Theme } from '../../../types/document';
 import { emuToPixels } from '../../../docx/imageParser';
+import { resolveColor } from '../../../utils/colorResolver';
 import type { StyleResolver } from '../../styles';
 import { isAnchoredDocxTextBox, textBoxAnchorAttrsFromDocx } from '../textBoxAnchors';
 import { convertParagraph } from './paragraph';
@@ -23,7 +24,8 @@ import { convertParagraph } from './paragraph';
  */
 export function convertParagraphWithTextBoxes(
   block: Paragraph,
-  styleResolver: StyleResolver | null
+  styleResolver: StyleResolver | null,
+  theme?: Theme | null
 ): PMNode[] {
   const textBoxes = extractTextBoxesFromParagraph(block);
   const pmParagraph = convertParagraph(block, styleResolver);
@@ -32,7 +34,7 @@ export function convertParagraphWithTextBoxes(
   const { anchored, inFlow } = partitionTextBoxesByAnchor(textBoxes);
 
   for (const tb of anchored) {
-    nodes.push(convertTextBox(tb, styleResolver));
+    nodes.push(convertTextBox(tb, styleResolver, theme));
   }
 
   if (!isEmptyAfterExtraction) {
@@ -40,7 +42,7 @@ export function convertParagraphWithTextBoxes(
   }
 
   for (const tb of inFlow) {
-    nodes.push(convertTextBox(tb, styleResolver));
+    nodes.push(convertTextBox(tb, styleResolver, theme));
   }
   return nodes;
 }
@@ -100,14 +102,23 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
 /**
  * Convert a TextBox to a ProseMirror textBox node
  */
-function convertTextBox(textBox: TextBox, styleResolver: StyleResolver | null): PMNode {
+function convertTextBox(
+  textBox: TextBox,
+  styleResolver: StyleResolver | null,
+  theme?: Theme | null
+): PMNode {
   const widthPx = textBox.size?.width ? emuToPixels(textBox.size.width) : 200;
   const heightPx = textBox.size?.height ? emuToPixels(textBox.size.height) : undefined;
 
-  // Convert fill color
+  // Convert fill color. Theme-referenced fills (a:schemeClr — e.g. a
+  // full-page cover background rectangle filled with tx1/dk1) must
+  // resolve through the DOCUMENT theme: dropping them painted the box
+  // transparent, leaving its light-colored text invisible on the page.
   let fillColor: string | undefined;
   if (textBox.fill?.color?.rgb) {
     fillColor = `#${textBox.fill.color.rgb}`;
+  } else if (textBox.fill?.color?.themeColor) {
+    fillColor = resolveColor(textBox.fill.color, theme ?? null);
   }
 
   // Convert outline

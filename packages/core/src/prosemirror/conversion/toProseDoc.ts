@@ -48,7 +48,7 @@ function convertBlocksToNodes(
   const nodes: PMNode[] = [];
   for (const block of blocks) {
     if (block.type === 'paragraph') {
-      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver));
+      nodes.push(...convertParagraphWithTextBoxes(block, styleResolver, theme));
       if (includePageBreaks && paragraphHasNonLeadingPageBreak(block)) {
         nodes.push(schema.node('pageBreak'));
       }
