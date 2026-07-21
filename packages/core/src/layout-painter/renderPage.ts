@@ -940,7 +940,14 @@ export function renderPage(
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = 'absolute';
-    footerEl.style.top = `${page.size.h - footerDistance - interactiveFooterHeight}px`;
+    // Word anchors the footer band's TOP at the w:footer distance from the
+    // page bottom — content flows DOWN toward the page edge (a one-line
+    // footer with the default 0.5in distance paints ~0.25-0.5in from the
+    // bottom). Only when the content is taller than the distance does the
+    // band shift up so it stays on the page. Pinning the BOTTOM at the
+    // distance (the old behavior) floated every footer a full band-height
+    // too high.
+    footerEl.style.top = `${page.size.h - Math.max(footerDistance, interactiveFooterHeight)}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
@@ -950,7 +957,8 @@ export function renderPage(
     let shouldClipFooter = !footerOverflows;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const layout: HeaderFooterLayoutInfo = {
-        flowTop: page.size.h - footerDistance - (options.footerContent?.height ?? 0),
+        // Top-anchored at the footer distance, like the band above.
+        flowTop: page.size.h - Math.max(footerDistance, options.footerContent?.height ?? 0),
         flowLeft: page.margins.left,
         contentWidth: footerContentWidth,
         pageWidth: page.size.w,

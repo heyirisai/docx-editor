@@ -173,7 +173,11 @@ export function resolveHeaderFooterVisualTop(
   const flowTop =
     metrics.section === 'header'
       ? (metrics.margins.header ?? 48)
-      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
+      : // Footer band TOP anchors at the w:footer distance (content flows
+        // down toward the page edge); it shifts up only when taller than
+        // the distance. Must stay in lockstep with renderPage's footer
+        // placement.
+        metrics.pageSize.h - Math.max(metrics.margins.footer ?? 48, flowHeight);
   const vertical = run.position?.vertical;
 
   if (!vertical) {
@@ -268,7 +272,11 @@ export function calculateHeaderFooterVisualBounds(
   const flowTop =
     metrics.section === 'header'
       ? (metrics.margins.header ?? 48)
-      : metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
+      : // Footer band TOP anchors at the w:footer distance (content flows
+        // down toward the page edge); it shifts up only when taller than
+        // the distance. Must stay in lockstep with renderPage's footer
+        // placement.
+        metrics.pageSize.h - Math.max(metrics.margins.footer ?? 48, flowHeight);
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];
