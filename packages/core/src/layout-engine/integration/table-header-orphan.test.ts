@@ -99,6 +99,35 @@ describe('Layout engine — table header orphan rule', () => {
     expect(tableFrags[0].frag.toRow).toBeGreaterThan(1);
   });
 
+  test('a mid-row split suppresses the repeated header on the continuation (Word quirk)', () => {
+    const options = makeLayoutOptions();
+    const contentHeight = options.pageSize.h - options.margins.top - options.margins.bottom;
+
+    // Header + one data row far taller than a page: the data row must split
+    // mid-content, and Word does NOT repeat the header above the remainder.
+    const tallRow = contentHeight * 1.5;
+    const { block, measure } = buildHeaderTable([LINE, tallRow]);
+    measure.rows[1].cells[0].blocks = [paraMeasure(Math.ceil(tallRow / LINE))];
+    measure.rows[1].cells[0].height = tallRow;
+    measure.totalHeight = LINE + tallRow;
+
+    const layout = layoutDocument([block], [measure], options);
+    const continuations: TableFragment[] = [];
+    for (const page of layout.pages) {
+      for (const frag of page.fragments) {
+        if (frag.kind === 'table' && (frag as TableFragment).continuesFromPrev) {
+          continuations.push(frag as TableFragment);
+        }
+      }
+    }
+    expect(continuations.length).toBeGreaterThan(0);
+    for (const frag of continuations) {
+      if (frag.topClip && frag.topClip > 0) {
+        expect(frag.headerRowCount).toBeUndefined();
+      }
+    }
+  });
+
   test('a headerless table still fills the remaining space greedily', () => {
     const options = makeLayoutOptions();
     const contentHeight = options.pageSize.h - options.margins.top - options.margins.bottom;

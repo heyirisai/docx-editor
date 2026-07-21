@@ -547,7 +547,12 @@ function layoutTable(
     // Account for trailing spacing from the previous block that addFragment
     // will consume (only the first fragment butts against prior content).
     const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
-    const headerOverhead = !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
+    // Word quirk: repeated tblHeader rows appear on a continuation page
+    // only when the break fell BETWEEN rows. When a row split mid-content
+    // (allow-row-to-break), Word suppresses the repeated header above the
+    // row's continuation — `consumed > 0` marks exactly that case.
+    const repeatHeader = !isFirstFragment && headerRowCount > 0 && consumed === 0;
+    const headerOverhead = repeatHeader ? headerRowsHeight : 0;
     const availableHeight = paginator.getAvailableHeight() - pendingSpacing - headerOverhead;
 
     const startRow = rowIndex;
@@ -646,7 +651,7 @@ function layoutTable(
       pmEnd: block.pmEnd,
       continuesFromPrev: !isFirstFragment,
       continuesOnNext: !isLastFragment,
-      headerRowCount: !isFirstFragment && headerRowCount > 0 ? headerRowCount : undefined,
+      headerRowCount: repeatHeader ? headerRowCount : undefined,
       topClip: topClip > 0 ? topClip : undefined,
       bottomClip,
     };
