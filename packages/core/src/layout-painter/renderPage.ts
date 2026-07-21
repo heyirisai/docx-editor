@@ -242,6 +242,10 @@ export function applyPageStyles(
   element.style.position = 'relative';
   element.style.width = `${width}px`;
   element.style.height = `${height}px`;
+  // Contain stacking: anchored objects use raw OOXML relativeHeight as
+  // z-index (hundreds of millions) — without isolation they escape the
+  // page and paint over app chrome (dropdowns, export modals).
+  element.style.isolation = 'isolate';
   // Resolve via CSS custom properties so dark mode (.ep-root.dark) re-themes
   // the canvas without any adapter wiring. Word renders a dark page with light
   // text in dark mode; this is a VIEW transform only — the saved DOCX is never
