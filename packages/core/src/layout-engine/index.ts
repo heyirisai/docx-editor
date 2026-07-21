@@ -601,6 +601,25 @@ function layoutTable(
       break;
     }
 
+    // Word never strands a table's header row(s) alone at the bottom of a
+    // page or column: when the FIRST fragment would carry only header rows
+    // while the data rows flow to the next page, start the whole table
+    // there instead. View-time pagination only — the document content
+    // (and therefore the export) is unchanged. Skipped on a fresh column
+    // (cursor at top) so an oversized header still places with overflow
+    // instead of looping.
+    if (
+      isFirstFragment &&
+      headerRowCount > 0 &&
+      !lastRowPartial &&
+      toRow <= headerRowCount &&
+      toRow < rows.length &&
+      state.cursorY > state.topMargin
+    ) {
+      paginator.ensureFits(paginator.getAvailableHeight() + 1);
+      continue;
+    }
+
     // Compute fragment geometry. `used` is the visible window height.
     const fragmentHeight = headerOverhead + used;
     const isLastFragment = toRow === rows.length && !lastRowPartial;
