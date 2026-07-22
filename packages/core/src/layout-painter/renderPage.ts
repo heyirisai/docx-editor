@@ -32,6 +32,7 @@ import type {
   TextBoxFragment,
   SdtGroup,
 } from '../layout-engine/types';
+import { PAGE_OVERLAY_Z } from '../layout-engine/zOrder';
 import { renderSdtBoundaryBoxes } from './sdtBoundary';
 import { renderFragment } from './renderFragment';
 import { renderParagraphFragment } from './renderParagraph';
@@ -337,7 +338,7 @@ function renderPageBorderOverlay(
   overlay.style.position = 'absolute';
   overlay.style.pointerEvents = 'none';
   overlay.style.boxSizing = 'border-box';
-  overlay.style.zIndex = pb.zOrder === 'back' ? '0' : '20';
+  overlay.style.zIndex = pb.zOrder === 'back' ? '0' : String(PAGE_OVERLAY_Z);
 
   if (offsetFrom === 'page') {
     overlay.style.top = `${topOffset}px`;

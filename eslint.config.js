@@ -203,6 +203,15 @@ export default [
     },
   },
 
+  // renderPage.ts sits at the default cap; bumped minimally for the
+  // page-overlay z-band import.
+  {
+    files: ['packages/core/src/layout-painter/renderPage.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1010, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // layout-engine/types.ts is the canonical schema definition for the
   // layout model — single file by design (cross-referencing types). Bumped
   // modestly above the default to accommodate new revision-tracking,

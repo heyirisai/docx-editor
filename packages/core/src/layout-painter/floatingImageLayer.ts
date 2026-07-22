@@ -1,3 +1,4 @@
+import { contentZIndex } from '../layout-engine/zOrder';
 import { applyImageVisualAttrs, hasImageVisualAttrs } from './renderImage';
 
 /**
@@ -86,7 +87,7 @@ export function renderFloatingImagesLayer(
       // layer z-index of 10 painted every image over every text box,
       // hiding cover titles behind their banner. The layer itself keeps
       // z auto so its children join the page stacking context.
-      container.style.zIndex = String(floatImg.relativeHeight ?? 10);
+      container.style.zIndex = String(contentZIndex(floatImg.relativeHeight ?? 10));
     }
     if (floatImg.pmStart !== undefined) container.dataset.pmStart = String(floatImg.pmStart);
     if (floatImg.pmEnd !== undefined) container.dataset.pmEnd = String(floatImg.pmEnd);

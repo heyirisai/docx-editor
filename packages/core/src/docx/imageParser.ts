@@ -250,7 +250,11 @@ function parseImageCrop(
   const toFraction = (attr: string): number | undefined => {
     const raw = parseNumericAttribute(srcRect, null, attr);
     if (raw === undefined || raw === 0) return undefined;
-    return raw / 100000;
+    // File-supplied: clamp to the documented [0, 1] contract — the
+    // header-float exact-crop path divides by (1 - left - right), so an
+    // out-of-range value must not escape the parser.
+    const frac = Math.min(1, Math.max(0, raw / 100000));
+    return frac === 0 ? undefined : frac;
   };
   const left = toFraction('l');
   const top = toFraction('t');

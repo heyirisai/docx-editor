@@ -512,19 +512,25 @@ export function renderHeaderFooterContent(
     // here escapes it and paints over higher-z body objects (a cover
     // banner that Word draws over the page-1 header).
     const run = floatImg.run;
-    const cropL = run.cropLeft ?? 0;
-    const cropR = run.cropRight ?? 0;
-    const cropT = run.cropTop ?? 0;
-    const cropB = run.cropBottom ?? 0;
+    const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+    const cropL = clamp01(run.cropLeft ?? 0);
+    const cropR = clamp01(run.cropRight ?? 0);
+    const cropT = clamp01(run.cropTop ?? 0);
+    const cropB = clamp01(run.cropBottom ?? 0);
+    // Defense in depth on top of the parser's [0, 1] clamp: a crop pair
+    // that consumes (nearly) the whole source axis would explode the
+    // inner-img scale factor — render uncropped instead.
+    const denomW = 1 - cropL - cropR;
+    const denomH = 1 - cropT - cropB;
     let el: HTMLElement = img;
-    if (cropL || cropR || cropT || cropB) {
+    if ((cropL || cropR || cropT || cropB) && denomW >= 0.01 && denomH >= 0.01) {
       const box = doc.createElement('div');
       box.style.position = 'absolute';
       box.style.width = `${floatImg.width}px`;
       box.style.height = `${floatImg.height}px`;
       box.style.overflow = 'hidden';
-      const innerW = floatImg.width / Math.max(1e-6, 1 - cropL - cropR);
-      const innerH = floatImg.height / Math.max(1e-6, 1 - cropT - cropB);
+      const innerW = floatImg.width / denomW;
+      const innerH = floatImg.height / denomH;
       img.style.position = 'absolute';
       img.style.width = `${innerW}px`;
       img.style.height = `${innerH}px`;

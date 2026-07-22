@@ -46,6 +46,7 @@ import { MIN_WRAP_SEGMENT_WIDTH } from '../layout-bridge/measuring/floatingZones
 import { getParagraphFragmentPmRange } from './paragraphFragmentRange';
 import { balanceTerminalContinuousTextColumns } from './columnBalancing';
 import { getSpacingAfter, getSpacingBefore } from './paragraphSpacing';
+import { contentZIndex } from './zOrder';
 
 // Default page size (US Letter in pixels at 96 DPI)
 const DEFAULT_PAGE_SIZE = { w: 816, h: 1056 };
@@ -861,7 +862,7 @@ function layoutAnchoredImage(
     pmEnd: block.pmEnd,
     isAnchored: true,
     // relativeHeight = OOXML z-order among anchored objects (Word stacking).
-    zIndex: anchor.behindDoc ? -1 : (anchor.relativeHeight ?? 1),
+    zIndex: anchor.behindDoc ? -1 : contentZIndex(anchor.relativeHeight ?? 1),
   };
 
   // Add directly to page without affecting cursor
@@ -893,7 +894,7 @@ function layoutTextBox(
       pmEnd: block.pmEnd,
       isFloating: true,
       // relativeHeight = OOXML z-order (cover titles stack over the banner).
-      zIndex: block.wrapType === 'behind' ? -1 : (block.relativeHeight ?? 1),
+      zIndex: block.wrapType === 'behind' ? -1 : contentZIndex(block.relativeHeight ?? 1),
     };
     state.page.fragments.push(fragment);
     return;
