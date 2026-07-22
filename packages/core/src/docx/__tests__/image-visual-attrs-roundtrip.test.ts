@@ -57,6 +57,31 @@ describe('wp:srcRect crop round-trip', () => {
     expect(img?.crop).toEqual({ left: 0.1, top: 0.05, right: 0.15, bottom: 0.2 });
   });
 
+  test('out-of-range srcRect values clamp to the [0, 1] contract', () => {
+    // File-supplied values: >100000 and negative sides must not escape the
+    // parser — the header-float exact-crop path divides by (1 - l - r).
+    const img = parseDrawingFromXml(`
+      <wp:inline distT="0" distB="0" distL="0" distR="0">
+        <wp:extent cx="1000000" cy="500000"/>
+        <wp:docPr id="1" name="Picture 1"/>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic>
+              <pic:nvPicPr><pic:cNvPr id="1" name="img"/><pic:cNvPicPr/></pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip r:embed="rId1"/>
+                <a:srcRect l="150000" t="-20000" r="30000"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </pic:blipFill>
+              <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="1000000" cy="500000"/></a:xfrm></pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>`);
+    // l clamps to 1, negative t clamps away entirely, valid r passes through.
+    expect(img?.crop).toEqual({ left: 1, right: 0.3 });
+  });
+
   test('omit a:srcRect element when crop has no non-zero sides', () => {
     // Without `crop` on the model, the serializer should not emit <a:srcRect/>.
     const xml = serializeImage({

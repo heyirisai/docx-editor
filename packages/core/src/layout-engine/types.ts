@@ -175,6 +175,8 @@ export type ImageRun = {
   transform?: string;
   /** Position for floating/anchored images */
   position?: ImageRunPosition;
+  /** OOXML z-order among overlapping anchored objects (higher on top). */
+  relativeHeight?: number;
   /** Wrap type from DOCX (inline, square, tight, through, topAndBottom, etc.) */
   wrapType?: string;
   /** Display mode for CSS rendering */
@@ -500,11 +502,20 @@ export type ImageBlock = {
   alt?: string;
   /** CSS transform string (rotation, flip) */
   transform?: string;
+  /** wp:srcRect crop fractions in [0, 1] (see ImageRun.cropTop). */
+  cropTop?: number;
+  cropRight?: number;
+  cropBottom?: number;
+  cropLeft?: number;
+  /** a:alphaModFix → CSS opacity in [0, 1]. */
+  opacity?: number;
   anchor?: {
     isAnchored?: boolean;
     offsetH?: number;
     offsetV?: number;
     behindDoc?: boolean;
+    /** OOXML z-order among overlapping anchored objects (higher on top). */
+    relativeHeight?: number;
   };
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
@@ -591,6 +602,8 @@ export type TextBoxBlock = {
   wrapText?: WrapTextDirection;
   /** Anchor target used during DOCX import/export */
   anchorTarget?: 'followingBlock';
+  /** OOXML z-order among overlapping anchored objects (higher on top). */
+  relativeHeight?: number;
   /** Position for floating/anchored text boxes */
   position?: ImageRunPosition;
   /** Wrap distances in pixels */

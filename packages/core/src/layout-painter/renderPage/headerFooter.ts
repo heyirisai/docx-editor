@@ -11,6 +11,7 @@
 
 import type {
   FlowBlock,
+  ImageRun,
   Measure,
   ParagraphBlock,
   ParagraphFragment,
@@ -22,7 +23,7 @@ import type {
 import { assertExhaustiveFlowBlock } from '../../layout-engine/types';
 import { renderParagraphFragment } from '../renderParagraph';
 import { renderTableFragment } from '../renderTable';
-import { renderImageFragment } from '../renderImage';
+import { applyImageVisualAttrs, hasImageVisualAttrs, renderImageFragment } from '../renderImage';
 import { renderTextBoxFragment } from '../renderTextBox';
 import { emuToPixels } from '../../utils/units';
 import type { RenderContext, RenderPageOptions } from '../renderPage';
@@ -227,8 +228,14 @@ export function renderHeaderFooterContent(
   // Use content width from context if available, otherwise default to reasonable width
   const contentWidth = context.contentWidth ?? 600;
 
-  // Collect floating images to render separately, with their paragraph's Y position
+  // Collect floating images to render separately, with their paragraph's Y
+  // position. Keep the FULL ImageRun on the record: an earlier narrow
+  // re-pack (src/width/height/alt/position only) silently dropped the
+  // OOXML srcRect crop, opacity, and transform — a badge strip cropped out
+  // of a full-page screenshot rendered as the whole screenshot squashed
+  // into the display box.
   const floatingImages: Array<{
+    run: ImageRun;
     src: string;
     width: number;
     height: number;
@@ -270,28 +277,11 @@ export function renderHeaderFooterContent(
       const inlineRuns: typeof paragraphBlock.runs = [];
       for (const run of paragraphBlock.runs) {
         if (run.kind === 'image' && 'position' in run && run.position) {
-          const imgRun = run as {
-            kind: 'image';
-            src: string;
-            width: number;
-            height: number;
-            alt?: string;
-            position: {
-              horizontal?: {
-                relativeTo?: string;
-                posOffset?: number;
-                align?: string;
-                alignment?: string;
-              };
-              vertical?: {
-                relativeTo?: string;
-                posOffset?: number;
-                align?: string;
-                alignment?: string;
-              };
-            };
+          const imgRun = run as ImageRun & {
+            position: NonNullable<ImageRun['position']>;
           };
           floatingImages.push({
+            run: imgRun,
             src: imgRun.src,
             width: imgRun.width,
             height: imgRun.height,
@@ -511,10 +501,58 @@ export function renderHeaderFooterContent(
     img.style.maxWidth = 'none';
     img.style.maxHeight = 'none';
 
-    applyHeaderFooterFloatHorizontalPosition(img, floatImg, layout);
-    img.style.top = `${top}px`;
+    // OOXML srcRect crop / picture opacity / rotation — the header's
+    // G2-badge-strip-cropped-from-a-screenshot case renders as a squashed
+    // full screenshot without this. Unlike body images (object-fit: cover,
+    // an approximation that leaks a sliver of the source when the display
+    // aspect drifts from the cropped region's), header floats aren't
+    // selectable/resizable, so we can afford the EXACT crop: a scaled
+    // inner img inside an overflow-hidden box. No z-index: header floats
+    // live in a separate stacking container, and a raw relativeHeight
+    // here escapes it and paints over higher-z body objects (a cover
+    // banner that Word draws over the page-1 header).
+    const run = floatImg.run;
+    const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+    const cropL = clamp01(run.cropLeft ?? 0);
+    const cropR = clamp01(run.cropRight ?? 0);
+    const cropT = clamp01(run.cropTop ?? 0);
+    const cropB = clamp01(run.cropBottom ?? 0);
+    // Defense in depth on top of the parser's [0, 1] clamp: a crop pair
+    // that consumes (nearly) the whole source axis would explode the
+    // inner-img scale factor — render uncropped instead.
+    const denomW = 1 - cropL - cropR;
+    const denomH = 1 - cropT - cropB;
+    let el: HTMLElement = img;
+    if ((cropL || cropR || cropT || cropB) && denomW >= 0.01 && denomH >= 0.01) {
+      const box = doc.createElement('div');
+      box.style.position = 'absolute';
+      box.style.width = `${floatImg.width}px`;
+      box.style.height = `${floatImg.height}px`;
+      box.style.overflow = 'hidden';
+      const innerW = floatImg.width / denomW;
+      const innerH = floatImg.height / denomH;
+      img.style.position = 'absolute';
+      img.style.width = `${innerW}px`;
+      img.style.height = `${innerH}px`;
+      img.style.left = `${-cropL * innerW}px`;
+      img.style.top = `${-cropT * innerH}px`;
+      box.appendChild(img);
+      el = box;
+      if (run.opacity != null && run.opacity < 1) {
+        img.style.opacity = String(Math.max(0, run.opacity));
+      }
+    } else if (hasImageVisualAttrs(run)) {
+      applyImageVisualAttrs(img, run);
+    }
+    if (run.transform) {
+      img.style.transform = run.transform;
+      img.style.transformOrigin = 'center center';
+    }
 
-    containerEl.appendChild(img);
+    applyHeaderFooterFloatHorizontalPosition(el as HTMLImageElement, floatImg, layout);
+    el.style.top = `${top}px`;
+
+    containerEl.appendChild(el);
   }
 
   return containerEl;

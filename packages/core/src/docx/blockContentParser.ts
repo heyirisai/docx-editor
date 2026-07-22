@@ -188,13 +188,18 @@ function enrichParagraphTextBoxes(
       }
     }
 
-    // Convert to Shape with textBody and inject as ShapeContent
+    // Convert to Shape with textBody and inject as ShapeContent.
+    // shapeType MUST be 'textBox' (the serializer maps it to prstGeom
+    // 'rect' on export): serializeShapeContent only emits the wps:txbx
+    // text body for 'textBox' shapes, so a plain 'rect' here silently
+    // DROPPED the text box content on every save round-trip.
     const shape: Shape = {
       type: 'shape',
-      shapeType: 'rect',
+      shapeType: 'textBox',
       size: textBox.size,
       position: textBox.position,
       wrap: textBox.wrap,
+      relativeHeight: textBox.relativeHeight,
       fill: textBox.fill,
       outline: textBox.outline,
       textBody: {

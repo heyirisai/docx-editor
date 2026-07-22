@@ -250,7 +250,11 @@ function parseImageCrop(
   const toFraction = (attr: string): number | undefined => {
     const raw = parseNumericAttribute(srcRect, null, attr);
     if (raw === undefined || raw === 0) return undefined;
-    return raw / 100000;
+    // File-supplied: clamp to the documented [0, 1] contract — the
+    // header-float exact-crop path divides by (1 - left - right), so an
+    // out-of-range value must not escape the parser.
+    const frac = Math.min(1, Math.max(0, raw / 100000));
+    return frac === 0 ? undefined : frac;
   };
   const left = toFraction('l');
   const top = toFraction('t');
@@ -578,6 +582,10 @@ function parseAnchor(
   const allowOverlapAttr = getAttribute(anchorEl, null, 'allowOverlap');
   const allowOverlap = allowOverlapAttr === null ? undefined : allowOverlapAttr === '1';
 
+  // Z-order among overlapping anchored objects — Word stacks by this value
+  // (e.g. cover title text boxes painted over a banner image).
+  const relativeHeight = parseNumericAttribute(anchorEl, null, 'relativeHeight') ?? undefined;
+
   // Read distance attributes from the wp:anchor element itself (fallback values)
   const anchorDistances = {
     distT: parseNumericAttribute(anchorEl, null, 'distT') ?? undefined,
@@ -639,6 +647,7 @@ function parseAnchor(
   if (opacity !== undefined) image.opacity = opacity;
   if (layoutInCell !== undefined) image.layoutInCell = layoutInCell;
   if (allowOverlap !== undefined) image.allowOverlap = allowOverlap;
+  if (relativeHeight !== undefined) image.relativeHeight = relativeHeight;
 
   // Resolve image hyperlink (a:hlinkClick)
   if (props.hlinkRId && rels) {

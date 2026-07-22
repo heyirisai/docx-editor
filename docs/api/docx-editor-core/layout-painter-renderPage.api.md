@@ -89,6 +89,7 @@ export interface FloatingImagePaintRecord {
     pmEnd?: number;
     // (undocumented)
     pmStart?: number;
+    relativeHeight?: number;
     // (undocumented)
     src: string;
     // (undocumented)

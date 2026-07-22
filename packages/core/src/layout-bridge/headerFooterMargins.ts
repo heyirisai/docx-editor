@@ -85,13 +85,19 @@ export function extendMarginsForHeaderFooter(
   const headerDistance = margins.header ?? DEFAULT_HF_DISTANCE_PX;
   const footerDistance = margins.footer ?? DEFAULT_HF_DISTANCE_PX;
   const availableHeaderSpace = margins.top - headerDistance;
-  const availableFooterSpace = margins.bottom - footerDistance;
 
   const headerContentHeight = Math.max(0, ...(headers ?? []).map(bandHeight));
   const footerContentHeight = Math.max(0, ...(footers ?? []).map(bandHeight));
 
   const extendHeader = headerContentHeight > availableHeaderSpace;
-  const extendFooter = footerContentHeight > availableFooterSpace;
+  // The footer band's TOP anchors at the w:footer distance and content
+  // flows DOWN toward the page edge (shifting up only when taller than
+  // the distance) — see the painter's footer placement. The body must
+  // clear the footer's top edge: max(distance, height) from the page
+  // bottom — NOT distance + height, which reserved a full band-height
+  // too much whenever footerDistance > bottomMargin.
+  const footerTopOffset = Math.max(footerDistance, footerContentHeight);
+  const extendFooter = footerTopOffset > margins.bottom;
   if (!extendHeader && !extendFooter) {
     return { margins, finalMargins };
   }
@@ -102,7 +108,7 @@ export function extendMarginsForHeaderFooter(
   const extend = (m: PageMargins): PageMargins => {
     const out = { ...m };
     if (extendHeader) out.top = Math.max(m.top, headerDistance + headerContentHeight);
-    if (extendFooter) out.bottom = Math.max(m.bottom, footerDistance + footerContentHeight);
+    if (extendFooter) out.bottom = Math.max(m.bottom, footerTopOffset);
     // Safety net: never let header + footer consume the whole page. Clamp the
     // footer band first (it sits at the page bottom), then the header band if
     // it alone still overflows, so the body keeps a positive content area.

@@ -46,6 +46,7 @@ import { MIN_WRAP_SEGMENT_WIDTH } from '../layout-bridge/measuring/floatingZones
 import { getParagraphFragmentPmRange } from './paragraphFragmentRange';
 import { balanceTerminalContinuousTextColumns } from './columnBalancing';
 import { getSpacingAfter, getSpacingBefore } from './paragraphSpacing';
+import { contentZIndex } from './zOrder';
 
 // Default page size (US Letter in pixels at 96 DPI)
 const DEFAULT_PAGE_SIZE = { w: 816, h: 1056 };
@@ -547,7 +548,12 @@ function layoutTable(
     // Account for trailing spacing from the previous block that addFragment
     // will consume (only the first fragment butts against prior content).
     const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
-    const headerOverhead = !isFirstFragment && headerRowCount > 0 ? headerRowsHeight : 0;
+    // Word quirk: repeated tblHeader rows appear on a continuation page
+    // only when the break fell BETWEEN rows. When a row split mid-content
+    // (allow-row-to-break), Word suppresses the repeated header above the
+    // row's continuation — `consumed > 0` marks exactly that case.
+    const repeatHeader = !isFirstFragment && headerRowCount > 0 && consumed === 0;
+    const headerOverhead = repeatHeader ? headerRowsHeight : 0;
     const availableHeight = paginator.getAvailableHeight() - pendingSpacing - headerOverhead;
 
     const startRow = rowIndex;
@@ -601,6 +607,25 @@ function layoutTable(
       break;
     }
 
+    // Word never strands a table's header row(s) alone at the bottom of a
+    // page or column: when the FIRST fragment would carry only header rows
+    // while the data rows flow to the next page, start the whole table
+    // there instead. View-time pagination only — the document content
+    // (and therefore the export) is unchanged. Skipped on a fresh column
+    // (cursor at top) so an oversized header still places with overflow
+    // instead of looping.
+    if (
+      isFirstFragment &&
+      headerRowCount > 0 &&
+      !lastRowPartial &&
+      toRow <= headerRowCount &&
+      toRow < rows.length &&
+      state.cursorY > state.topMargin
+    ) {
+      paginator.ensureFits(paginator.getAvailableHeight() + 1);
+      continue;
+    }
+
     // Compute fragment geometry. `used` is the visible window height.
     const fragmentHeight = headerOverhead + used;
     const isLastFragment = toRow === rows.length && !lastRowPartial;
@@ -627,7 +652,7 @@ function layoutTable(
       pmEnd: block.pmEnd,
       continuesFromPrev: !isFirstFragment,
       continuesOnNext: !isLastFragment,
-      headerRowCount: !isFirstFragment && headerRowCount > 0 ? headerRowCount : undefined,
+      headerRowCount: repeatHeader ? headerRowCount : undefined,
       topClip: topClip > 0 ? topClip : undefined,
       bottomClip,
     };
@@ -836,7 +861,8 @@ function layoutAnchoredImage(
     pmStart: block.pmStart,
     pmEnd: block.pmEnd,
     isAnchored: true,
-    zIndex: anchor.behindDoc ? -1 : 1,
+    // relativeHeight = OOXML z-order among anchored objects (Word stacking).
+    zIndex: anchor.behindDoc ? -1 : contentZIndex(anchor.relativeHeight ?? 1),
   };
 
   // Add directly to page without affecting cursor
@@ -867,7 +893,8 @@ function layoutTextBox(
       pmStart: block.pmStart,
       pmEnd: block.pmEnd,
       isFloating: true,
-      zIndex: block.wrapType === 'behind' ? -1 : 1,
+      // relativeHeight = OOXML z-order (cover titles stack over the banner).
+      zIndex: block.wrapType === 'behind' ? -1 : contentZIndex(block.relativeHeight ?? 1),
     };
     state.page.fragments.push(fragment);
     return;

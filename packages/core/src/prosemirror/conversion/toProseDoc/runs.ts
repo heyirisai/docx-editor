@@ -398,6 +398,7 @@ function convertImage(image: Image): PMNode {
     effectExtentRight,
     layoutInCell: image.layoutInCell,
     allowOverlap: image.allowOverlap,
+    relativeHeight: image.relativeHeight,
   });
 }
 

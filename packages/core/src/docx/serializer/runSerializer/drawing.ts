@@ -266,7 +266,7 @@ export function serializeDrawingContent(content: DrawingContent): string {
 
   return [
     '<w:drawing>',
-    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="${image.layoutInCell === false ? '0' : '1'}" allowOverlap="${image.allowOverlap === false ? '0' : '1'}">`,
+    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="${intAttr(image.relativeHeight ?? 251658240)}" behindDoc="${behindDoc}" locked="0" layoutInCell="${image.layoutInCell === false ? '0' : '1'}" allowOverlap="${image.allowOverlap === false ? '0' : '1'}">`,
     '<wp:simplePos x="0" y="0"/>',
     position,
     `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
@@ -389,7 +389,7 @@ export function serializeShapeContent(content: ShapeContent): string {
 
   return [
     '<w:drawing>',
-    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="251658240" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
+    `<wp:anchor distT="${intAttr(distT)}" distB="${intAttr(distB)}" distL="${intAttr(distL)}" distR="${intAttr(distR)}" simplePos="0" relativeHeight="${intAttr(shape.relativeHeight ?? 251658240)}" behindDoc="${behindDoc}" locked="0" layoutInCell="1" allowOverlap="1">`,
     '<wp:simplePos x="0" y="0"/>',
     position,
     `<wp:extent cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,

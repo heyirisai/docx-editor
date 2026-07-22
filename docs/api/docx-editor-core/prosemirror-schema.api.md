@@ -91,6 +91,7 @@ export interface ImageAttrs {
     layoutInCell?: boolean;
     opacity?: number;
     position?: ImagePositionAttrs;
+    relativeHeight?: number;
     // (undocumented)
     rId?: string;
     // (undocumented)

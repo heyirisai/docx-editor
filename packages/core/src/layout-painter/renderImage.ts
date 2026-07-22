@@ -179,6 +179,13 @@ export function renderImageFragment(
   imgEl.style.objectFit = 'contain';
   imgEl.style.display = 'block';
 
+  // OOXML srcRect crop / picture opacity — without this, a heavily cropped
+  // source (a badge strip cut out of a full-page screenshot) renders as the
+  // whole screenshot squashed into the display box.
+  if (hasImageVisualAttrs(block)) {
+    applyImageVisualAttrs(imgEl, block);
+  }
+
   // Apply transform if present (rotation, flip)
   if (block.transform) {
     imgEl.style.transform = block.transform;

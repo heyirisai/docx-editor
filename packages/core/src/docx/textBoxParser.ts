@@ -313,6 +313,13 @@ export function parseTextBox(drawingEl: XmlElement): TextBox | null {
     if (wrap) {
       textBox.wrap = wrap;
     }
+
+    // Z-order among overlapping anchored objects — Word stacks by this
+    // value (cover title text boxes paint over the banner image).
+    const relativeHeight = parseNumericAttribute(container, null, 'relativeHeight');
+    if (relativeHeight !== null && relativeHeight !== undefined) {
+      textBox.relativeHeight = relativeHeight;
+    }
   }
 
   return textBox;

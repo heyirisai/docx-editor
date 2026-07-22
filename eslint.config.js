@@ -191,15 +191,36 @@ export default [
     },
   },
 
+  // layout-engine/index.ts is the layout pipeline core: the per-FlowBlock
+  // layout switch (see the FlowBlock invariant) plus table/image/text-box
+  // pagination that shares its paginator state. Bumped modestly for the
+  // Word table-pagination fidelity rules rather than splitting the shared
+  // pagination loop across files.
+  {
+    files: ['packages/core/src/layout-engine/index.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1050, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
+  // renderPage.ts sits at the default cap; bumped minimally for the
+  // page-overlay z-band import.
+  {
+    files: ['packages/core/src/layout-painter/renderPage.ts'],
+    rules: {
+      'max-lines': ['error', { max: 1010, skipBlankLines: false, skipComments: false }],
+    },
+  },
+
   // layout-engine/types.ts is the canonical schema definition for the
   // layout model — single file by design (cross-referencing types). Bumped
-  // modestly above the default to accommodate new revision-tracking and
-  // table-pagination fields without forcing a split that would obscure the
-  // schema.
+  // modestly above the default to accommodate new revision-tracking,
+  // table-pagination, and anchored-object z-order/crop fields without
+  // forcing a split that would obscure the schema.
   {
     files: ['packages/core/src/layout-engine/types.ts'],
     rules: {
-      'max-lines': ['error', { max: 1085, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1095, skipBlankLines: false, skipComments: false }],
     },
   },
 
