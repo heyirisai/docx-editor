@@ -1,5 +1,11 @@
 # @eigenpal/docx-editor-core
 
+## 1.11.0
+
+### Minor Changes
+
+- f705c04: Rendering fidelity: anchored-object z-order, header/footer placement, table page-split rules, theme-color text box fills, srcRect crop clamping.
+
 ## 1.10.0
 
 ## 1.9.1
