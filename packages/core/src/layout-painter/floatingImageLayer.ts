@@ -1,5 +1,7 @@
 import { contentZIndex } from '../layout-engine/zOrder';
 import { applyImageVisualAttrs, hasImageVisualAttrs } from './renderImage';
+import { setImageAssetSource } from './imageAssets';
+import type { LazyImageAssetLoader } from './imageAssets';
 
 /**
  * Minimum fields the floating-image painter needs. Page-level and cell-level
@@ -7,6 +9,7 @@ import { applyImageVisualAttrs, hasImageVisualAttrs } from './renderImage';
  */
 export interface FloatingImagePaintRecord {
   src: string;
+  assetId?: string;
   width: number;
   height: number;
   alt?: string;
@@ -41,6 +44,7 @@ export interface FloatingImagesLayerOptions {
   sizing: 'inset0' | 'fullSize';
   /** `behind` skips z-index so DOM order keeps the layer below body fragments. */
   layerMode: 'front' | 'behind';
+  imageAssetLoader?: LazyImageAssetLoader;
 }
 
 /**
@@ -93,7 +97,16 @@ export function renderFloatingImagesLayer(
     if (floatImg.pmEnd !== undefined) container.dataset.pmEnd = String(floatImg.pmEnd);
 
     const img = doc.createElement('img');
-    img.src = floatImg.src;
+    setImageAssetSource(
+      img,
+      {
+        assetId: floatImg.assetId,
+        src: floatImg.src,
+        width: floatImg.width,
+        height: floatImg.height,
+      },
+      options.imageAssetLoader
+    );
     img.style.width = `${floatImg.width}px`;
     img.style.height = `${floatImg.height}px`;
     img.style.display = 'block';

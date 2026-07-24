@@ -19,6 +19,7 @@ import type {
 import type { RenderContext } from '../renderPage';
 import { isFloatingImageRun } from '../floatingImageFlow';
 import { applyImageVisualAttrs, hasImageVisualAttrs } from '../renderImage';
+import { setImageAssetSource, type LazyImageAssetLoader } from '../imageAssets';
 import { resolveFontFamily } from '../../utils/fontResolver';
 import {
   PARAGRAPH_CLASS_NAMES,
@@ -450,11 +451,19 @@ function applyInlineImageDist(el: HTMLElement, run: ImageRun): void {
   if (run.distBottom) el.style.marginBottom = `${run.distBottom}px`;
 }
 
-function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
+function renderInlineImageRun(
+  run: ImageRun,
+  doc: Document,
+  imageAssetLoader?: LazyImageAssetLoader
+): HTMLElement {
   const img = doc.createElement('img');
   img.className = `${PARAGRAPH_CLASS_NAMES.run} ${PARAGRAPH_CLASS_NAMES.image}`;
 
-  img.src = run.src;
+  setImageAssetSource(
+    img,
+    { assetId: run.assetId, src: run.src, width: run.width, height: run.height },
+    imageAssetLoader
+  );
   img.width = run.width;
   img.height = run.height;
   // Lock dimensions explicitly: when only the width/height attributes are set,
@@ -534,7 +543,11 @@ function renderInlineImageRun(run: ImageRun, doc: Document): HTMLElement {
 /**
  * Render a block image (on its own line, like topAndBottom)
  */
-function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
+function renderBlockImage(
+  run: ImageRun,
+  doc: Document,
+  imageAssetLoader?: LazyImageAssetLoader
+): HTMLElement {
   const container = doc.createElement('div');
   container.className = 'layout-block-image';
   container.style.display = 'block';
@@ -543,7 +556,11 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
   container.style.marginBottom = `${run.distBottom ?? 6}px`;
 
   const img = doc.createElement('img');
-  img.src = run.src;
+  setImageAssetSource(
+    img,
+    { assetId: run.assetId, src: run.src, width: run.width, height: run.height },
+    imageAssetLoader
+  );
   img.width = run.width;
   img.height = run.height;
   // Global CSS reset (Tailwind preflight) sets img { display: block },
@@ -588,17 +605,21 @@ function renderBlockImage(run: ImageRun, doc: Document): HTMLElement {
  * Note: Floating images (square/tight/through) are handled separately at paragraph level,
  * not through this function. If they reach here, render as block.
  */
-export function renderImageRun(run: ImageRun, doc: Document): HTMLElement {
+export function renderImageRun(
+  run: ImageRun,
+  doc: Document,
+  imageAssetLoader?: LazyImageAssetLoader
+): HTMLElement {
   // Floating images should be handled at paragraph level, not here
   // If they reach here (e.g., inside table cells), render as block
   let el: HTMLElement;
   if (isFloatingImageRun(run)) {
-    el = renderBlockImage(run, doc);
+    el = renderBlockImage(run, doc, imageAssetLoader);
   } else if (run.displayMode === 'block' || run.wrapType === 'topAndBottom') {
-    el = renderBlockImage(run, doc);
+    el = renderBlockImage(run, doc, imageAssetLoader);
   } else {
     // Default: inline
-    el = renderInlineImageRun(run, doc);
+    el = renderInlineImageRun(run, doc, imageAssetLoader);
   }
   applyImageRevisionStyle(el, run);
   return el;
@@ -689,7 +710,7 @@ export function renderRun(run: Run, doc: Document, context?: RenderContext): HTM
     return renderTabRun(run, doc, 48, undefined); // Default 0.5 inch tab
   }
   if (isImageRun(run)) {
-    return renderImageRun(run, doc);
+    return renderImageRun(run, doc, context?.imageAssetLoader);
   }
   if (isLineBreakRun(run)) {
     return renderLineBreakRun(run, doc);

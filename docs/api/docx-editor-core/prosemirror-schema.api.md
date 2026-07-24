@@ -63,9 +63,11 @@ export interface ImageAttrs {
     allowOverlap?: boolean;
     // (undocumented)
     alt?: string;
+    assetId?: string;
     borderColor?: string;
     borderStyle?: string;
     borderWidth?: number;
+    collaborationId?: string;
     // (undocumented)
     cropBottom?: number;
     // (undocumented)
@@ -140,6 +142,7 @@ export interface ParagraphAttrs {
         between?: BorderSpec;
         bar?: BorderSpec;
     };
+    collaborationId?: string;
     contextualSpacing?: boolean;
     // (undocumented)
     defaultTextFormatting?: TextFormatting;
@@ -228,6 +231,7 @@ export interface TableAttrs {
         left?: number;
         right?: number;
     };
+    collaborationId?: string;
     columnWidths?: number[];
     floating?: FloatingTableProperties;
     justification?: 'left' | 'center' | 'right';
@@ -261,6 +265,7 @@ export interface TableCellAttrs {
         vMerge: 'rest' | 'cont';
         vMergeOrig?: 'rest' | 'cont';
     } | null;
+    collaborationId?: string;
     colspan: number;
     colwidth?: number[] | null;
     margins?: {
@@ -282,6 +287,7 @@ export interface TableCellAttrs {
 
 // @public
 export interface TableRowAttrs {
+    collaborationId?: string;
     height?: number;
     heightRule?: string;
     isHeader?: boolean;

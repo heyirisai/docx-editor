@@ -35,6 +35,7 @@ import type { HyperlinkPopupData } from '../ui/HyperlinkPopup';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import type { ReactSidebarItem } from '../../plugin-api/types';
 import type { RenderedDomContext } from '../../plugin-api/types';
+import type { ImageAssetResolver } from '@eigenpal/docx-editor-core/layout-painter';
 
 /**
  * Body of the editor: the paged ProseMirror host, its sidebar overlay
@@ -102,6 +103,8 @@ export function DocxEditorPagedArea({
   comments,
   resolvedCommentIds,
   resolvedIdsForRender,
+  imageAssetResolver,
+  forcePageVirtualization,
   setShowCommentsSidebar,
   // Scroll page indicator
   onTotalPagesChange,
@@ -177,6 +180,8 @@ export function DocxEditorPagedArea({
   comments: Comment[];
   resolvedCommentIds: Set<number>;
   resolvedIdsForRender: Set<number>;
+  imageAssetResolver?: ImageAssetResolver;
+  forcePageVirtualization?: boolean;
   setShowCommentsSidebar: React.Dispatch<React.SetStateAction<boolean>>;
   onTotalPagesChange: (totalPages: number) => void;
   floatingCommentBtn: { top: number; left: number } | null;
@@ -328,6 +333,8 @@ export function DocxEditorPagedArea({
         footerContent={footerContent}
         firstPageHeaderContent={firstPageHeaderContent}
         firstPageFooterContent={firstPageFooterContent}
+        imageAssetResolver={imageAssetResolver}
+        forcePageVirtualization={forcePageVirtualization}
         onHeaderFooterDoubleClick={onHeaderFooterDoubleClick}
         hfEditMode={hfEditPosition}
         onBodyClick={onBodyClick}

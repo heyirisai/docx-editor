@@ -159,6 +159,7 @@ describe('package.json exports map', () => {
       './prosemirror/commentIdAllocator',
       './utils/autoScroll',
       './editor',
+      './collaboration',
     ]);
     const unexpected = Object.keys(pkg.exports).filter((subpath) => !approved.has(subpath));
     expect(unexpected).toEqual([]);

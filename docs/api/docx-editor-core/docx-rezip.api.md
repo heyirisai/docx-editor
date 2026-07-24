@@ -65,6 +65,7 @@ export function repackDocxFromRaw(doc: Document_2, rawContent: RawDocxContent, o
 export interface RepackOptions {
     compressionLevel?: number;
     modifiedBy?: string;
+    preserveUnreferencedMedia?: boolean;
     updateModifiedDate?: boolean;
 }
 

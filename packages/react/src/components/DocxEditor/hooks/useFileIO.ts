@@ -12,8 +12,11 @@ import {
   clearTrackedChanges,
 } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { readDocxFileFromInput, type DocxInput } from '@eigenpal/docx-editor-core/utils';
-import { insertImageFromFile } from '@eigenpal/docx-editor-core/prosemirror/commands';
-import { renderAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
+import {
+  insertImageFromFile,
+  type ImageUploadHandler,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
+import { renderAllPagesForPrint } from '@eigenpal/docx-editor-core/layout-painter';
 import type { EditorView } from 'prosemirror-view';
 import type { PagedEditorRef } from '../PagedEditor';
 
@@ -41,6 +44,7 @@ export function useFileIO({
   onError,
   onPrint,
   onDocumentNameChange,
+  imageUploadHandler,
   loadBuffer,
   getActiveEditorView,
   focusActiveEditor,
@@ -55,6 +59,7 @@ export function useFileIO({
   onError: ((error: Error) => void) | undefined;
   onPrint: (() => void) | undefined;
   onDocumentNameChange: ((name: string) => void) | undefined;
+  imageUploadHandler?: ImageUploadHandler;
   loadBuffer: (buffer: DocxInput) => Promise<void>;
   getActiveEditorView: () => EditorView | null | undefined;
   focusActiveEditor: () => void;
@@ -125,7 +130,7 @@ export function useFileIO({
     [agentRef, pagedEditorRef, comments, onSave, onError]
   );
 
-  const handleDirectPrint = useCallback(() => {
+  const handleDirectPrint = useCallback(async () => {
     // Find the pages container and clone its content into a clean print window
     const pagesEl = containerRef.current?.querySelector('.paged-editor__pages');
     if (!pagesEl) {
@@ -134,14 +139,27 @@ export function useFileIO({
       return;
     }
 
-    // Virtualization keeps off-screen pages as empty shells. Without this
-    // they clone as blank pages in the print output (issue #579).
-    renderAllPagesNow(pagesEl as HTMLElement);
-
+    // Open synchronously while this callback still has the user's click
+    // activation; opening after the awaited image work is popup-blocked.
     const printWindow = window.open('', '_blank');
+    let releasePrintAssets = (): void => {};
+    try {
+      // Virtualization keeps off-screen pages as empty shells. External
+      // images in those new shells also resolve asynchronously, so wait for
+      // every source and decode before cloning the print tree.
+      ({ release: releasePrintAssets } = await renderAllPagesForPrint(pagesEl as HTMLElement));
+    } catch (error) {
+      printWindow?.close();
+      onError?.(toFileIOError(error, 'Failed to prepare document for print'));
+      return;
+    }
     if (!printWindow) {
       // Popup blocked — fall back to window.print()
-      window.print();
+      try {
+        window.print();
+      } finally {
+        releasePrintAssets();
+      }
       onPrint?.();
       return;
     }
@@ -183,25 +201,36 @@ body { background: white; }
     const fontStyleEl = printWindow.document.createElement('style');
     fontStyleEl.textContent = fontFaceRules.join('\n');
     printWindow.document.head.appendChild(fontStyleEl);
+    let printFinished = false;
+    const printAndClose = () => {
+      if (printFinished) return;
+      printFinished = true;
+      try {
+        printWindow.print();
+        printWindow.close();
+      } finally {
+        releasePrintAssets();
+      }
+    };
+    // Wait for fonts/images then print
+    printWindow.onload = printAndClose;
     printWindow.document.body.appendChild(printWindow.document.importNode(pagesClone, true));
     printWindow.document.close();
 
-    // Wait for fonts/images then print
-    printWindow.onload = () => {
-      printWindow.print();
-      printWindow.close();
-    };
-
     // Fallback if onload doesn't fire (some browsers)
     setTimeout(() => {
-      if (!printWindow.closed) {
-        printWindow.print();
-        printWindow.close();
+      if (printWindow.closed) {
+        if (!printFinished) {
+          printFinished = true;
+          releasePrintAssets();
+        }
+        return;
       }
+      printAndClose();
     }, 1000);
 
     onPrint?.();
-  }, [containerRef, onPrint]);
+  }, [containerRef, onError, onPrint]);
 
   const handleDownloadDocument = useCallback(async () => {
     const buffer = await handleSave();
@@ -261,12 +290,18 @@ body { background: white; }
       // `insertImageFromFile` is the shared core flow (Vue calls it too): read
       // the file, fit the image to the page width, and insert it inline with
       // the `insertion` mark when suggesting mode is active.
-      if (file && view) insertImageFromFile(view, file, { onInserted: focusActiveEditor });
+      if (file && view) {
+        void insertImageFromFile(view, file, {
+          imageUploadHandler,
+          onError: (error) => onError?.(toFileIOError(error, 'Failed to insert image')),
+          onInserted: focusActiveEditor,
+        });
+      }
 
       // Reset the input so the same file can be selected again
       e.target.value = '';
     },
-    [getActiveEditorView, focusActiveEditor]
+    [getActiveEditorView, focusActiveEditor, imageUploadHandler, onError]
   );
 
   return {

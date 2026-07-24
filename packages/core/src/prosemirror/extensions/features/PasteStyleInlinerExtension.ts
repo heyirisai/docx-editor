@@ -71,7 +71,7 @@ function inlineStylesFromStyleBlocks(doc: Document): void {
     declarations: Record<string, string>;
   }> = [];
 
-  for (const styleEl of styleElements) {
+  for (const styleEl of Array.from(styleElements)) {
     const cssText = styleEl.textContent || '';
     if (!cssText.trim()) continue;
 
@@ -124,7 +124,7 @@ function inlineStylesFromStyleBlocks(doc: Document): void {
   for (const { selector, declarations } of rulesWithSelectors) {
     try {
       const matchingElements = doc.body.querySelectorAll(selector);
-      for (const el of matchingElements) {
+      for (const el of Array.from(matchingElements)) {
         mergeStylesOntoElement(el as HTMLElement, declarations);
       }
     } catch {
@@ -145,7 +145,7 @@ function inlineStylesFromStyleBlocks(doc: Document): void {
  */
 function unwrapGoogleDocsStructuralB(doc: Document): void {
   const structuralBs = doc.body.querySelectorAll('b[id^="docs-internal-guid-"]');
-  for (const b of structuralBs) {
+  for (const b of Array.from(structuralBs)) {
     const parent = b.parentNode;
     if (!parent) continue;
     while (b.firstChild) {
@@ -171,7 +171,7 @@ function transformPastedHTML(html: string): string {
     if (hasStyleBlock) {
       inlineStylesFromStyleBlocks(doc);
       const styleElements = doc.querySelectorAll('style');
-      for (const el of styleElements) {
+      for (const el of Array.from(styleElements)) {
         el.remove();
       }
     }

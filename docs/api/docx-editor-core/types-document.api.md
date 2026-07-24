@@ -253,6 +253,14 @@ export interface EndnoteProperties {
     position?: EndnotePosition;
 }
 
+// @public
+export interface ExternalMediaManifestEntry {
+    assetId: string;
+    filename?: string;
+    mimeType: string;
+    path: string;
+}
+
 // @public (undocumented)
 export type Field = SimpleField | ComplexField;
 
@@ -393,6 +401,7 @@ export interface Hyperlink {
 interface Image_2 {
     allowOverlap?: boolean;
     alt?: string;
+    assetId?: string;
     crop?: ImageCrop;
     decorative?: boolean;
     effects?: {
@@ -565,8 +574,9 @@ export interface MathEquation {
 
 // @public
 export interface MediaFile {
+    assetId?: string;
     base64?: string;
-    data: ArrayBuffer;
+    data?: ArrayBuffer;
     dataUrl?: string;
     filename?: string;
     mimeType: string;
@@ -759,6 +769,7 @@ export interface ParagraphPropertyChange {
 
 // @public
 export interface PictureWatermark {
+    assetId?: string;
     contentType?: string;
     data?: Uint8Array;
     dataUrl?: string;

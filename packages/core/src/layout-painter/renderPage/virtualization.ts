@@ -37,6 +37,7 @@ function buildPageRenderArgs(
     totalPages,
     section: 'body',
     resolvedCommentIds: options.resolvedCommentIds,
+    imageAssetLoader: options.imageAssetLoader,
   };
   const pageOptions: RenderPageOptions = { ...options };
   // Per-page header/footer selection when titlePg is enabled
@@ -61,10 +62,12 @@ interface PageShellState {
 
 interface PageContainerState {
   pageStates: PageShellState[];
+  virtualized: boolean;
   totalPages: number;
   optionsHash: string;
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>;
   currentOptions: FullPageOptions;
+  imageAssetLoader: FullPageOptions['imageAssetLoader'];
 }
 
 interface PageContainer extends HTMLElement {
@@ -152,6 +155,7 @@ function computeOptionsHash(options: RenderPageOptions): string {
   // Header/footer distances
   if (options.headerDistance !== undefined) parts.push(`hd:${options.headerDistance}`);
   if (options.footerDistance !== undefined) parts.push(`fd:${options.footerDistance}`);
+  if (options.forcePageVirtualization) parts.push('force-virtualization');
 
   return parts.join('|');
 }
@@ -200,11 +204,16 @@ export function renderPages(
   const pc = container as PageContainer;
   const prevState = pc.__pageRenderState;
   const currentOptionsHash = computeOptionsHash(options);
-  const useVirtualization = totalPages >= VIRTUALIZATION_THRESHOLD;
+  const useVirtualization =
+    options.forcePageVirtualization === true || totalPages >= VIRTUALIZATION_THRESHOLD;
 
   // Determine if we can do an incremental update
   const canIncremental =
-    prevState && prevState.optionsHash === currentOptionsHash && useVirtualization;
+    prevState &&
+    prevState.virtualized &&
+    prevState.optionsHash === currentOptionsHash &&
+    prevState.imageAssetLoader === options.imageAssetLoader &&
+    useVirtualization;
 
   if (canIncremental) {
     // --- INCREMENTAL UPDATE PATH ---
@@ -289,6 +298,7 @@ export function renderPages(
           observer.unobserve(shell);
         }
         prevDataMap.delete(shell);
+        prevState.imageAssetLoader?.releaseSubtree(shell);
         container.removeChild(shell);
       }
       prevShells.length = pages.length;
@@ -319,6 +329,10 @@ export function renderPages(
   }
 
   // Clear existing content
+  prevState?.imageAssetLoader?.releaseSubtree(container);
+  if (!prevState) {
+    options.imageAssetLoader?.releaseSubtree(container);
+  }
   container.innerHTML = '';
   pc.__pageRenderState = undefined;
 
@@ -352,8 +366,22 @@ export function renderPages(
   }
 
   if (!useVirtualization) {
-    // Store state for potential future incremental updates (won't be used
-    // since small docs skip the incremental path, but keeps data consistent)
+    const pageDataMap = new Map<HTMLElement, { page: Page; index: number; rendered: boolean }>();
+    for (let i = 0; i < pages.length; i++) {
+      pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: true });
+    }
+    pc.__pageRenderState = {
+      pageStates: pageShells.map((element, i) => ({
+        element,
+        fingerprint: fingerprints[i],
+      })),
+      virtualized: false,
+      totalPages,
+      optionsHash: currentOptionsHash,
+      pageDataMap,
+      currentOptions: options,
+      imageAssetLoader: options.imageAssetLoader,
+    };
     return 'full';
   }
 
@@ -429,7 +457,7 @@ export function renderPages(
           }
         }
         if (!keepRendered && nearIndices.size > 0) {
-          depopulatePageShell(el, liveDataMap);
+          depopulatePageShell(el, liveDataMap, liveOptions.imageAssetLoader);
         }
       }
     },
@@ -449,10 +477,12 @@ export function renderPages(
   pc.__pageObserver = observer;
   pc.__pageRenderState = {
     pageStates: pageShells.map((el, i) => ({ element: el, fingerprint: fingerprints[i] })),
+    virtualized: true,
     totalPages,
     optionsHash: currentOptionsHash,
     pageDataMap,
     currentOptions: options,
+    imageAssetLoader: options.imageAssetLoader,
   };
 
   // Eagerly render the first few pages so the initial view isn't blank
@@ -510,9 +540,13 @@ function repopulatePageContent(
 
   if (newContentEl && oldContentEl) {
     // Replace only the content area — header/footer stay untouched
+    options.imageAssetLoader?.releaseSubtree(oldContentEl);
     shell.replaceChild(newContentEl, oldContentEl);
+    options.imageAssetLoader?.releaseSubtree(fullPageEl);
   } else {
     // Fallback: full replace if structure doesn't match
+    options.imageAssetLoader?.releaseSubtree(shell);
+    options.imageAssetLoader?.releaseSubtree(fullPageEl);
     shell.innerHTML = '';
     data.rendered = false;
     populatePageShell(shell, pageDataMap, totalPages, options);
@@ -524,11 +558,13 @@ function repopulatePageContent(
  */
 function depopulatePageShell(
   shell: HTMLElement,
-  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  imageAssetLoader?: FullPageOptions['imageAssetLoader']
 ): void {
   const data = pageDataMap.get(shell);
   if (!data || !data.rendered) return;
 
+  imageAssetLoader?.releaseSubtree(shell);
   shell.innerHTML = '';
   data.rendered = false;
 }
@@ -559,4 +595,29 @@ export function renderAllPagesNow(container: HTMLElement): number {
     populated++;
   }
   return populated;
+}
+
+/**
+ * Materialize every virtual page and wait for all external images in the
+ * resulting subtree to resolve and decode before a print/DOM snapshot.
+ */
+export interface PrintPageMaterialization {
+  populated: number;
+  release: () => void;
+}
+
+export async function renderAllPagesForPrint(
+  container: HTMLElement
+): Promise<PrintPageMaterialization> {
+  const populated = renderAllPagesNow(container);
+  const state = (container as PageContainer).__pageRenderState;
+  const loader = state?.currentOptions.imageAssetLoader;
+  const release = loader?.holdLeases() ?? (() => {});
+  try {
+    await loader?.resolveSubtree(container);
+    return { populated, release };
+  } catch (error) {
+    release();
+    throw error;
+  }
 }

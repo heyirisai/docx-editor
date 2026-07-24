@@ -25,7 +25,7 @@ import {
 } from '@eigenpal/docx-editor-core/utils';
 import type { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import { findPageIndexContainingPmPos } from '@eigenpal/docx-editor-core/layout-engine';
-import { renderAllPagesNow } from '@eigenpal/docx-editor-core/layout-painter';
+import { renderAllPagesForPrint } from '@eigenpal/docx-editor-core/layout-painter';
 import {
   findContentControlsInPM,
   findContentControlPos,
@@ -102,12 +102,24 @@ export function useDocxEditorRefApi(opts: UseDocxEditorRefApiOptions): {
   exposed: DocxEditorRef;
 } {
   function print() {
-    // Virtualization keeps off-screen pages as empty shells. Without this
-    // they print as blank pages past the visible band (issue #579).
     const pagesEl = opts.pagesRef.value;
-    if (pagesEl) renderAllPagesNow(pagesEl);
-    opts.onPrint?.();
-    window.print();
+    if (!pagesEl) {
+      opts.onPrint?.();
+      window.print();
+      return;
+    }
+    // Virtualized shells and their external images must both be ready before
+    // the browser takes its synchronous print snapshot.
+    void renderAllPagesForPrint(pagesEl)
+      .catch(() => undefined)
+      .then((materialization) => {
+        opts.onPrint?.();
+        try {
+          window.print();
+        } finally {
+          materialization?.release();
+        }
+      });
   }
 
   function openPrintPreview() {

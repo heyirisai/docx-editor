@@ -127,7 +127,15 @@ export {
   insertImageFromFile,
   INSERT_IMAGE_MAX_WIDTH_PX,
 } from './image';
-export type { AnchorWrapType, ImageLayoutTarget, SetImageWrapTypeOptions } from './image';
+export type {
+  AnchorWrapType,
+  ImageLayoutTarget,
+  ImageUploadContext,
+  ImageUploadHandler,
+  ImageUploadResult,
+  InsertImageFromFileOptions,
+  SetImageWrapTypeOptions,
+} from './image';
 
 // Table of Contents
 export { generateTOC } from './paragraph';

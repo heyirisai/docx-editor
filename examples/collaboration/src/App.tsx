@@ -1,10 +1,28 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { createEmptyDocument } from '@eigenpal/docx-editor-core';
-import { DocxEditor } from '@eigenpal/docx-editor-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createEmptyDocument, parseCollaborationPackage } from '@eigenpal/docx-editor-core';
+import type { ImageAssetResolver } from '@eigenpal/docx-editor-core/layout-painter';
+import { schema } from '@eigenpal/docx-editor-core/prosemirror';
+import type { Document } from '@eigenpal/docx-editor-core/types/document';
+import { DocxEditor, type DocxEditorRef } from '@eigenpal/docx-editor-react';
+import { prosemirrorToYXmlFragment } from 'y-prosemirror';
 import { GitHubBadge } from '../../shared/GitHubBadge';
+import { createCachedImageAssetResolver } from '../../shared/cachedImageAssetResolver';
+import { loadExternalMediaFixture } from '../../shared/externalMediaFixture';
 import { AvatarStack } from './AvatarStack';
 import { useCollaboration, yHistoryOverride } from './useCollaboration';
 import { getOrCreateRoomFromUrl, loadOrCreateUser } from './identity';
+
+declare global {
+  interface Window {
+    __COLLAB_PERF__?: {
+      getClientId: () => number;
+      getDocSize: () => number | null;
+      getPeerCount: () => number;
+      getTextPrefix: () => string;
+      isReady: () => boolean;
+    };
+  }
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -75,13 +93,72 @@ export function App() {
   const [user] = useState(loadOrCreateUser);
   const [room] = useState(getOrCreateRoomFromUrl);
   const [shareCopied, setShareCopied] = useState(false);
+  const editorRef = useRef<DocxEditorRef>(null);
+  const query = useMemo(() => new URLSearchParams(window.location.search), []);
+  const externalMediaPerf = query.get('externalMediaPerf') === '1';
+  const shouldSeedExternalMedia = query.get('seed') === '1';
+  const [externalDocument, setExternalDocument] = useState<Document | null>(null);
+  const [externalLoadError, setExternalLoadError] = useState<string | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
 
-  const { plugins, users, status, comments, setComments } = useCollaboration(room, user);
+  const { ydoc, plugins, users, status, comments, setComments } = useCollaboration(room, user, {
+    localOnly: externalMediaPerf,
+  });
   const { zoom: autoZoom, isMobile } = useResponsiveLayout();
 
   // Empty document acts purely as a schema seed. ySyncPlugin populates the real
   // content from the Y.Doc, which is why we set externalContent on the editor.
   const seedDocument = useMemo(() => createEmptyDocument(), []);
+  const externalImageAssets = useMemo(() => {
+    if (!externalMediaPerf) return undefined;
+    return createCachedImageAssetResolver(
+      (assetId) => `/e2e-external-assets/${encodeURIComponent(assetId)}`
+    );
+  }, [externalMediaPerf]);
+  const externalImageAssetResolver: ImageAssetResolver | undefined = externalImageAssets?.resolver;
+  useEffect(() => () => externalImageAssets?.dispose(), [externalImageAssets]);
+
+  useEffect(() => {
+    if (!externalMediaPerf) return;
+
+    const controller = new AbortController();
+    void loadExternalMediaFixture(controller.signal, parseCollaborationPackage)
+      .then((parsed) => {
+        if (controller.signal.aborted) return;
+
+        const fragment = ydoc.getXmlFragment('prosemirror');
+        if (shouldSeedExternalMedia && fragment.length === 0) {
+          prosemirrorToYXmlFragment(schema.nodeFromJSON(parsed.projection.document), fragment);
+        }
+        setExternalDocument(parsed.document);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setExternalLoadError(
+          error instanceof Error ? error.message : 'Failed to load collaboration fixture'
+        );
+      });
+
+    return () => controller.abort();
+  }, [externalMediaPerf, shouldSeedExternalMedia, ydoc]);
+
+  useEffect(() => {
+    if (!externalMediaPerf) return;
+    window.__COLLAB_PERF__ = {
+      getClientId: () => ydoc.clientID,
+      getDocSize: () => editorRef.current?.getEditorRef()?.getState?.()?.doc.content.size ?? null,
+      getPeerCount: () => users.length,
+      getTextPrefix: () => {
+        const doc = editorRef.current?.getEditorRef()?.getState?.()?.doc;
+        if (!doc) return '';
+        return doc.textBetween(0, Math.min(doc.content.size, 4_096), '\n');
+      },
+      isReady: () => editorReady,
+    };
+    return () => {
+      delete window.__COLLAB_PERF__;
+    };
+  }, [editorReady, externalMediaPerf, users, ydoc]);
 
   const handleCopyShareLink = useCallback(async () => {
     try {
@@ -122,22 +199,32 @@ export function App() {
   return (
     <div style={styles.container}>
       <main style={styles.main}>
-        <DocxEditor
-          document={seedDocument}
-          externalContent
-          externalPlugins={plugins}
-          historyOverride={yHistoryOverride}
-          comments={comments}
-          onCommentsChange={setComments}
-          author={user.name}
-          showToolbar
-          showRuler={!isMobile}
-          showZoomControl
-          initialZoom={autoZoom}
-          renderLogo={renderLogo}
-          documentName={`Shared document — ${room}`}
-          renderTitleBarRight={renderTitleBarRight}
-        />
+        {externalLoadError ? (
+          <span role="alert">Error: {externalLoadError}</span>
+        ) : externalMediaPerf && !externalDocument ? (
+          <span>Loading external-media collaboration fixture...</span>
+        ) : (
+          <DocxEditor
+            ref={editorRef}
+            document={externalDocument ?? seedDocument}
+            externalContent
+            externalPlugins={plugins}
+            historyOverride={yHistoryOverride}
+            comments={comments}
+            onCommentsChange={setComments}
+            author={user.name}
+            showToolbar
+            showRuler={!isMobile}
+            showZoomControl
+            initialZoom={autoZoom}
+            imageAssetResolver={externalImageAssetResolver}
+            forcePageVirtualization={externalMediaPerf}
+            onEditorViewReady={() => setEditorReady(true)}
+            renderLogo={renderLogo}
+            documentName={`Shared document — ${room}`}
+            renderTitleBarRight={renderTitleBarRight}
+          />
+        )}
       </main>
     </div>
   );

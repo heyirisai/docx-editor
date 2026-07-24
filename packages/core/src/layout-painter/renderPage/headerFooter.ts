@@ -27,6 +27,7 @@ import { applyImageVisualAttrs, hasImageVisualAttrs, renderImageFragment } from 
 import { renderTextBoxFragment } from '../renderTextBox';
 import { emuToPixels } from '../../utils/units';
 import type { RenderContext, RenderPageOptions } from '../renderPage';
+import { setImageAssetSource } from '../imageAssets';
 
 /**
  * Header/footer content for rendering
@@ -486,7 +487,16 @@ export function renderHeaderFooterContent(
     }
 
     const img = doc.createElement('img');
-    img.src = floatImg.src;
+    setImageAssetSource(
+      img,
+      {
+        assetId: floatImg.run.assetId,
+        src: floatImg.src,
+        width: floatImg.width,
+        height: floatImg.height,
+      },
+      context.imageAssetLoader
+    );
     img.width = floatImg.width;
     img.height = floatImg.height;
     if (floatImg.alt) img.alt = floatImg.alt;

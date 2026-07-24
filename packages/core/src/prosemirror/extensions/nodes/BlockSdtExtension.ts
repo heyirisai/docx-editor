@@ -26,6 +26,7 @@ export const BlockSdtExtension = createNodeExtension({
     isolating: true,
     defining: true,
     attrs: {
+      collaborationId: { default: null },
       /** SDT type: richText, plainText, date, dropDownList, comboBox, checkbox, etc. */
       sdtType: { default: 'richText' },
       /** Unique numeric id (`w:id`). Stored as number|null. */

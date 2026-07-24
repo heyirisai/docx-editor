@@ -18,6 +18,7 @@ export const tableSpec: NodeSpec = {
   tableRole: 'table',
   isolating: true,
   attrs: {
+    collaborationId: { default: null },
     styleId: { default: null },
     width: { default: null },
     widthType: { default: null },
@@ -106,6 +107,7 @@ export const tableRowSpec: NodeSpec = {
   content: '(tableCell | tableHeader)+',
   tableRole: 'row',
   attrs: {
+    collaborationId: { default: null },
     height: { default: null },
     heightRule: { default: null },
     isHeader: { default: false },
@@ -266,6 +268,7 @@ export const tableCellSpec: NodeSpec = {
   tableRole: 'cell',
   isolating: true,
   attrs: {
+    collaborationId: { default: null },
     colspan: { default: 1 },
     rowspan: { default: 1 },
     colwidth: { default: null },
@@ -351,6 +354,7 @@ export const tableHeaderSpec: NodeSpec = {
   tableRole: 'header_cell',
   isolating: true,
   attrs: {
+    collaborationId: { default: null },
     colspan: { default: 1 },
     rowspan: { default: 1 },
     colwidth: { default: null },

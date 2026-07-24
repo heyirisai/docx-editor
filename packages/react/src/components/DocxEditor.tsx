@@ -79,8 +79,6 @@ import { createStarterKit } from '@eigenpal/docx-editor-core/prosemirror/extensi
 import { ExtensionManager } from '@eigenpal/docx-editor-core/prosemirror/extensions';
 import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 
-// Conversion (for HF inline editor save)
-
 // ProseMirror editor
 import {
   type SelectionState,
@@ -90,6 +88,7 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror';
 import type { ContentControlFilter, ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import {
+  type ImageUploadHandler,
   acceptChange,
   rejectChange,
   acceptChangeById,
@@ -101,7 +100,6 @@ import {
   resolveIsDark,
   subscribeSystemDark,
 } from '@eigenpal/docx-editor-core/utils';
-
 // Paginated editor
 import { type PagedEditorRef, DEFAULT_PAGE_WIDTH } from './DocxEditor/PagedEditor';
 
@@ -141,28 +139,21 @@ export interface DocxEditorProps {
   /** External ProseMirror plugins (from PluginHost) */
   externalPlugins?: import('prosemirror-state').Plugin[];
   /**
-   * When true, the editor treats the `document` prop as a schema seed only and
-   * does not load it into ProseMirror on mount. Content is expected to come from
-   * external sources — typically `externalPlugins` such as `ySyncPlugin` from
-   * `y-prosemirror`, but also any code that dispatches transactions directly.
-   *
-   * You must still pass a `document` prop (e.g., `createEmptyDocument()`) so the
-   * editor can build its schema and render the shell.
+   * Treat the `document` prop as a schema seed while `externalPlugins` or other
+   * transaction sources own content. A document is still required to build the
+   * editor schema and shell.
    */
   externalContent?: boolean;
+  imageAssetResolver?: import('@eigenpal/docx-editor-core/layout-painter').ImageAssetResolver;
+  /** Persist image bytes before publishing an opaque asset ID. */
+  imageUploadHandler?: ImageUploadHandler;
+  forcePageVirtualization?: boolean;
   /**
-   * Replaces built-in prosemirror-history undo/redo on the BODY editor with
-   * caller-supplied commands — for collab, where y-prosemirror's yUndoPlugin
-   * must own history so users only undo their own edits. Latched on mount;
-   * see {@link HistoryOverride} for details.
+   * Replace body-editor history with caller commands, allowing a collaboration
+   * plugin to own undo/redo. Latched on mount; see {@link HistoryOverride}.
    */
   historyOverride?: HistoryOverride;
-  /**
-   * Namespaces the comment/tracked-change ID allocator so IDs minted by this
-   * editor never collide with another collaborator's — pass a per-client
-   * unique 32-bit integer (with Yjs, the `doc.clientID`). Omit outside
-   * collaboration for the classic small sequential IDs.
-   */
+  /** Namespace comment/change IDs per collaborator (for example, Yjs `doc.clientID`). */
   commentIdNamespace?: number;
   /** Callback when editor view is ready (for PluginHost) */
   onEditorViewReady?: (view: import('prosemirror-view').EditorView) => void;
@@ -658,6 +649,9 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onCommentsSidebarOpenChange,
     externalPlugins,
     externalContent = false,
+    imageAssetResolver,
+    imageUploadHandler,
+    forcePageVirtualization = false,
     historyOverride,
     commentIdNamespace,
     onEditorViewReady,
@@ -831,12 +825,15 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
   // Extension manager — built once, provides schema + plugins + commands
   const extensionManager = useMemo(() => {
     const mgr = new ExtensionManager(
-      createStarterKit(latchedHistoryOverride ? { disable: ['history'] } : {})
+      createStarterKit({
+        ...(latchedHistoryOverride ? { disable: ['history'] } : {}),
+        imageUploadHandler,
+      })
     );
     mgr.buildSchema();
     mgr.initializeRuntime();
     return mgr;
-  }, [latchedHistoryOverride]);
+  }, [imageUploadHandler, latchedHistoryOverride]);
 
   // Refs (pagedEditorRef is declared earlier — useCommentManagement needs it)
   const hfEditorRef = useRef<InlineHeaderFooterEditorRef>(null);
@@ -948,6 +945,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     onError,
     onPrint,
     onDocumentNameChange,
+    imageUploadHandler,
     loadBuffer,
     getActiveEditorView,
     focusActiveEditor,
@@ -1897,6 +1895,8 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
             comments={comments}
             resolvedCommentIds={resolvedCommentIds}
             resolvedIdsForRender={resolvedIdsForRender}
+            imageAssetResolver={imageAssetResolver}
+            forcePageVirtualization={forcePageVirtualization}
             setShowCommentsSidebar={setShowCommentsSidebar}
             onTotalPagesChange={(totalPages) => {
               setScrollPageInfo((prev) =>

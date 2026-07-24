@@ -34,6 +34,7 @@ export interface CollaborativeUser {
 }
 
 export interface CollaborationState {
+  ydoc: Y.Doc;
   plugins: Plugin[];
   users: CollaborativeUser[];
   roomName: string;
@@ -48,19 +49,22 @@ const SIGNALING_SERVERS = ['wss://signaling.yjs.dev', 'wss://y-webrtc-signaling-
 
 export function useCollaboration(
   roomName: string,
-  localUser: { name: string; color: string }
+  localUser: { name: string; color: string },
+  options: { localOnly?: boolean } = {}
 ): CollaborationState {
   // Y.Doc, provider, prosemirror plugins, and the comments Y.Array are created
   // once per room. localUser changes (e.g. renaming) update awareness without
   // rebuilding the doc.
   const { ydoc, provider, plugins, yComments } = useMemo(() => {
     const ydoc = new Y.Doc();
-    const provider = new WebrtcProvider(roomName, ydoc, { signaling: SIGNALING_SERVERS });
+    const provider = new WebrtcProvider(roomName, ydoc, {
+      signaling: options.localOnly ? [] : SIGNALING_SERVERS,
+    });
     const fragment = ydoc.getXmlFragment('prosemirror');
     const plugins = [ySyncPlugin(fragment), yCursorPlugin(provider.awareness), yUndoPlugin()];
     const yComments = ydoc.getArray<Comment>('comments');
     return { ydoc, provider, plugins, yComments };
-  }, [roomName]);
+  }, [options.localOnly, roomName]);
 
   const [users, setUsers] = useState<CollaborativeUser[]>([]);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
@@ -132,5 +136,5 @@ export function useCollaboration(
     };
   }, [provider, ydoc]);
 
-  return { plugins, users, roomName, status, comments, setComments };
+  return { ydoc, plugins, users, roomName, status, comments, setComments };
 }

@@ -180,7 +180,7 @@ export function parseVmlImageContent(
     const idLower = (getAttribute(shape, null, 'id') ?? '').toLowerCase();
     if (isWatermarkShape(shape, idLower)) continue;
 
-    const { src, mimeType, filename } = resolveImageData(
+    const { assetId, src, mimeType, filename } = resolveImageData(
       rId,
       rels ?? undefined,
       media ?? undefined
@@ -220,6 +220,7 @@ export function parseVmlImageContent(
       // follow-up.
       wrap: { type: 'inline' },
     };
+    if (assetId) image.assetId = assetId;
     if (src) image.src = src;
     if (mimeType) image.mimeType = mimeType;
     if (filename) image.filename = filename;

@@ -26,6 +26,15 @@
 
 import JSZip from 'jszip';
 
+export interface UnzipOptions {
+  /**
+   * Whether to inflate entries under `word/media/`. Hosts using an external
+   * asset manifest disable this so image count and payload size do not affect
+   * parse-time allocations.
+   */
+  extractMedia?: boolean;
+}
+
 /**
  * Raw extracted content from a DOCX file
  */
@@ -88,7 +97,11 @@ export interface RawDocxContent {
  * @param buffer - DOCX file as ArrayBuffer
  * @returns Promise resolving to extracted content
  */
-export async function unzipDocx(buffer: ArrayBuffer): Promise<RawDocxContent> {
+export async function unzipDocx(
+  buffer: ArrayBuffer,
+  options: UnzipOptions = {}
+): Promise<RawDocxContent> {
+  const { extractMedia = true } = options;
   const zip = await JSZip.loadAsync(buffer);
 
   const content: RawDocxContent = {
@@ -176,9 +189,14 @@ export async function unzipDocx(buffer: ArrayBuffer): Promise<RawDocxContent> {
         content.footers.set(filename, xmlContent);
       }
     } else if (lowerPath.startsWith('word/media/')) {
-      // Media files (images, etc.)
-      const binaryContent = await file.async('arraybuffer');
-      content.media.set(path, binaryContent);
+      // External-media mode deliberately leaves these ZIP entries compressed.
+      // The original ZIP remains available for the legacy round-trip path, but
+      // parsing does not allocate one ArrayBuffer (and then one data URL) per
+      // image.
+      if (extractMedia) {
+        const binaryContent = await file.async('arraybuffer');
+        content.media.set(path, binaryContent);
+      }
     } else if (lowerPath.startsWith('word/fonts/')) {
       // Embedded fonts
       const binaryContent = await file.async('arraybuffer');

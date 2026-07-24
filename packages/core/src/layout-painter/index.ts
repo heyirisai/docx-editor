@@ -34,7 +34,9 @@ import {
   renderPage,
   renderPages,
   renderAllPagesNow,
+  renderAllPagesForPrint,
   type RenderContext,
+  type PrintPageMaterialization,
   type RenderPagesUpdateKind,
 } from './renderPage';
 import { isFloatingImageRun, isTextWrappingFloatingImageRun } from './floatingImageFlow';
@@ -43,12 +45,22 @@ import { renderFragment, FRAGMENT_CLASS_NAMES } from './renderFragment';
 import { renderTableFragment, TABLE_CLASS_NAMES } from './renderTable';
 import { renderImageFragment, IMAGE_CLASS_NAMES } from './renderImage';
 import { renderTextBoxFragment, TEXTBOX_CLASS_NAMES } from './renderTextBox';
+import {
+  LazyImageAssetLoader,
+  setImageAssetSource,
+  type ImageAssetRequest,
+  type ImageAssetResolver,
+  type ImageAssetSource,
+  type LazyImageAssetLoaderOptions,
+  type ResolvedImageAsset,
+} from './imageAssets';
 
 // Re-export render functions
 export {
   renderPage,
   renderPages,
   renderAllPagesNow,
+  renderAllPagesForPrint,
   renderParagraphFragment,
   renderTableFragment,
   renderImageFragment,
@@ -62,7 +74,15 @@ export {
   TEXTBOX_CLASS_NAMES,
   isFloatingImageRun,
   isTextWrappingFloatingImageRun,
+  LazyImageAssetLoader,
+  setImageAssetSource,
   type RenderContext,
+  type PrintPageMaterialization,
+  type ImageAssetRequest,
+  type ImageAssetResolver,
+  type ImageAssetSource,
+  type LazyImageAssetLoaderOptions,
+  type ResolvedImageAsset,
 };
 export type { RenderPagesUpdateKind };
 export type { HeaderFooterContent, RenderPageOptions, FootnoteRenderItem } from './renderPage';

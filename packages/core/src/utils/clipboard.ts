@@ -597,7 +597,7 @@ function processNode(node: Node, runs: Run[], inheritedFormatting: TextFormattin
     case 'p':
     case 'div':
       // Process children
-      for (const child of element.childNodes) {
+      for (const child of Array.from(element.childNodes)) {
         processNode(child, runs, formatting);
       }
       // Add line break after block elements if not the last element
@@ -641,7 +641,7 @@ function processNode(node: Node, runs: Run[], inheritedFormatting: TextFormattin
   }
 
   // Process children
-  for (const child of element.childNodes) {
+  for (const child of Array.from(element.childNodes)) {
     processNode(child, runs, formatting);
   }
 }

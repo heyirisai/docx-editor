@@ -10,12 +10,16 @@ import type { Node as PMNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 import { singletonManager } from '../schema';
 import { makeRevisionInfo } from '../plugins/revisionIds';
+import {
+  createImageUploadAnchor,
+  removeImageUploadAnchor,
+  resolveImageUploadAnchor,
+  type ImageUploadAnchor,
+} from './imageUploadAnchor';
 import type {
   ImageLayoutTarget,
   SetImageWrapTypeOptions,
 } from '../extensions/nodes/ImageExtension';
-
-const cmds = singletonManager.getCommands();
 
 /**
  * Insert an image node at `pos`, wrapping with the `insertion` mark when
@@ -36,21 +40,7 @@ export function insertImageNode(
   pos: number
 ): boolean {
   if (!dispatch) return true;
-  const tr = state.tr.insert(pos, imageNode);
-  const info = makeRevisionInfo(state);
-  const insertionType = state.schema.marks.insertion;
-  if (info && insertionType) {
-    tr.addMark(
-      pos,
-      pos + imageNode.nodeSize,
-      insertionType.create({
-        revisionId: info.revisionId,
-        author: info.author,
-        date: info.date,
-      })
-    );
-  }
-  dispatch(tr.scrollIntoView());
+  dispatch(buildImageInsertionTransaction(state, imageNode, pos).scrollIntoView());
   return true;
 }
 
@@ -64,6 +54,157 @@ export function insertImageNode(
 export const INSERT_IMAGE_MAX_WIDTH_PX = 612;
 
 /**
+ * Result returned by a host that persists an image outside the collaborative
+ * document. The identifier must be opaque: it is safe to share in document
+ * state, but it is not itself a URL or bearer credential.
+ *
+ * @public
+ */
+export interface ImageUploadResult {
+  assetId: string;
+}
+
+/**
+ * Metadata supplied to a host image uploader after the browser has decoded
+ * the local file. Dimensions are the original pixel dimensions, before the
+ * editor scales the rendered node to the page width.
+ *
+ * @public
+ */
+export interface ImageUploadContext {
+  width: number;
+  height: number;
+}
+
+/**
+ * Optional host hook for persisting image bytes before an image node is
+ * inserted. When present, the editor inserts only the returned opaque asset
+ * identity and never places a data URL in ProseMirror.
+ *
+ * @public
+ */
+export type ImageUploadHandler = (
+  file: File,
+  context: ImageUploadContext
+) => Promise<ImageUploadResult>;
+
+/**
+ * Options for {@link insertImageFromFile}.
+ *
+ * @public
+ */
+export interface InsertImageFromFileOptions {
+  maxWidth?: number;
+  imageUploadHandler?: ImageUploadHandler;
+  onError?: (error: unknown) => void;
+  onInserted?: () => void;
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error('Failed to read image'));
+    reader.readAsDataURL(file);
+  });
+}
+
+function loadImageSize(src: string): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () =>
+      resolve({
+        width: image.naturalWidth || 1,
+        height: image.naturalHeight || 1,
+      });
+    image.onerror = () => reject(new Error('Failed to decode image'));
+    image.src = src;
+  });
+}
+
+function buildImageInsertionTransaction(
+  state: EditorState,
+  imageNode: PMNode,
+  pos: number
+): Transaction {
+  const transaction = state.tr.insert(pos, imageNode);
+  const info = makeRevisionInfo(state);
+  const insertionType = state.schema.marks.insertion;
+  if (info && insertionType) {
+    transaction.addMark(
+      pos,
+      pos + imageNode.nodeSize,
+      insertionType.create({
+        revisionId: info.revisionId,
+        author: info.author,
+        date: info.date,
+      })
+    );
+  }
+  return transaction;
+}
+
+async function insertImageFromFileAtAnchor(
+  view: EditorView,
+  file: File,
+  opts: InsertImageFromFileOptions | undefined,
+  anchor: ImageUploadAnchor
+): Promise<boolean> {
+  const maxWidth = opts?.maxWidth ?? INSERT_IMAGE_MAX_WIDTH_PX;
+  let objectUrl: string | null = null;
+
+  try {
+    const imageSource = opts?.imageUploadHandler
+      ? (objectUrl = URL.createObjectURL(file))
+      : await readFileAsDataUrl(file);
+    const naturalSize = await loadImageSize(imageSource);
+
+    let width = naturalSize.width;
+    let height = naturalSize.height;
+    if (width > maxWidth) {
+      height = Math.max(1, Math.round(height * (maxWidth / width)));
+      width = maxWidth;
+    }
+
+    const upload = opts?.imageUploadHandler
+      ? await opts.imageUploadHandler(file, naturalSize)
+      : null;
+    if (upload && !upload.assetId.trim()) {
+      throw new Error('Image upload returned an empty asset ID');
+    }
+    if (view.isDestroyed) return false;
+
+    const insertionPos = resolveImageUploadAnchor(view, anchor);
+    if (insertionPos === null) return false;
+
+    const imageNode = view.state.schema.nodes.image.create({
+      src: upload ? '' : imageSource,
+      assetId: upload?.assetId,
+      alt: file.name,
+      width,
+      height,
+      // Newly uploaded external assets have no package relationship yet; the
+      // collaboration exporter creates it from the manifest. Legacy inline
+      // images retain the established temporary-rId behavior.
+      rId: upload ? undefined : `rId_img_${Date.now()}_${Math.round(Math.random() * 1e9)}`,
+      wrapType: 'inline',
+      displayMode: 'inline',
+    });
+    view.dispatch(
+      buildImageInsertionTransaction(view.state, imageNode, insertionPos).scrollIntoView()
+    );
+    if (!anchor.tracked) {
+      anchor.fallbackPos = insertionPos + imageNode.nodeSize;
+    }
+    view.focus();
+    opts?.onInserted?.();
+    return true;
+  } finally {
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/**
  * Read an image `File` (from a file picker or drop), fit it to the page width,
  * and insert it inline at the current selection. This is the single source of
  * truth for "insert an image from a file" — the React and Vue adapters both
@@ -71,48 +212,56 @@ export const INSERT_IMAGE_MAX_WIDTH_PX = 612;
  * is sized to fit the column, and it round-trips as an inline drawing (with the
  * `insertion` mark applied in suggesting mode, via {@link insertImageNode}).
  *
- * The decode is async (FileReader → Image); `onError` reports a failed read or
- * decode, and `onInserted` runs after the node lands (e.g. to refocus).
+ * By default the file is stored as a data URL for backward compatibility. If
+ * `imageUploadHandler` is provided, the file is decoded through a temporary
+ * object URL, uploaded before insertion, and only the returned opaque asset ID
+ * is stored in the node. `onError` reports a failed read, decode, or upload,
+ * and `onInserted` runs after the node lands (e.g. to refocus).
  *
  * @public
  */
-export function insertImageFromFile(
+export async function insertImageFromFile(
   view: EditorView,
   file: File,
-  opts?: { maxWidth?: number; onError?: (error: unknown) => void; onInserted?: () => void }
-): void {
-  const maxWidth = opts?.maxWidth ?? INSERT_IMAGE_MAX_WIDTH_PX;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const dataUrl = reader.result as string;
-    const img = new Image();
-    img.onload = () => {
-      let width = img.naturalWidth;
-      let height = img.naturalHeight;
-      if (width > maxWidth) {
-        height = Math.round(height * (maxWidth / width));
-        width = maxWidth;
+  opts?: InsertImageFromFileOptions
+): Promise<void> {
+  const anchor = createImageUploadAnchor(view);
+
+  try {
+    await insertImageFromFileAtAnchor(view, file, opts, anchor);
+  } catch (error) {
+    opts?.onError?.(error);
+  } finally {
+    removeImageUploadAnchor(view, anchor);
+  }
+}
+
+/**
+ * Insert a clipboard batch at one mapped paste position while preserving file
+ * order even when uploads are deferred.
+ *
+ * @internal
+ */
+export async function insertImageFilesAtSelection(
+  view: EditorView,
+  files: readonly File[],
+  opts?: InsertImageFromFileOptions
+): Promise<void> {
+  const anchor = createImageUploadAnchor(view);
+  try {
+    for (const file of files) {
+      try {
+        const inserted = await insertImageFromFileAtAnchor(view, file, opts, anchor);
+        if (!inserted && (view.isDestroyed || resolveImageUploadAnchor(view, anchor) === null)) {
+          return;
+        }
+      } catch (error) {
+        opts?.onError?.(error);
       }
-      const imageNode = view.state.schema.nodes.image.create({
-        src: dataUrl,
-        alt: file.name,
-        width,
-        height,
-        // Entropy beyond the timestamp so two images inserted in the same
-        // millisecond can't collide on rId (mirrors the clipboard-paste path).
-        rId: `rId_img_${Date.now()}_${Math.round(Math.random() * 1e9)}`,
-        wrapType: 'inline',
-        displayMode: 'inline',
-      });
-      insertImageNode(view.state, view.dispatch, imageNode, view.state.selection.from);
-      view.focus();
-      opts?.onInserted?.();
-    };
-    img.onerror = () => opts?.onError?.(new Error('Failed to decode image'));
-    img.src = dataUrl;
-  };
-  reader.onerror = () => opts?.onError?.(reader.error);
-  reader.readAsDataURL(file);
+    }
+  } finally {
+    removeImageUploadAnchor(view, anchor);
+  }
 }
 
 /**
@@ -131,7 +280,11 @@ export function setImageWrapType(
   target: ImageLayoutTarget,
   opts?: SetImageWrapTypeOptions
 ): Command {
-  return cmds.setImageWrapType(pos, target, opts);
+  // Resolve lazily to keep StarterKit -> ImagePasteExtension -> image commands
+  // from reading the schema singleton while that same StarterKit is still
+  // constructing it.
+  return (state, dispatch, view) =>
+    singletonManager.getCommands().setImageWrapType(pos, target, opts)(state, dispatch, view);
 }
 
 export type {

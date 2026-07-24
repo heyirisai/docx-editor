@@ -113,6 +113,11 @@ export interface Image {
   type: 'image';
   /** Unique ID */
   id?: string;
+  /**
+   * Stable host-owned media identity. Present for collaboration documents
+   * whose image bytes are intentionally kept outside the parsed package.
+   */
+  assetId?: string;
   /** Relationship ID for the image data */
   rId: string;
   /** Resolved image data (base64 or blob URL) */

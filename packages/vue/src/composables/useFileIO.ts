@@ -12,6 +12,7 @@ import { ref } from 'vue';
 import type { EditorView } from 'prosemirror-view';
 import { readDocxFileFromInput } from '@eigenpal/docx-editor-core/utils';
 import { insertImageFromFile } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type { ImageUploadHandler } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 
 export interface UseFileIOOptions {
@@ -38,6 +39,8 @@ export interface UseFileIOOptions {
   onDocumentNameChange?: (name: string) => void;
   /** Active editor view to insert images into — the header/footer being edited, else the body. */
   getActiveView: () => EditorView | null;
+  /** Persist image bytes before inserting an opaque asset ID. */
+  imageUploadHandler?: ImageUploadHandler;
   /** Vue's `nextTick` — passed in so the composable doesn't require its own import wiring. */
   nextTick: () => Promise<void>;
 }
@@ -54,6 +57,7 @@ export function useFileIO(opts: UseFileIOOptions) {
     const view = opts.getActiveView();
     if (file && view) {
       insertImageFromFile(view, file, {
+        imageUploadHandler: opts.imageUploadHandler,
         onError: (e) =>
           opts.emit('error', e instanceof Error ? e : new Error('Failed to insert image')),
       });

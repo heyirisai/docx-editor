@@ -15,6 +15,7 @@
 
 // Top-level archive I/O
 export { parseDocx } from './parser';
+export type { ExternalMediaParseOptions, ParseOptions, ProgressCallback } from './parser';
 export { parseFontTable } from './fontTableParser';
 export { repackDocx, createDocx, updateMultipleFiles } from './rezip';
 export { attemptSelectiveSave } from './selectiveSave';

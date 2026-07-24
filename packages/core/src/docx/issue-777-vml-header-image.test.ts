@@ -104,6 +104,24 @@ describe('issue #777 — VML header images', () => {
     expect(Math.round(result!.image.size.width / result!.image.size.height)).toBe(3);
   });
 
+  test('preserves an external asset identity without requiring image bytes', () => {
+    const externalMedia: Map<string, MediaFile> = new Map([
+      [
+        'media/logo.png',
+        {
+          path: 'word/media/logo.png',
+          assetId: 'asset-vml-logo',
+          mimeType: 'image/png',
+        },
+      ],
+    ]);
+
+    const result = parseVmlImageContent(pictEl(LOGO_PICT), rels, externalMedia);
+    expect(result?.image.assetId).toBe('asset-vml-logo');
+    expect(result?.image.src).toBeUndefined();
+    expect(result?.image.size.width).toBeGreaterThan(0);
+  });
+
   test('falls back to intrinsic image size when the shape omits style dims', () => {
     const result = parseVmlImageContent(pictEl(LOGO_PICT_NODIMS), rels, media);
     expect(result).not.toBeNull();

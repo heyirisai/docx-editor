@@ -40,6 +40,8 @@ export interface TextWatermark {
  */
 export interface PictureWatermark {
   kind: 'picture';
+  /** Stable external-media identity when bytes are not embedded in the parsed package. */
+  assetId?: string;
   /** Header-part relationship id of the media (set for images parsed from an existing file). */
   relId?: string;
   /** Package path of the media, e.g. 'word/media/image1.png'. */

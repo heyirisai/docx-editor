@@ -225,6 +225,7 @@ export interface Hyperlink {
 interface Image_2 {
     allowOverlap?: boolean;
     alt?: string;
+    assetId?: string;
     crop?: ImageCrop;
     decorative?: boolean;
     effects?: {
@@ -461,6 +462,7 @@ export interface ParagraphPropertyChange {
 
 // @public
 export interface PictureWatermark {
+    assetId?: string;
     contentType?: string;
     data?: Uint8Array;
     dataUrl?: string;

@@ -195,6 +195,7 @@ export interface StarterKitOptions {
     disable?: string[];
     historyDepth?: number;
     historyNewGroupDelay?: number;
+    imageUploadHandler?: ImageUploadHandler;
     onSelectionChange?: SelectionChangeCallback;
 }
 

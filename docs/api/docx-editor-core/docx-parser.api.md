@@ -5,6 +5,12 @@
 ```ts
 
 // @public
+export interface ExternalMediaParseOptions {
+    // (undocumented)
+    entries: readonly ExternalMediaManifestEntry[];
+}
+
+// @public
 export function fullParseDocx(buffer: ArrayBuffer, onProgress?: ProgressCallback): Promise<Document_2>;
 
 // @public
@@ -22,12 +28,20 @@ export function getDocxSummary(buffer: ArrayBuffer): Promise<{
 // @public
 export function getDocxVariables(buffer: ArrayBuffer): Promise<string[]>;
 
+// @public (undocumented)
+export class IncompleteExternalMediaManifestError extends Error {
+    constructor(missingPaths: readonly string[]);
+    // (undocumented)
+    readonly missingPaths: readonly string[];
+}
+
 // @public
 export function parseDocx(input: DocxInput, options?: ParseOptions): Promise<Document_2>;
 
 // @public
 export interface ParseOptions {
     detectVariables?: boolean;
+    externalMedia?: ExternalMediaParseOptions;
     onProgress?: ProgressCallback;
     parseHeadersFooters?: boolean;
     parseNotes?: boolean;

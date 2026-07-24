@@ -14,6 +14,7 @@
 import type { Watermark, TextWatermark, PictureWatermark } from '../types/document';
 import type { Page } from '../layout-engine/types';
 import { resolveFontFamily } from '../utils/fontResolver';
+import { setImageAssetSource, type LazyImageAssetLoader } from './imageAssets';
 
 /** Class name on the watermark layer (stable for queries/tests). */
 export const WATERMARK_LAYER_CLASS = 'layout-watermark-layer';
@@ -64,12 +65,12 @@ function renderTextWatermark(wm: TextWatermark, page: Page, doc: Document): HTML
 function renderPictureWatermark(
   wm: PictureWatermark,
   page: Page,
-  doc: Document
+  doc: Document,
+  imageAssetLoader?: LazyImageAssetLoader
 ): HTMLElement | null {
-  if (!wm.dataUrl) return null;
+  if (!wm.dataUrl && !wm.assetId) return null;
 
   const img = doc.createElement('img');
-  img.src = wm.dataUrl;
   img.alt = '';
   img.style.position = 'absolute';
   img.style.top = '50%';
@@ -79,6 +80,15 @@ function renderPictureWatermark(
   const contentWidth = page.size.w - page.margins.left - page.margins.right;
   const naturalWidthPx =
     wm.widthEmu !== undefined ? wm.widthEmu / (914400 / 96) : contentWidth * 0.75;
+  setImageAssetSource(
+    img,
+    {
+      assetId: wm.assetId,
+      src: wm.dataUrl,
+      width: naturalWidthPx * (wm.scale || 1),
+    },
+    imageAssetLoader
+  );
   img.style.width = `${naturalWidthPx * (wm.scale || 1)}px`;
   img.style.height = 'auto';
 
@@ -99,12 +109,13 @@ function renderPictureWatermark(
 export function renderWatermarkLayer(
   watermark: Watermark,
   page: Page,
-  doc: Document = document
+  doc: Document = document,
+  imageAssetLoader?: LazyImageAssetLoader
 ): HTMLElement | null {
   const inner =
     watermark.kind === 'text'
       ? renderTextWatermark(watermark, page, doc)
-      : renderPictureWatermark(watermark, page, doc);
+      : renderPictureWatermark(watermark, page, doc, imageAssetLoader);
   if (!inner) return null;
 
   const layer = doc.createElement('div');

@@ -79,7 +79,7 @@ function resolveWatermarkImage(
   rId: string,
   rels: RelationshipMap | null | undefined,
   media: Map<string, MediaFile> | null | undefined
-): { dataUrl?: string; mediaPath?: string; contentType?: string } {
+): { assetId?: string; dataUrl?: string; mediaPath?: string; contentType?: string } {
   if (!rId || !rels) return {};
   const rel = rels.get(rId);
   if (!rel?.target) return {};
@@ -98,6 +98,7 @@ function resolveWatermarkImage(
       for (const [key, file] of media.entries()) {
         if (key.toLowerCase() === lower) {
           return {
+            assetId: file.assetId,
             dataUrl: file.dataUrl ?? file.base64,
             mediaPath: file.path,
             contentType: file.mimeType,
@@ -204,7 +205,7 @@ export function extractWatermark(
         getAttribute(imagedata, 'r', 'embed') ??
         getAttribute(imagedata, null, 'id') ??
         '';
-      const { dataUrl, mediaPath, contentType } = resolveWatermarkImage(rId, rels, media);
+      const { assetId, dataUrl, mediaPath, contentType } = resolveWatermarkImage(rId, rels, media);
 
       // Washout: Word sets gain (<1) and blacklevel (>0) on the imagedata.
       const gain = getAttribute(imagedata, null, 'gain');
@@ -216,6 +217,7 @@ export function extractWatermark(
 
       return {
         kind: 'picture',
+        assetId,
         relId: rId || undefined,
         mediaPath,
         contentType,

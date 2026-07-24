@@ -18,7 +18,10 @@ import {
   findImageElement,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import { getTableContext } from '@eigenpal/docx-editor-core/prosemirror/extensions/nodes/TableExtension';
-import type { ImageLayoutTarget } from '@eigenpal/docx-editor-core/prosemirror/commands';
+import type {
+  ImageLayoutTarget,
+  ImageUploadHandler,
+} from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import {
   copyImageToClipboard,
@@ -53,6 +56,7 @@ export interface UseContextMenusOptions {
   clearOverlay: () => void;
   setPmSelection: (anchor: number, head?: number) => void;
   resolvePos: (clientX: number, clientY: number) => number | null;
+  imageUploadHandler?: ImageUploadHandler;
 }
 
 export interface UseContextMenusReturn {
@@ -259,7 +263,7 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
         }
         break;
       case 'paste':
-        pasteFromClipboard(view);
+        void pasteFromClipboard(view, opts.imageUploadHandler);
         break;
       case 'pasteAsPlainText':
         // Strip all formatting — insert the clipboard's text/plain only.
@@ -289,7 +293,7 @@ export function useContextMenus(opts: UseContextMenusOptions): UseContextMenusRe
         break;
       case 'replaceImage':
         if (opts.selectedImage.value) {
-          triggerReplaceImage(view, opts.selectedImage.value.pmPos);
+          triggerReplaceImage(view, opts.selectedImage.value.pmPos, opts.imageUploadHandler);
         }
         break;
       case 'deleteImage': {

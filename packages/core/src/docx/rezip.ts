@@ -85,6 +85,13 @@ export interface RepackOptions {
   updateModifiedDate?: boolean;
   /** Custom modifier name for lastModifiedBy */
   modifiedBy?: string;
+  /**
+   * Preserve every original media part and relationship even when the
+   * editable model cannot prove it is referenced. Collaboration export uses
+   * this for complex/unsupported OOXML constructs whose raw package remains
+   * authoritative for fidelity.
+   */
+  preserveUnreferencedMedia?: boolean;
 }
 
 /**
@@ -104,7 +111,12 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
     );
   }
 
-  const { compressionLevel = 6, updateModifiedDate = true, modifiedBy } = options;
+  const {
+    compressionLevel = 6,
+    updateModifiedDate = true,
+    modifiedBy,
+    preserveUnreferencedMedia = false,
+  } = options;
   const exportDocument = doc;
 
   // Load the original ZIP
@@ -182,7 +194,9 @@ export async function repackDocx(doc: Document, options: RepackOptions = {}): Pr
 
   // Drop image rels that no part uses anymore and the media files they kept
   // alive — must run AFTER every part has its final XML in the zip.
-  await pruneUnreferencedMedia(newZip, compressionLevel);
+  if (!preserveUnreferencedMedia) {
+    await pruneUnreferencedMedia(newZip, compressionLevel);
+  }
 
   // Generate the new DOCX file
   const arrayBuffer = await newZip.generateAsync({
@@ -207,7 +221,12 @@ export async function repackDocxFromRaw(
   rawContent: RawDocxContent,
   options: RepackOptions = {}
 ): Promise<ArrayBuffer> {
-  const { compressionLevel = 6, updateModifiedDate = true, modifiedBy } = options;
+  const {
+    compressionLevel = 6,
+    updateModifiedDate = true,
+    modifiedBy,
+    preserveUnreferencedMedia = false,
+  } = options;
   const exportDocument = doc;
 
   // Create a new ZIP with all original files
@@ -274,7 +293,9 @@ export async function repackDocxFromRaw(
 
   // Drop image rels that no part uses anymore and the media files they kept
   // alive — must run AFTER every part has its final XML in the zip.
-  await pruneUnreferencedMedia(newZip, compressionLevel);
+  if (!preserveUnreferencedMedia) {
+    await pruneUnreferencedMedia(newZip, compressionLevel);
+  }
 
   // Generate the new DOCX file
   const arrayBuffer = await newZip.generateAsync({

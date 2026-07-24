@@ -258,9 +258,11 @@ export interface ImageAttrs {
     allowOverlap?: boolean;
     // (undocumented)
     alt?: string;
+    assetId?: string;
     borderColor?: string;
     borderStyle?: string;
     borderWidth?: number;
+    collaborationId?: string;
     // (undocumented)
     cropBottom?: number;
     // (undocumented)
@@ -370,6 +372,7 @@ export interface ParagraphAttrs {
         between?: BorderSpec;
         bar?: BorderSpec;
     };
+    collaborationId?: string;
     contextualSpacing?: boolean;
     // (undocumented)
     defaultTextFormatting?: TextFormatting;

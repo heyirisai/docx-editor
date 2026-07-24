@@ -31,7 +31,12 @@ import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/n
 import type { Theme, SectionProperties } from '../types/document';
 import { resolveColorToHex } from '../utils/colorResolver';
 
-import { twipsToPixels, constrainImageToPage, nextBlockId } from './toFlowBlocks/shared';
+import {
+  twipsToPixels,
+  constrainImageToPage,
+  createBlockIdAllocator,
+  type BlockIdAllocator,
+} from './toFlowBlocks/shared';
 import { AUTO_PARAGRAPH_SPACING_PX } from '../utils/units';
 import type { ToFlowBlocksOptions } from './toFlowBlocks/shared';
 import { paragraphToRuns } from './toFlowBlocks/runs';
@@ -45,6 +50,10 @@ export { resolveListTemplate } from './toFlowBlocks/listMarkers';
 
 const DEFAULT_FONT = 'Calibri';
 const DEFAULT_SIZE = 11; // points (Word 2007+ default)
+
+type InternalToFlowBlocksOptions = ToFlowBlocksOptions & {
+  blockIdAllocator: BlockIdAllocator;
+};
 
 /**
  * Convert PM paragraph attrs to layout engine paragraph attrs.
@@ -341,7 +350,7 @@ function mapTabAlignment(
 function convertParagraph(
   node: PMNode,
   startPos: number,
-  options: ToFlowBlocksOptions
+  options: InternalToFlowBlocksOptions
 ): ParagraphBlock {
   const pmAttrs = node.attrs as PMParagraphAttrs;
   const runs = paragraphToRuns(node, startPos, options);
@@ -355,7 +364,7 @@ function convertParagraph(
 
   return {
     kind: 'paragraph',
-    id: nextBlockId(),
+    id: options.blockIdAllocator.idFor(node, 'paragraph'),
     paraId: pmAttrs.paraId || undefined,
     runs,
     attrs,
@@ -370,7 +379,7 @@ function convertParagraph(
 function convertTableCell(
   node: PMNode,
   startPos: number,
-  options: ToFlowBlocksOptions,
+  options: InternalToFlowBlocksOptions,
   tableCellMargins?: { top?: number; bottom?: number; left?: number; right?: number }
 ): TableCell {
   const blocks: FlowBlock[] = [];
@@ -435,7 +444,7 @@ function convertTableCell(
     | undefined;
 
   return {
-    id: nextBlockId(),
+    id: options.blockIdAllocator.idFor(node, 'tableCell'),
     blocks,
     colSpan: attrs.colspan as number,
     rowSpan: attrs.rowspan as number,
@@ -457,7 +466,7 @@ function convertTableCell(
 function convertTableRow(
   node: PMNode,
   startPos: number,
-  options: ToFlowBlocksOptions,
+  options: InternalToFlowBlocksOptions,
   tableCellMargins?: { top?: number; bottom?: number; left?: number; right?: number }
 ): TableRow {
   const cells: TableCell[] = [];
@@ -475,7 +484,7 @@ function convertTableRow(
   // so the layout engine keeps the row whole across page boundaries.
   const rowFormatting = attrs._originalFormatting as { cantSplit?: boolean } | null | undefined;
   return {
-    id: nextBlockId(),
+    id: options.blockIdAllocator.idFor(node, 'tableRow'),
     cells,
     height: attrs.height ? twipsToPixels(attrs.height as number) : undefined,
     heightRule: (attrs.heightRule as 'auto' | 'atLeast' | 'exact') ?? undefined,
@@ -491,7 +500,11 @@ function convertTableRow(
 /**
  * Convert a table node to a TableBlock.
  */
-function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptions): TableBlock {
+function convertTable(
+  node: PMNode,
+  startPos: number,
+  options: InternalToFlowBlocksOptions
+): TableBlock {
   const rows: TableRow[] = [];
   let offset = startPos + 1; // +1 for opening tag
 
@@ -576,7 +589,7 @@ function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptio
 
   return {
     kind: 'table',
-    id: nextBlockId(),
+    id: options.blockIdAllocator.idFor(node, 'table'),
     rows,
     columnWidths,
     width,
@@ -593,7 +606,11 @@ function convertTable(node: PMNode, startPos: number, options: ToFlowBlocksOptio
 /**
  * Convert an image node to an ImageBlock.
  */
-function convertImage(node: PMNode, startPos: number, pageContentHeight?: number): ImageBlock {
+function convertImage(
+  node: PMNode,
+  startPos: number,
+  options: InternalToFlowBlocksOptions
+): ImageBlock {
   const attrs = node.attrs;
   const wrapType = attrs.wrapType as string | undefined;
 
@@ -613,12 +630,13 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
   const rawHeight = (attrs.height as number) || 100;
   const constrained = shouldAnchor
     ? { width: rawWidth, height: rawHeight }
-    : constrainImageToPage(rawWidth, rawHeight, pageContentHeight);
+    : constrainImageToPage(rawWidth, rawHeight, options.pageContentHeight);
 
   return {
     kind: 'image',
-    id: nextBlockId(),
+    id: options.blockIdAllocator.idFor(node, 'image'),
     src: attrs.src as string,
+    assetId: attrs.assetId as string | undefined,
     width: constrained.width,
     height: constrained.height,
     alt: attrs.alt as string | undefined,
@@ -649,7 +667,7 @@ function convertImage(node: PMNode, startPos: number, pageContentHeight?: number
 function convertTextBoxNode(
   node: PMNode,
   startPos: number,
-  opts: ToFlowBlocksOptions
+  opts: InternalToFlowBlocksOptions
 ): TextBoxBlock {
   const attrs = node.attrs;
   const contentBlocks: ParagraphBlock[] = [];
@@ -664,7 +682,7 @@ function convertTextBoxNode(
 
   return {
     kind: 'textBox',
-    id: nextBlockId(),
+    id: opts.blockIdAllocator.idFor(node, 'textBox'),
     width: (attrs.width as number) ?? DEFAULT_TEXTBOX_WIDTH,
     height: (attrs.height as number) ?? undefined,
     fillColor: attrs.fillColor as string | undefined,
@@ -705,11 +723,12 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
   // doc node so callers don't have to plumb a separate prop. Explicit
   // options still win for callers that override.
   const docDefaultTabStop = doc.attrs?.defaultTabStopTwips as number | undefined;
-  const opts: ToFlowBlocksOptions = {
+  const opts: InternalToFlowBlocksOptions = {
     ...options,
     defaultFont: options.defaultFont ?? DEFAULT_FONT,
     defaultSize: options.defaultSize ?? DEFAULT_SIZE,
     defaultTabStopTwips: options.defaultTabStopTwips ?? docDefaultTabStop,
+    blockIdAllocator: createBlockIdAllocator(),
   };
 
   const blocks: FlowBlock[] = [];
@@ -774,7 +793,7 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
           if (secProps || pmAttrs.sectionBreakType) {
             const sectionBreak: SectionBreakBlock = {
               kind: 'sectionBreak',
-              id: nextBlockId(),
+              id: opts.blockIdAllocator.idFor(node, 'sectionBreak'),
               type: (secProps?.sectionStart ??
                 pmAttrs.sectionBreakType) as SectionBreakBlock['type'],
             };
@@ -834,7 +853,7 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
 
       case 'image':
         // Standalone image block (if not inline)
-        blocks.push(convertImage(node, pos, opts.pageContentHeight));
+        blocks.push(convertImage(node, pos, opts));
         break;
 
       case 'textBox':
@@ -845,7 +864,7 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
       case 'pageBreak': {
         const pb: PageBreakBlock = {
           kind: 'pageBreak',
-          id: nextBlockId(),
+          id: opts.blockIdAllocator.idFor(node, 'pageBreak'),
           pmStart: pos,
           pmEnd: pos + node.nodeSize,
         };

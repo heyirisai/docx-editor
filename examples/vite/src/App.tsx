@@ -1,5 +1,10 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { createEmptyDocument, findStartPosForParaId } from '@eigenpal/docx-editor-core';
+import {
+  createEmptyDocument,
+  findStartPosForParaId,
+  parseCollaborationPackage,
+} from '@eigenpal/docx-editor-core';
+import type { ImageAssetResolver } from '@eigenpal/docx-editor-core/layout-painter';
 import { setSuggestionMode } from '@eigenpal/docx-editor-core/prosemirror/plugins';
 // Re-exported by core, so the demo needs no direct `prosemirror-state` dep
 // (which would break the production build — it isn't in examples/vite deps).
@@ -24,6 +29,8 @@ import {
 import { ExampleSwitcher } from '../../shared/ExampleSwitcher';
 import { AdapterSwitcher } from '../../shared/AdapterSwitcher';
 import { BrandLogo } from '../../shared/BrandLogo';
+import { createCachedImageAssetResolver } from '../../shared/cachedImageAssetResolver';
+import { loadExternalMediaFixture } from '../../shared/externalMediaFixture';
 
 function extractDocumentText(value: unknown): string {
   if (!value || typeof value !== 'object') return '';
@@ -224,6 +231,18 @@ export function App() {
   const [fileName, setFileName] = useState<string>('docx-editor-demo.docx');
   const [status, setStatus] = useState<string>('');
   const [colorMode, setColorMode] = useState<'light' | 'dark'>('light');
+  const externalMediaPerf = useMemo(
+    () => new URLSearchParams(window.location.search).get('externalMediaPerf') === '1',
+    []
+  );
+  const externalImageAssets = useMemo(() => {
+    if (!externalMediaPerf) return undefined;
+    return createCachedImageAssetResolver(
+      (assetId) => `/e2e-external-assets/${encodeURIComponent(assetId)}`
+    );
+  }, [externalMediaPerf]);
+  const externalImageAssetResolver: ImageAssetResolver | undefined = externalImageAssets?.resolver;
+  useEffect(() => () => externalImageAssets?.dispose(), [externalImageAssets]);
   const disableFindReplaceShortcuts = useMemo(
     () => new URLSearchParams(window.location.search).get('disableFindReplaceShortcuts') === '1',
     []
@@ -705,6 +724,26 @@ export function App() {
   const [docVersion, setDocVersion] = useState(0);
 
   useEffect(() => {
+    if (externalMediaPerf) {
+      const controller = new AbortController();
+      setStatus('Loading external-media fixture...');
+      void loadExternalMediaFixture(controller.signal, parseCollaborationPackage)
+        .then((parsed) => {
+          if (controller.signal.aborted) return;
+          userStartedOwnDocRef.current = true;
+          setCurrentDocument(parsed.document);
+          setDocumentBuffer(null);
+          setFileName('external-media-performance.docx');
+          setStatus('');
+          setDocVersion((version) => version + 1);
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return;
+          setStatus(error instanceof Error ? `Error: ${error.message}` : 'Error loading fixture');
+        });
+      return () => controller.abort();
+    }
+
     // Under E2E with ?empty=1, boot empty so tests get a deterministic,
     // known starting document instead of racing this async fixture fetch.
     if (e2eBootEmpty) {
@@ -724,7 +763,7 @@ export function App() {
         setCurrentDocument(createEmptyDocument());
         setFileName('Untitled.docx');
       });
-  }, [e2eBootEmpty]);
+  }, [e2eBootEmpty, externalMediaPerf]);
 
   const handleNewDocument = useCallback(() => {
     userStartedOwnDocRef.current = true;
@@ -903,6 +942,8 @@ export function App() {
           initialZoom={autoZoom}
           disableFindReplaceShortcuts={disableFindReplaceShortcuts}
           fonts={customFonts}
+          imageAssetResolver={externalImageAssetResolver}
+          forcePageVirtualization={externalMediaPerf}
           watermarkPresets={['SAMPLE', 'DEMO ONLY', 'PREVIEW', 'NOT FOR DISTRIBUTION']}
           renderLogo={renderLogo}
           documentName={fileName}

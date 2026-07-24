@@ -9,6 +9,7 @@
 
 import type { ImageFragment, ImageBlock, ImageMeasure } from '../layout-engine/types';
 import type { RenderContext } from './renderPage';
+import { setImageAssetSource } from './imageAssets';
 
 /**
  * CSS class names for image elements
@@ -129,7 +130,7 @@ export function renderImageFragment(
   fragment: ImageFragment,
   block: ImageBlock,
   _measure: ImageMeasure,
-  _context: RenderContext,
+  context: RenderContext,
   options: RenderImageFragmentOptions = {}
 ): HTMLElement {
   const doc = options.document ?? document;
@@ -170,7 +171,16 @@ export function renderImageFragment(
 
   // Create the actual image element
   const imgEl = doc.createElement('img');
-  imgEl.src = block.src;
+  setImageAssetSource(
+    imgEl,
+    {
+      assetId: block.assetId,
+      src: block.src,
+      width: fragment.width,
+      height: fragment.height,
+    },
+    context.imageAssetLoader
+  );
   imgEl.alt = block.alt ?? '';
 
   // Image sizing

@@ -266,6 +266,7 @@ const paragraphNodeSpec: NodeSpec = {
   attrs: {
     paraId: { default: null },
     textId: { default: null },
+    collaborationId: { default: null },
     alignment: { default: null },
     spaceBefore: { default: null },
     spaceAfter: { default: null },
