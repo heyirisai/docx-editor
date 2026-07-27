@@ -1,3 +1,4 @@
+import { assignSafeAttrs, copySafeAttrs } from '../utils/safeAttrs';
 import type { CollaborationDiagnostic, CollaborationJsonNode, FidelitySidecar } from './types';
 
 interface CollaborationNodeIdentity {
@@ -148,7 +149,11 @@ export function rehydrateCollaborationDocument(
   diagnostics: CollaborationDiagnostic[] = []
 ): CollaborationJsonNode {
   const visit = (node: CollaborationJsonNode): CollaborationJsonNode => {
-    const attrs = node.attrs ? { ...node.attrs } : undefined;
+    // Both the document JSON and the sidecar come from a peer, so every key
+    // copied onto a plain object here is untrusted. copySafeAttrs /
+    // assignSafeAttrs drop __proto__, constructor and prototype rather than
+    // letting them reach Object.prototype.
+    const attrs = copySafeAttrs(node.attrs);
     const collaborationId =
       typeof attrs?.collaborationId === 'string' ? attrs.collaborationId : undefined;
     const entry = collaborationId ? sidecar.entries[collaborationId] : undefined;
@@ -160,7 +165,7 @@ export function rehydrateCollaborationDocument(
         nodeType: node.type,
       });
     } else if (entry && attrs) {
-      Object.assign(attrs, entry.attrs);
+      assignSafeAttrs(attrs, entry.attrs);
     }
 
     return {
@@ -169,7 +174,7 @@ export function rehydrateCollaborationDocument(
       content: node.content?.map(visit),
       marks: node.marks?.map((mark) => ({
         ...mark,
-        attrs: mark.attrs ? { ...mark.attrs } : undefined,
+        attrs: copySafeAttrs(mark.attrs),
       })),
     };
   };

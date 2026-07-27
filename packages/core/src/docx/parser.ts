@@ -450,8 +450,23 @@ function buildMediaMap(
   const media = new Map<string, MediaFile>();
 
   if (externalMedia) {
+    // Downstream consumers (the resolver cache and export asset map) key by
+    // assetId, so a manifest that reuses one assetId for two different images
+    // would alias them together and embed the wrong bytes on export. Entry
+    // validation is per-entry and cannot see collisions, so check here where
+    // the whole manifest is in scope. Re-declaring the identical
+    // path+mimeType is harmless and stays allowed.
+    const seenAssetIds = new Map<string, { path: string; mimeType: string }>();
     for (const entry of externalMedia.entries) {
       const path = validateExternalMediaEntry(entry);
+      const previous = seenAssetIds.get(entry.assetId);
+      if (previous && (previous.path !== path || previous.mimeType !== entry.mimeType)) {
+        throw new Error(
+          `Duplicate external media asset ID ${entry.assetId} maps to both ` +
+            `${previous.path} (${previous.mimeType}) and ${path} (${entry.mimeType})`
+        );
+      }
+      seenAssetIds.set(entry.assetId, { path, mimeType: entry.mimeType });
       const filename = entry.filename ?? path.split('/').pop() ?? path;
       const mediaFile: MediaFile = {
         path,

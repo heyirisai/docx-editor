@@ -12,11 +12,14 @@
 
 import type { EditorView } from 'prosemirror-view';
 import { makeRevisionInfo } from '@eigenpal/docx-editor-core/prosemirror/plugins';
+import { INSERT_IMAGE_MAX_WIDTH_PX } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { ImageUploadHandler } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import type { Node as PMNode } from 'prosemirror-model';
 import type { Transaction } from 'prosemirror-state';
 
-const MAX_PASTED_IMAGE_WIDTH = 612;
+// Same cap as file-picker inserts (US Letter content width at 96dpi). Aliased
+// from core rather than redeclared so the two cannot drift apart.
+const MAX_PASTED_IMAGE_WIDTH = INSERT_IMAGE_MAX_WIDTH_PX;
 
 interface PreparedImage {
   src: string;
@@ -105,6 +108,60 @@ async function prepareImage(
     if (objectUrl) URL.revokeObjectURL(objectUrl);
     throw error;
   }
+}
+
+/**
+ * Whether a clipboard `img src` may be fetched to obtain bytes for upload.
+ *
+ * `data:` and `blob:` carry their own bytes, so reading them is local. A remote
+ * URL would mean a network request triggered purely by pasting — a zero-click
+ * SSRF / IP-leak / tracking-beacon vector — and cross-origin reads would fail
+ * CORS regardless. Those are inserted by reference instead.
+ */
+function isFetchableImageSrc(src: string): boolean {
+  const scheme = src.slice(0, src.indexOf(':') + 1).toLowerCase();
+  return scheme === 'data:' || scheme === 'blob:';
+}
+
+/**
+ * Fetch a local image src and run it through the upload handler.
+ * Returns `null` when the bytes cannot be read or the upload fails, so the
+ * caller can insert by reference instead of dropping the paste entirely.
+ */
+async function prepareImageFromSrc(
+  src: string,
+  imageUploadHandler: ImageUploadHandler
+): Promise<PreparedImage | null> {
+  try {
+    const response = await fetch(src);
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    const file = imageFileFromBlob(blob, blob.type || 'image/png');
+    return await prepareImage(file, imageUploadHandler);
+  } catch {
+    return null;
+  }
+}
+
+/** Insert an image that keeps its original src, with no upload. */
+function insertReferencedImage(
+  view: EditorView,
+  src: string,
+  htmlWidth: number,
+  htmlHeight: number
+): void {
+  const imageNode = view.state.schema.nodes.image.create({
+    src,
+    assetId: null,
+    width: htmlWidth || 200,
+    height: htmlHeight || 200,
+    rId: createImageRelationshipId(),
+    wrapType: 'inline',
+    displayMode: 'inline',
+  });
+  const tr = view.state.tr.replaceSelectionWith(imageNode);
+  tagPastedImageAsInsertion(view, tr, imageNode);
+  view.dispatch(tr);
 }
 
 function fitWithinMaxWidth(
@@ -291,12 +348,17 @@ export async function pasteFromClipboard(
             const tr = view.state.tr.replaceSelectionWith(imageNode);
             tagPastedImageAsInsertion(view, tr, imageNode);
             view.dispatch(tr);
-          } else if (imageUploadHandler) {
-            const response = await fetch(src);
-            if (!response.ok) throw new Error('Failed to read clipboard image');
-            const blob = await response.blob();
-            const file = imageFileFromBlob(blob, blob.type || 'image/png');
-            const prepared = await prepareImage(file, imageUploadHandler);
+          } else if (imageUploadHandler && isFetchableImageSrc(src)) {
+            // Only same-document sources (data:/blob:) are fetched. A remote
+            // src would be a zero-click external request on paste — an
+            // SSRF/IP-leak/tracking-beacon vector — and would fail CORS
+            // anyway. Anything else falls through to the reference-only insert
+            // below rather than dropping the paste.
+            const prepared = await prepareImageFromSrc(src, imageUploadHandler);
+            if (!prepared) {
+              insertReferencedImage(view, src, htmlWidth, htmlHeight);
+              return;
+            }
             try {
               if (view.isDestroyed) return;
               const dimensions =
@@ -319,18 +381,7 @@ export async function pasteFromClipboard(
               prepared.release();
             }
           } else {
-            const imageNode = view.state.schema.nodes.image.create({
-              src,
-              assetId: null,
-              width: htmlWidth || 200,
-              height: htmlHeight || 200,
-              rId: createImageRelationshipId(),
-              wrapType: 'inline',
-              displayMode: 'inline',
-            });
-            const tr = view.state.tr.replaceSelectionWith(imageNode);
-            tagPastedImageAsInsertion(view, tr, imageNode);
-            view.dispatch(tr);
+            insertReferencedImage(view, src, htmlWidth, htmlHeight);
           }
           return;
         }

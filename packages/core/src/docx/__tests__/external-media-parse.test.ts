@@ -155,6 +155,52 @@ describe('external media parsing', () => {
     ).rejects.toThrow('Invalid external media path');
   });
 
+  test('rejects one asset ID claiming two different media paths', async () => {
+    // Resolver caches and the export asset map key by assetId, so aliasing two
+    // images onto one ID would embed the wrong bytes rather than fail loudly.
+    await expect(
+      parseDocx(await buildDocx(), {
+        preloadFonts: false,
+        externalMedia: {
+          entries: [
+            {
+              assetId: 'asset-shared',
+              path: 'word/media/logo.png',
+              mimeType: 'image/png',
+            },
+            {
+              assetId: 'asset-shared',
+              path: 'word/media/other.png',
+              mimeType: 'image/png',
+            },
+          ],
+        },
+      })
+    ).rejects.toThrow('Duplicate external media asset ID');
+  });
+
+  test('allows an asset ID repeated with an identical path and MIME type', async () => {
+    const document = await parseDocx(await buildDocx(), {
+      preloadFonts: false,
+      externalMedia: {
+        entries: [
+          {
+            assetId: 'asset-logo',
+            path: 'word/media/logo.png',
+            mimeType: 'image/png',
+          },
+          {
+            assetId: 'asset-logo',
+            path: 'word/media/logo.png',
+            mimeType: 'image/png',
+          },
+        ],
+      },
+    });
+
+    expect(firstBodyImage(document).assetId).toBe('asset-logo');
+  });
+
   test('rejects a manifest missing images referenced by non-body package parts', async () => {
     const parsing = parseDocx(await buildDocxWithPartImages(), {
       preloadFonts: false,
