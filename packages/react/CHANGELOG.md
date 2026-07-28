@@ -1,5 +1,24 @@
 # @eigenpal/docx-js-editor
 
+## 1.12.0
+
+### Minor Changes
+
+- fbea20d: Add external DOCX media identities, lean collaboration projection and export APIs,
+  and viewport-gated image rendering with bounded decode concurrency.
+
+  External media manifests now reject one asset ID mapping to two different images,
+  sidecar rehydration ignores prototype-polluting attribute keys, export change
+  detection is insensitive to attribute key order, and an image pasted from HTML is
+  inserted by reference instead of being dropped when its bytes cannot be read.
+
+### Patch Changes
+
+- Updated dependencies [fbea20d]
+  - @eigenpal/docx-editor-core@1.12.0
+  - @eigenpal/docx-editor-agents@1.12.0
+  - @eigenpal/docx-editor-i18n@1.12.0
+
 ## 1.11.0
 
 ### Patch Changes
