@@ -86,6 +86,9 @@
   "peerDependencies": {
     "@ai-sdk/vue": "^2.0.0",
     "ai": "^5.0.0 || ^6.0.0",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-view": "^1.41.6",
     "react": "^17.0.0 || ^18.0.0 || ^19.0.0",
     "vue": "^3.0.0"
   },
@@ -94,6 +97,15 @@
       "optional": true
     },
     "ai": {
+      "optional": true
+    },
+    "prosemirror-model": {
+      "optional": true
+    },
+    "prosemirror-state": {
+      "optional": true
+    },
+    "prosemirror-view": {
       "optional": true
     },
     "react": {
@@ -107,6 +119,9 @@
     "@microsoft/api-extractor": "^7.50.0",
     "@vitejs/plugin-vue": "^6.0.4",
     "ai": "^6.0.169",
+    "prosemirror-model": "^1.19.4",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-view": "^1.41.6",
     "vite": "^8.0.10",
     "vite-plugin-dts": "^5.0.0",
     "vue": "^3.4.0",
