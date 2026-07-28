@@ -159,7 +159,6 @@ export type ImageRunPosition = {
     align?: string;
   };
 };
-
 export type WrapTextDirection = 'bothSides' | 'left' | 'right' | 'largest';
 
 /**
@@ -168,6 +167,7 @@ export type WrapTextDirection = 'bothSides' | 'left' | 'right' | 'largest';
 export type ImageRun = {
   kind: 'image';
   src: string;
+  assetId?: string;
   width: number;
   height: number;
   alt?: string;
@@ -208,7 +208,6 @@ export type ImageRun = {
   pmStart?: number;
   pmEnd?: number;
 };
-
 /**
  * A line break run.
  */
@@ -497,6 +496,7 @@ export type ImageBlock = {
   kind: 'image';
   id: BlockId;
   src: string;
+  assetId?: string;
   width: number;
   height: number;
   alt?: string;

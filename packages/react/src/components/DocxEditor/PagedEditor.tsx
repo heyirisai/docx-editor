@@ -33,17 +33,10 @@ import type { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
 
 // Layout bridge
 import { DEFAULT_PAGE_HEIGHT_PX } from '@eigenpal/docx-editor-core/layout-bridge';
-
 // Selection sync
 import { LayoutSelectionGate } from './internals/LayoutSelectionGate';
-
-// Visual line navigation hook
 import { useVisualLineNavigation } from '../../hooks/useVisualLineNavigation';
-
-// Sidebar constants
 import { SIDEBAR_DOCUMENT_SHIFT } from '../sidebar/constants';
-
-// Types
 import type {
   Document,
   Theme,
@@ -53,6 +46,7 @@ import type {
 } from '@eigenpal/docx-editor-core/types/document';
 import type { WrapType } from '@eigenpal/docx-editor-core/docx/wrapTypes';
 import type { RenderedDomContext } from '../../plugin-api/types';
+import type { ImageAssetResolver } from '@eigenpal/docx-editor-core/layout-painter';
 import {
   DEFAULT_PAGE_WIDTH,
   DEFAULT_PAGE_GAP,
@@ -191,6 +185,8 @@ export interface PagedEditorProps {
   onTotalPagesChange?: (totalPages: number) => void;
   /** Set of resolved comment IDs — hides highlight for these comments */
   resolvedCommentIds?: Set<number>;
+  imageAssetResolver?: ImageAssetResolver;
+  forcePageVirtualization?: boolean;
   /** Suggestion mode active state */
   isSuggesting?: boolean;
   /** Active author for suggestion mode */
@@ -320,6 +316,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       onAnchorPositionsChange,
       onTotalPagesChange,
       resolvedCommentIds,
+      imageAssetResolver,
+      forcePageVirtualization,
       hyperlinkPopupData,
       onHyperlinkPopupNavigate,
       onHyperlinkPopupCopy,
@@ -463,6 +461,8 @@ const PagedEditorComponent = forwardRef<PagedEditorRef, PagedEditorProps>(
       pageGap,
       zoom,
       resolvedCommentIds,
+      imageAssetResolver,
+      forcePageVirtualization,
       pagesContainerRef,
       viewportLayoutRef,
       hiddenPMRef,

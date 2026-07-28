@@ -130,9 +130,7 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
 
     // Sanity: the review markup actually made it into the rendered document.
     const commentSpans = await page.locator('[data-comment-id]').count();
-    const trackedSpans = await page
-      .locator('[data-revision-id], [data-change-author]')
-      .count();
+    const trackedSpans = await page.locator('[data-revision-id], [data-change-author]').count();
     expect(commentSpans).toBeGreaterThan(0);
     expect(trackedSpans).toBeGreaterThan(0);
 
@@ -204,6 +202,7 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     // Scroll to middle
     await page.evaluate(() => {
       const container =
+        document.querySelector('.docx-editor__scroll-container') ||
         document.querySelector('.paged-editor__scroll-container') ||
         document.querySelector('.paged-editor__pages');
       if (container) container.scrollTop = container.scrollHeight / 2;
@@ -241,6 +240,7 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     // Scroll to end
     await page.evaluate(() => {
       const container =
+        document.querySelector('.docx-editor__scroll-container') ||
         document.querySelector('.paged-editor__scroll-container') ||
         document.querySelector('.paged-editor__pages');
       if (container) container.scrollTop = container.scrollHeight;
@@ -322,6 +322,7 @@ test.describe('Large Document Performance — comments + suggestions (#68)', () 
     const scrollStart = Date.now();
     await page.evaluate(() => {
       const container =
+        document.querySelector('.docx-editor__scroll-container') ||
         document.querySelector('.paged-editor__scroll-container') ||
         document.querySelector('.paged-editor__pages');
       if (container) container.scrollTop = container.scrollHeight / 2;

@@ -32,6 +32,8 @@ export interface ParagraphAttrs {
   // Identity
   paraId?: string;
   textId?: string;
+  /** Stable collaboration-sidecar provenance identity. */
+  collaborationId?: string;
 
   // Alignment
   alignment?: ParagraphAlignment;
@@ -210,6 +212,10 @@ export interface ImagePositionAttrs {
  */
 export interface ImageAttrs {
   src: string;
+  /** Stable collaboration-sidecar provenance identity. */
+  collaborationId?: string;
+  /** Stable external-media identity; never a URL or bearer credential. */
+  assetId?: string;
   alt?: string;
   title?: string;
   /** Width in pixels (already converted from EMU) */
@@ -279,6 +285,8 @@ export interface ImageAttrs {
  * Table node attributes
  */
 export interface TableAttrs {
+  /** Stable collaboration-sidecar provenance identity. */
+  collaborationId?: string;
   /** Table style ID */
   styleId?: string;
   /** Table width (in twips) */
@@ -314,6 +322,8 @@ export interface TableAttrs {
  * Table row attributes
  */
 export interface TableRowAttrs {
+  /** Stable collaboration-sidecar provenance identity. */
+  collaborationId?: string;
   /** Row height (in twips) */
   height?: number;
   /** Height rule ('auto', 'exact', 'atLeast') */
@@ -337,6 +347,8 @@ export interface TableRowAttrs {
  * Table cell attributes
  */
 export interface TableCellAttrs {
+  /** Stable collaboration-sidecar provenance identity. */
+  collaborationId?: string;
   /** Column span */
   colspan: number;
   /** Row span */

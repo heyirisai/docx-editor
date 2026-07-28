@@ -4,6 +4,8 @@
 
 ```ts
 
+import { Node as Node_2 } from 'prosemirror-model';
+
 // @public
 export function addRepeatingSectionItem(doc: Document_2, filter: ContentControlFilter, options?: {
     afterIndex?: number;
@@ -94,6 +96,94 @@ export function buildSelectionContext(doc: Document_2, range: Range_2, options?:
 
 // @public
 export function buildSelectionContextFromContext(doc: Document_2, range: Range_2, options?: ContextSelectionOptions): SelectionContext;
+
+// @public (undocumented)
+export interface CollaborationExportAsset {
+    // (undocumented)
+    assetId: string;
+    // (undocumented)
+    bytes: Uint8Array;
+    // (undocumented)
+    mimeType: string;
+}
+
+// @public (undocumented)
+export class CollaborationExportFidelityError extends Error {
+    constructor(reason: CollaborationExportFidelityFailure, paragraphId?: string);
+    // (undocumented)
+    readonly code = "collaboration_export_fidelity_unsupported";
+    // (undocumented)
+    readonly paragraphId?: string;
+    // (undocumented)
+    readonly reason: CollaborationExportFidelityFailure;
+}
+
+// @public (undocumented)
+export type CollaborationExportFidelityFailure = 'structural_change' | 'untracked_paragraph_change' | 'unsafe_paragraph_markup' | 'xml_patch_failed';
+
+// @public (undocumented)
+export interface CollaborationExportInput {
+    // (undocumented)
+    assets?: readonly CollaborationExportAsset[];
+    // (undocumented)
+    baseRevision: string;
+    comments?: readonly Comment_2[];
+    // (undocumented)
+    manifest: readonly ExternalMediaManifestEntry[];
+    // (undocumented)
+    projectedDocument: CollaborationJsonNode;
+    // (undocumented)
+    sidecar: FidelitySidecar;
+    // (undocumented)
+    sourceBuffer: ArrayBuffer;
+    // (undocumented)
+    sourceSha256: string;
+}
+
+// @public (undocumented)
+export class CollaborationIdentityMismatchError extends Error {
+    constructor();
+    // (undocumented)
+    readonly code = "collaboration_identity_mismatch";
+}
+
+// @public (undocumented)
+export interface CollaborationJsonNode {
+    // (undocumented)
+    attrs?: Record<string, unknown>;
+    // (undocumented)
+    content?: CollaborationJsonNode[];
+    // (undocumented)
+    marks?: CollaborationJsonMark[];
+    // (undocumented)
+    text?: string;
+    // (undocumented)
+    type: string;
+}
+
+// @public (undocumented)
+export interface CollaborationProjection {
+    // (undocumented)
+    baseRevision: string;
+    // (undocumented)
+    diagnostics: CollaborationDiagnostic[];
+    // (undocumented)
+    document: CollaborationJsonNode;
+    // (undocumented)
+    schemaVersion: number;
+    // (undocumented)
+    sidecar: FidelitySidecar;
+    // (undocumented)
+    stats: CollaborationProjectionStats;
+}
+
+// @public (undocumented)
+export interface CollaborationProjectionOptions {
+    // (undocumented)
+    baseRevision: string;
+    // (undocumented)
+    schemaVersion?: number;
+}
 
 // @public
 export function colorsEqual(color1: ColorValue | undefined | null, color2: ColorValue | undefined | null, theme: Theme | null | undefined): boolean;
@@ -461,6 +551,9 @@ export function executeCommand(doc: Document_2, command: AgentCommand): Document
 export function executeCommands(doc: Document_2, commands: AgentCommand[]): Document_2;
 
 // @public
+export function exportCollaborationDocument(input: CollaborationExportInput): Promise<ArrayBuffer>;
+
+// @public
 export interface ExtendedSelectionContext extends SelectionContext {
     characterCount?: number;
     contentType?: 'prose' | 'list' | 'heading' | 'table' | 'mixed';
@@ -472,7 +565,23 @@ export interface ExtendedSelectionContext extends SelectionContext {
 }
 
 // @public
+export interface ExternalMediaParseOptions {
+    // (undocumented)
+    entries: readonly ExternalMediaManifestEntry[];
+}
+
+// @public
 export function extractVariablesFromText(text: string): string[];
+
+// @public (undocumented)
+export interface FidelitySidecar {
+    // (undocumented)
+    baseRevision: string;
+    // (undocumented)
+    entries: Record<string, FidelitySidecarEntry>;
+    // (undocumented)
+    version: 1;
+}
 
 // @public
 export function findContentControl(input: Document_2 | DocumentBody, filter: ContentControlFilter, options?: FindContentControlsOptions): ContentControlInfo | undefined;
@@ -640,6 +749,7 @@ export interface Hyperlink {
 interface Image_2 {
     allowOverlap?: boolean;
     alt?: string;
+    assetId?: string;
     crop?: ImageCrop;
     decorative?: boolean;
     effects?: {
@@ -668,6 +778,15 @@ interface Image_2 {
     wrap: ImageWrap;
 }
 export { Image_2 as Image }
+
+// @public (undocumented)
+export class IncompleteCollaborationManifestError extends Error {
+    constructor(missingPaths?: readonly string[]);
+    // (undocumented)
+    readonly code = "incomplete_collaboration_manifest";
+    // (undocumented)
+    readonly missingPaths: readonly string[];
+}
 
 // @public
 export interface InsertHyperlinkCommand extends BaseCommand {
@@ -905,6 +1024,15 @@ interface McpToolResult {
 export { McpToolResult }
 export { McpToolResult as ToolResult }
 
+// @public (undocumented)
+export class MissingCollaborationAssetError extends Error {
+    constructor(assetId: string);
+    // (undocumented)
+    readonly assetId: string;
+    // (undocumented)
+    readonly code = "missing_collaboration_asset";
+}
+
 // @public
 export interface MoveFrom {
     content: (Run | Hyperlink)[];
@@ -1037,14 +1165,39 @@ export interface ParagraphOutline {
     style?: string;
 }
 
+// @public (undocumented)
+export function parseCollaborationPackage(input: {
+    packageBuffer: ArrayBuffer;
+    manifest: readonly ExternalMediaManifestEntry[];
+    baseRevision: string;
+}): Promise<ParsedCollaborationPackage>;
+
 // @public
 export function parseColorString(colorString: string | undefined): ColorValue | undefined;
+
+// @public (undocumented)
+export interface ParsedCollaborationPackage {
+    // (undocumented)
+    document: Document_2;
+    // (undocumented)
+    projection: CollaborationProjection;
+}
 
 // @public
 export function parseDocx(input: DocxInput, options?: ParseOptions): Promise<Document_2>;
 
 // @public
 export function parseHeadingLevel(styleId?: string): number | undefined;
+
+// @public
+export interface ParseOptions {
+    detectVariables?: boolean;
+    externalMedia?: ExternalMediaParseOptions;
+    onProgress?: ProgressCallback;
+    parseHeadersFooters?: boolean;
+    parseNotes?: boolean;
+    preloadFonts?: boolean;
+}
 
 // @public
 export function parseVariable(variable: string): string | null;
@@ -1174,6 +1327,12 @@ export interface ProcessTemplateResult {
 }
 
 // @public
+export type ProgressCallback = (stage: string, percent: number) => void;
+
+// @public (undocumented)
+export function projectProseMirrorDocument(document: Node_2, options: CollaborationProjectionOptions): CollaborationProjection;
+
+// @public
 interface Range_2 {
     collapsed?: boolean;
     end: Position_2;
@@ -1183,6 +1342,9 @@ export { Range_2 as Range }
 
 // @public
 export function registerPlugins(plugins: CorePlugin[], options?: PluginOptions): PluginRegistrationResult[];
+
+// @public (undocumented)
+export function rehydrateCollaborationDocument(document: CollaborationJsonNode, sidecar: FidelitySidecar, diagnostics?: CollaborationDiagnostic[]): CollaborationJsonNode;
 
 // @public
 export interface Relationship {

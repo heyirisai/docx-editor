@@ -82,6 +82,33 @@ export const IMAGE_CLASS_NAMES: {
 // @public
 export const IMAGE_LAYOUT_OPTIONS: readonly ImageLayoutOptionDef[];
 
+// @public
+export interface ImageAssetRequest {
+    // (undocumented)
+    assetId: string;
+    // (undocumented)
+    height?: number;
+    // (undocumented)
+    signal: AbortSignal;
+    // (undocumented)
+    width?: number;
+}
+
+// @public (undocumented)
+export type ImageAssetResolver = (request: ImageAssetRequest) => Promise<ResolvedImageAsset>;
+
+// @public (undocumented)
+export interface ImageAssetSource {
+    // (undocumented)
+    assetId?: string;
+    // (undocumented)
+    height?: number;
+    // (undocumented)
+    src?: string;
+    // (undocumented)
+    width?: number;
+}
+
 // @public (undocumented)
 export interface ImageHitTestResult {
     imageEl: HTMLElement;
@@ -133,6 +160,27 @@ export class LayoutPainter {
 }
 
 // @public
+export class LazyImageAssetLoader {
+    constructor(resolver: ImageAssetResolver, options?: LazyImageAssetLoaderOptions);
+    // (undocumented)
+    dispose(): void;
+    holdLeases(): () => void;
+    // (undocumented)
+    observe(image: HTMLImageElement, request: Omit<ImageAssetRequest, 'signal'>): void;
+    // (undocumented)
+    releaseSubtree(root: ParentNode): void;
+    resolveSubtree(root: ParentNode): Promise<void>;
+}
+
+// @public (undocumented)
+export interface LazyImageAssetLoaderOptions {
+    // (undocumented)
+    maxConcurrent?: number;
+    // (undocumented)
+    rootMargin?: string;
+}
+
+// @public
 export interface PageGeometry {
     // (undocumented)
     contentHeight: number;
@@ -161,11 +209,24 @@ export interface PainterOptions {
 }
 
 // @public
+export interface PrintPageMaterialization {
+    // (undocumented)
+    populated: number;
+    // (undocumented)
+    release: () => void;
+}
+
+// @public (undocumented)
+export function renderAllPagesForPrint(container: HTMLElement): Promise<PrintPageMaterialization>;
+
+// @public
 export function renderAllPagesNow(container: HTMLElement): number;
 
 // @public
 export interface RenderContext {
     contentWidth?: number;
+    // (undocumented)
+    imageAssetLoader?: LazyImageAssetLoader;
     insideTableCell?: boolean;
     pageNumber: number;
     positioning?: 'absolute' | 'flow';
@@ -178,7 +239,7 @@ export interface RenderContext {
 export function renderFragment(fragment: Fragment, context: RenderContext, options?: RenderFragmentOptions): HTMLElement;
 
 // @public
-export function renderImageFragment(fragment: ImageFragment, block: ImageBlock, _measure: ImageMeasure, _context: RenderContext, options?: RenderImageFragmentOptions): HTMLElement;
+export function renderImageFragment(fragment: ImageFragment, block: ImageBlock, _measure: ImageMeasure, context: RenderContext, options?: RenderImageFragmentOptions): HTMLElement;
 
 // @public
 export function renderLine(block: ParagraphBlock, line: MeasuredLine, alignment: 'left' | 'center' | 'right' | 'justify' | undefined, doc: Document, options?: RenderLineOptions): HTMLElement;
@@ -196,8 +257,12 @@ export interface RenderPageOptions {
     footerContent?: HeaderFooterContent;
     footerDistance?: number;
     footnoteArea?: FootnoteRenderItem[];
+    // (undocumented)
+    forcePageVirtualization?: boolean;
     headerContent?: HeaderFooterContent;
     headerDistance?: number;
+    // (undocumented)
+    imageAssetLoader?: LazyImageAssetLoader;
     pageBorders?: {
         top?: BorderSpec;
         bottom?: BorderSpec;
@@ -239,6 +304,17 @@ export function resolveAnchoredObjectPosition(object: AnchoredObjectPositionInpu
 
 // @public
 export function resolveAnchoredObjectVerticalTop(object: AnchoredObjectPositionInput, fragmentY: number, geometry?: PageGeometry): number;
+
+// @public (undocumented)
+export interface ResolvedImageAsset {
+    // (undocumented)
+    release?: () => void;
+    // (undocumented)
+    src: string;
+}
+
+// @public
+export function setImageAssetSource(image: HTMLImageElement, source: ImageAssetSource, loader?: LazyImageAssetLoader): void;
 
 // @public
 export function sliceRunsForLine(block: ParagraphBlock, line: MeasuredLine): Run[];

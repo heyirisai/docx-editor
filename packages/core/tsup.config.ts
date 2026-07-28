@@ -27,6 +27,7 @@ export default defineConfig([
       'docx/wrapTypes': 'src/docx/wrapTypes.ts',
       'docx/serializer/index': 'src/docx/serializer/index.ts',
       'agent/index': 'src/agent/index.ts',
+      'collaboration/index': 'src/collaboration/index.ts',
       'utils/index': 'src/utils/index.ts',
       'utils/cardStyles': 'src/utils/cardStyles.ts',
       'types/document': 'src/types/document.ts',

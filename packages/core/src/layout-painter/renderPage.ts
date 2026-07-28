@@ -79,7 +79,7 @@ import {
   calculateFootnoteAreaRenderHeight,
   type FootnoteRenderItem,
 } from './renderPage/footnotes';
-
+import type { LazyImageAssetLoader } from './imageAssets';
 export {
   floatingImageIsBehindDoc,
   floatingImageWrapsText,
@@ -100,6 +100,8 @@ export type { FootnoteRenderItem } from './renderPage/footnotes';
 export {
   renderPages,
   renderAllPagesNow,
+  renderAllPagesForPrint,
+  type PrintPageMaterialization,
   type RenderPagesUpdateKind,
 } from './renderPage/virtualization';
 
@@ -109,6 +111,7 @@ export {
  */
 interface PageFloatingImage {
   src: string;
+  assetId?: string;
   width: number;
   height: number;
   alt?: string;
@@ -178,8 +181,8 @@ export interface RenderContext {
    * fact (#379).
    */
   positioning?: 'absolute' | 'flow';
+  imageAssetLoader?: LazyImageAssetLoader;
 }
-
 /**
  * Options for rendering a page
  */
@@ -228,8 +231,9 @@ export interface RenderPageOptions {
   resolvedCommentIds?: Set<number>;
   /** Watermark to paint behind body content (resolved from the page's section header). */
   watermark?: Watermark;
+  imageAssetLoader?: LazyImageAssetLoader;
+  forcePageVirtualization?: boolean;
 }
-
 /**
  * Apply page styles to an element. Exported because virtualization.ts uses it
  * to size lightweight shells before content lands in them.
@@ -429,6 +433,7 @@ function extractFloatingImagesFromParagraph(
 
     floatingImages.push({
       src: imgRun.src,
+      assetId: imgRun.assetId,
       width: imgRun.width,
       height: imgRun.height,
       alt: imgRun.alt,
@@ -470,7 +475,6 @@ export function renderPage(
   options: RenderPageOptions = {}
 ): HTMLElement {
   const doc = options.document ?? document;
-
   // Create page container
   const pageEl = doc.createElement('div');
   pageEl.className = options.pageClassName ?? PAGE_CLASS_NAMES.page;
@@ -481,7 +485,12 @@ export function renderPage(
   // Watermark layer: painted first so it sits behind the body content area
   // (which is appended later), matching Word's behind-text watermark.
   if (options.watermark) {
-    const watermarkLayer = renderWatermarkLayer(options.watermark, page, doc);
+    const watermarkLayer = renderWatermarkLayer(
+      options.watermark,
+      page,
+      doc,
+      context.imageAssetLoader
+    );
     if (watermarkLayer) {
       pageEl.appendChild(watermarkLayer);
     }
@@ -639,6 +648,7 @@ export function renderPage(
       itemClass: 'layout-page-floating-image',
       sizing: 'inset0',
       layerMode: 'behind',
+      imageAssetLoader: context.imageAssetLoader,
     });
     contentEl.appendChild(floatingLayer);
   }
@@ -805,6 +815,7 @@ export function renderPage(
       itemClass: 'layout-page-floating-image',
       sizing: 'inset0',
       layerMode: 'front',
+      imageAssetLoader: context.imageAssetLoader,
     });
     contentEl.appendChild(floatingLayer);
   }
@@ -992,10 +1003,8 @@ export function renderPage(
     }
     pageEl.appendChild(footerEl);
   }
-
   if (pageBorderEl && options.pageBorders?.zOrder !== 'back') {
     pageEl.appendChild(pageBorderEl);
   }
-
   return pageEl;
 }

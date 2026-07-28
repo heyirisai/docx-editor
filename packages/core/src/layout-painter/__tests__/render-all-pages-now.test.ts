@@ -9,9 +9,10 @@
  */
 
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, mock, test } from 'bun:test';
 import type { Page } from '../../layout-engine/types';
-import { renderPages, renderAllPagesNow } from '../renderPage';
+import { LazyImageAssetLoader } from '../imageAssets';
+import { renderPages, renderAllPagesForPrint, renderAllPagesNow } from '../renderPage';
 
 let originalGetContext: typeof HTMLCanvasElement.prototype.getContext | undefined;
 let originalIntersectionObserver: typeof globalThis.IntersectionObserver | undefined;
@@ -99,6 +100,96 @@ describe('renderAllPagesNow', () => {
 
     expect(renderAllPagesNow(container)).toBe(0);
 
+    container.remove();
+  });
+
+  test('fully rebuilds when an eager document grows across the virtualization threshold', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    renderPages(makePages(3), container, { document });
+    const eagerFirstPage = container.firstElementChild;
+
+    expect(renderPages(makePages(12), container, { document })).toBe('full');
+    expect(container.firstElementChild).not.toBe(eagerFirstPage);
+
+    const shells = Array.from(container.children) as HTMLElement[];
+    expect(shells).toHaveLength(12);
+    expect(shells.some((shell) => shell.childElementCount === 0)).toBe(true);
+
+    container.remove();
+  });
+
+  test('virtualizes a short image-dense document when the host forces it', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+
+    renderPages(makePages(3), container, {
+      document,
+      forcePageVirtualization: true,
+    });
+
+    const shells = Array.from(container.children) as HTMLElement[];
+    expect(shells).toHaveLength(3);
+    expect(shells.every((shell) => shell.dataset.pageIndex !== undefined)).toBe(true);
+    expect(renderAllPagesNow(container)).toBe(0);
+
+    container.remove();
+  });
+
+  test('waits for the image loader after materializing virtual pages', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const loader = new LazyImageAssetLoader(async () => ({
+      src: 'blob:unused',
+    }));
+    let resolved = false;
+    loader.resolveSubtree = async () => {
+      await Promise.resolve();
+      resolved = true;
+    };
+
+    renderPages(makePages(12), container, {
+      document,
+      imageAssetLoader: loader,
+    });
+
+    const materialization = renderAllPagesForPrint(container);
+    expect(resolved).toBe(false);
+    const result = await materialization;
+    expect(resolved).toBe(true);
+    result.release();
+
+    loader.dispose();
+    container.remove();
+  });
+
+  test('retains the image loader when an eager short document is printed', async () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const loader = new LazyImageAssetLoader(async () => ({
+      src: 'blob:unused',
+    }));
+    const resolveSubtree = mock(async () => undefined);
+    const release = mock(() => undefined);
+    const holdLeases = mock(() => release);
+    loader.resolveSubtree = resolveSubtree;
+    loader.holdLeases = holdLeases;
+
+    renderPages(makePages(3), container, {
+      document,
+      imageAssetLoader: loader,
+    });
+
+    const result = await renderAllPagesForPrint(container);
+    expect(result.populated).toBe(0);
+    expect(holdLeases).toHaveBeenCalledTimes(1);
+    expect(resolveSubtree).toHaveBeenCalledWith(container);
+
+    result.release();
+    expect(release).toHaveBeenCalledTimes(1);
+
+    loader.dispose();
     container.remove();
   });
 });

@@ -400,6 +400,7 @@ export function paragraphToRuns(
       const run: ImageRun = {
         kind: 'image',
         src: attrs.src as string,
+        assetId: attrs.assetId as string | undefined,
         width: constrained.width,
         height: constrained.height,
         alt: attrs.alt as string | undefined,

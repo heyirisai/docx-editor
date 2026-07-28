@@ -190,6 +190,8 @@ export const ImageExtension = createNodeExtension({
     draggable: true,
     attrs: {
       src: {},
+      collaborationId: { default: null },
+      assetId: { default: null },
       alt: { default: null },
       title: { default: null },
       width: { default: null },
@@ -224,11 +226,12 @@ export const ImageExtension = createNodeExtension({
     },
     parseDOM: [
       {
-        tag: 'img[src]',
+        tag: 'img[src], img[data-asset-id]',
         getAttrs(dom): ImageAttrs {
           const element = dom as HTMLImageElement;
           return {
             src: element.getAttribute('src') || '',
+            assetId: element.dataset.assetId || undefined,
             alt: element.getAttribute('alt') || undefined,
             title: element.getAttribute('title') || undefined,
             width: element.width || undefined,
@@ -250,10 +253,14 @@ export const ImageExtension = createNodeExtension({
     toDOM(node) {
       const attrs = node.attrs as ImageAttrs;
       const domAttrs: Record<string, string> = {
-        src: attrs.src,
         class: 'docx-image',
       };
 
+      // An empty `src` makes browsers request the current document URL. Leave
+      // the attribute absent until the host resolver supplies a local object
+      // URL for this asset.
+      if (attrs.src) domAttrs.src = attrs.src;
+      if (attrs.assetId) domAttrs['data-asset-id'] = attrs.assetId;
       if (attrs.alt) domAttrs.alt = attrs.alt;
       if (attrs.title) domAttrs.title = attrs.title;
       if (attrs.rId) domAttrs['data-rid'] = attrs.rId;

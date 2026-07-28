@@ -587,7 +587,7 @@ export function renderLine(
             const imageKey = getInlineImageRunKey(next);
             if (!options?.renderedInlineImageKeys?.has(imageKey)) {
               options?.renderedInlineImageKeys?.add(imageKey);
-              lineEl.appendChild(renderImageRun(next, doc));
+              lineEl.appendChild(renderImageRun(next, doc, options?.context?.imageAssetLoader));
             }
           } else {
             lineEl.appendChild(renderRun(next, doc, options?.context));
@@ -656,7 +656,7 @@ export function renderLine(
       }
       options?.renderedInlineImageKeys?.add(imageKey);
       // Inline or block image - render in the text flow
-      const runEl = renderImageRun(run, doc);
+      const runEl = renderImageRun(run, doc, options?.context?.imageAssetLoader);
       lineEl.appendChild(runEl);
       // Block images don't contribute to horizontal position
       if (run.displayMode !== 'block' && run.wrapType !== 'topAndBottom') {

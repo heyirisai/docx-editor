@@ -25,6 +25,7 @@ import {
   type BlockLookup,
   type FootnoteRenderItem,
   type RenderPageOptions,
+  type ImageAssetResolver,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import {
   computeLayout,
@@ -54,6 +55,7 @@ import {
   reclampIncrementalSnapshot,
   type PendingScrollRestore,
 } from '../internals/scrollRestore';
+import { useLazyImageAssetLoader } from './useLazyImageAssetLoader';
 
 export interface UseLayoutPipelineOptions {
   document: Document | null;
@@ -77,6 +79,8 @@ export interface UseLayoutPipelineOptions {
   pageGap: number;
   zoom: number;
   resolvedCommentIds?: Set<number>;
+  imageAssetResolver?: ImageAssetResolver;
+  forcePageVirtualization?: boolean;
   pagesContainerRef: React.RefObject<HTMLDivElement | null>;
   viewportLayoutRef: React.RefObject<HTMLDivElement | null>;
   hiddenPMRef: React.RefObject<HiddenProseMirrorRef | null>;
@@ -113,6 +117,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
     pageGap,
     zoom,
     resolvedCommentIds,
+    imageAssetResolver,
+    forcePageVirtualization,
     pagesContainerRef,
     viewportLayoutRef,
     hiddenPMRef,
@@ -178,6 +184,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       }),
     [pageGap]
   );
+  const imageAssetLoader = useLazyImageAssetLoader(imageAssetResolver);
   const painterRef = useRef<LayoutPainter | null>(null);
   painterRef.current = painter;
 
@@ -285,6 +292,8 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
             watermark,
             footnotesByPage,
             resolvedCommentIds,
+            imageAssetLoader,
+            forcePageVirtualization,
           } as RenderPageOptions & {
             pageGap?: number;
             blockLookup?: BlockLookup;
@@ -441,6 +450,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       sectionProperties,
       finalSectionProperties,
       document,
+      forcePageVirtualization,
       resolvedCommentIds,
       getScrollContainer,
       hiddenPMRef,
@@ -448,6 +458,7 @@ export function useLayoutPipeline(opts: UseLayoutPipelineOptions): UseLayoutPipe
       styles,
       theme,
       viewportLayoutRef,
+      imageAssetLoader,
     ]
   );
 

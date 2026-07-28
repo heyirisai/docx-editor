@@ -9,6 +9,8 @@
 import { createNodeExtension } from '../create';
 
 export interface TextBoxAttrs {
+  /** Stable collaboration-sidecar provenance identity. */
+  collaborationId?: string;
   /** Width in pixels */
   width?: number;
   /** Height in pixels */
@@ -66,6 +68,7 @@ export const TextBoxExtension = createNodeExtension({
     isolating: true,
     draggable: true,
     attrs: {
+      collaborationId: { default: null },
       width: { default: 200 },
       height: { default: null },
       textBoxId: { default: null },

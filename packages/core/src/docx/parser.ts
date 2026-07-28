@@ -30,10 +30,11 @@ import type {
   HeaderFooter,
   RelationshipMap,
   MediaFile,
+  ExternalMediaManifestEntry,
   StyleDefinitions,
 } from '../types/document';
 import { unzipDocx, getMediaMimeType, type RawDocxContent } from './unzip';
-import { parseRelationships, RELATIONSHIP_TYPES } from './relsParser';
+import { parseRelationships, RELATIONSHIP_TYPES, resolveRelativePath } from './relsParser';
 import { parseTheme, applyThemeFontLang } from './themeParser';
 import { parseStyles, parseStyleDefinitions, type StyleMap } from './styleParser';
 import { parseNumbering, type NumberingMap } from './numberingParser';
@@ -64,6 +65,23 @@ import { type DocxInput, toArrayBuffer } from '../utils/docxInput';
 export type ProgressCallback = (stage: string, percent: number) => void;
 
 /**
+ * Host-supplied immutable media manifest used by collaboration packages.
+ */
+export interface ExternalMediaParseOptions {
+  entries: readonly ExternalMediaManifestEntry[];
+}
+
+export class IncompleteExternalMediaManifestError extends Error {
+  readonly missingPaths: readonly string[];
+
+  constructor(missingPaths: readonly string[]) {
+    super('External media manifest is missing package image relationships');
+    this.name = 'IncompleteExternalMediaManifestError';
+    this.missingPaths = [...missingPaths];
+  }
+}
+
+/**
  * Parsing options
  */
 export interface ParseOptions {
@@ -77,6 +95,11 @@ export interface ParseOptions {
   parseNotes?: boolean;
   /** Whether to detect template variables (default: true) */
   detectVariables?: boolean;
+  /**
+   * Keep package media compressed and represent image relationships with
+   * stable opaque asset IDs instead of raw bytes or data URLs.
+   */
+  externalMedia?: ExternalMediaParseOptions;
 }
 
 // ============================================================================
@@ -100,6 +123,7 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     parseHeadersFooters = true,
     parseNotes = true,
     detectVariables = true,
+    externalMedia,
   } = options;
 
   const warnings: string[] = [];
@@ -134,7 +158,12 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     // STAGE 1: Unzip DOCX package (0-10%)
     // ========================================================================
     onProgress('Extracting DOCX...', 0);
-    const raw = await timeStageAsync('unzip', () => unzipDocx(buffer));
+    const raw = await timeStageAsync('unzip', () =>
+      unzipDocx(buffer, { extractMedia: externalMedia === undefined })
+    );
+    if (externalMedia) {
+      assertCompleteExternalMediaManifest(raw, externalMedia);
+    }
     onProgress('Extracted DOCX', 10);
 
     // ========================================================================
@@ -187,7 +216,7 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     // STAGE 6: Build media file map (35-40%)
     // ========================================================================
     onProgress('Processing media files...', 35);
-    const media = timeStage('media', () => buildMediaMap(raw, rels));
+    const media = timeStage('media', () => buildMediaMap(raw, rels, externalMedia));
     onProgress('Processed media', 40);
 
     // ========================================================================
@@ -351,6 +380,9 @@ export async function parseDocx(input: DocxInput, options: ParseOptions = {}): P
     onProgress('Complete', 100);
     return document;
   } catch (error) {
+    if (error instanceof IncompleteExternalMediaManifestError) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     console.error('[parseDocx] Failed to parse DOCX:', message, error);
     throw new Error(`Failed to parse DOCX: ${message}`);
@@ -372,11 +404,80 @@ function findFontTableRels(raw: RawDocxContent): string | null {
   return null;
 }
 
+function assertCompleteExternalMediaManifest(
+  raw: RawDocxContent,
+  externalMedia: ExternalMediaParseOptions
+): void {
+  const manifestPaths = new Set(
+    externalMedia.entries.map((entry) => validateExternalMediaEntry(entry).toLowerCase())
+  );
+  const missingPaths = new Set<string>();
+
+  for (const [relsPath, xml] of raw.allXml) {
+    if (!relsPath.toLowerCase().endsWith('.rels')) continue;
+
+    for (const relationship of parseRelationships(xml).values()) {
+      if (
+        relationship.targetMode === 'External' ||
+        !relationship.type.toLowerCase().endsWith('/image')
+      ) {
+        continue;
+      }
+
+      const resolvedPath = resolveRelativePath(
+        relsPath.replace(/\\/g, '/'),
+        relationship.target.replace(/\\/g, '/')
+      );
+      if (!manifestPaths.has(resolvedPath.toLowerCase())) {
+        missingPaths.add(resolvedPath);
+      }
+    }
+  }
+
+  if (missingPaths.size > 0) {
+    throw new IncompleteExternalMediaManifestError([...missingPaths].sort());
+  }
+}
+
 /**
  * Build media file map from raw content and relationships
  */
-function buildMediaMap(raw: RawDocxContent, _rels: RelationshipMap): Map<string, MediaFile> {
+function buildMediaMap(
+  raw: RawDocxContent,
+  _rels: RelationshipMap,
+  externalMedia?: ExternalMediaParseOptions
+): Map<string, MediaFile> {
   const media = new Map<string, MediaFile>();
+
+  if (externalMedia) {
+    // Downstream consumers (the resolver cache and export asset map) key by
+    // assetId, so a manifest that reuses one assetId for two different images
+    // would alias them together and embed the wrong bytes on export. Entry
+    // validation is per-entry and cannot see collisions, so check here where
+    // the whole manifest is in scope. Re-declaring the identical
+    // path+mimeType is harmless and stays allowed.
+    const seenAssetIds = new Map<string, { path: string; mimeType: string }>();
+    for (const entry of externalMedia.entries) {
+      const path = validateExternalMediaEntry(entry);
+      const previous = seenAssetIds.get(entry.assetId);
+      if (previous && (previous.path !== path || previous.mimeType !== entry.mimeType)) {
+        throw new Error(
+          `Duplicate external media asset ID ${entry.assetId} maps to both ` +
+            `${previous.path} (${previous.mimeType}) and ${path} (${entry.mimeType})`
+        );
+      }
+      seenAssetIds.set(entry.assetId, { path, mimeType: entry.mimeType });
+      const filename = entry.filename ?? path.split('/').pop() ?? path;
+      const mediaFile: MediaFile = {
+        path,
+        assetId: entry.assetId,
+        filename,
+        mimeType: entry.mimeType,
+      };
+      addMediaAliases(media, path, mediaFile);
+    }
+    return media;
+  }
 
   // Process each media file
   for (const [path, data] of raw.media.entries()) {
@@ -400,17 +501,48 @@ function buildMediaMap(raw: RawDocxContent, _rels: RelationshipMap): Map<string,
       dataUrl,
     };
 
-    // Store by path and also by relationship target path
-    media.set(path, mediaFile);
-
-    // Also map normalized paths (without "word/" prefix)
-    const normalizedPath = path.replace(/^word\//, '');
-    if (normalizedPath !== path) {
-      media.set(normalizedPath, mediaFile);
-    }
+    addMediaAliases(media, path, mediaFile);
   }
 
   return media;
+}
+
+function validateExternalMediaEntry(entry: ExternalMediaManifestEntry): string {
+  const path = entry.path.replace(/\\/g, '/');
+  const segments = path.split('/');
+  if (
+    path.startsWith('/') ||
+    segments.some((segment) => segment === '..' || segment === '') ||
+    !/^word\/media\/[^/]+$/i.test(path)
+  ) {
+    throw new Error(`Invalid external media path: ${entry.path}`);
+  }
+  if (
+    entry.assetId.length === 0 ||
+    entry.assetId.length > 256 ||
+    /[\u0000-\u001f\u007f]/.test(entry.assetId)
+  ) {
+    throw new Error(`Invalid external media asset ID for ${path}`);
+  }
+  if (
+    entry.mimeType.length === 0 ||
+    entry.mimeType.length > 128 ||
+    !/^image\/[a-z0-9.+-]+$/i.test(entry.mimeType)
+  ) {
+    throw new Error(`Invalid external media MIME type for ${path}`);
+  }
+  return path;
+}
+
+function addMediaAliases(media: Map<string, MediaFile>, path: string, mediaFile: MediaFile): void {
+  const aliases = [path, path.replace(/^word\//i, '')];
+  for (const alias of aliases) {
+    const existing = media.get(alias);
+    if (existing && existing.assetId !== mediaFile.assetId) {
+      throw new Error(`Conflicting media manifest entries for ${path}`);
+    }
+    media.set(alias, mediaFile);
+  }
 }
 
 /**

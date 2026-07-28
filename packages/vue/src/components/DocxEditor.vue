@@ -464,6 +464,9 @@ const props = withDefaults(defineProps<DocxEditorProps>(), {
   theme: null,
   colorMode: 'light',
   externalPlugins: () => [],
+  imageAssetResolver: undefined,
+  imageUploadHandler: undefined,
+  forcePageVirtualization: false,
   showZoomControl: true,
   initialZoom: 1,
   toolbarExtra: undefined,
@@ -574,6 +577,9 @@ const {
   pagesContainer: pagesRef,
   readOnly,
   externalPlugins: props.externalPlugins,
+  imageAssetResolver: computed(() => props.imageAssetResolver),
+  imageUploadHandler: props.imageUploadHandler,
+  forcePageVirtualization: computed(() => props.forcePageVirtualization),
   syncCoordinator,
   editorMode,
   author: authorRef,
@@ -882,6 +888,7 @@ const {
   documentName: () => props.documentName,
   onDocumentNameChange: props.onDocumentNameChange,
   getActiveView: () => activeFormattingView.value,
+  imageUploadHandler: props.imageUploadHandler,
   nextTick,
 });
 
@@ -1048,6 +1055,7 @@ const {
   clearOverlay,
   setPmSelection,
   resolvePos,
+  imageUploadHandler: props.imageUploadHandler,
 });
 
 const { handleMenuAction, handleMenuTableInsert } = useMenuActions({

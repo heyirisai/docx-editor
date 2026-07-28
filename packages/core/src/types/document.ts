@@ -164,6 +164,7 @@ export type {
   Relationship,
   RelationshipMap,
   MediaFile,
+  ExternalMediaManifestEntry,
 } from './styles';
 
 // ============================================================================

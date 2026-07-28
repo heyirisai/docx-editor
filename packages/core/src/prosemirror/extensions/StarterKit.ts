@@ -10,6 +10,7 @@
 
 import type { AnyExtension } from './types';
 import type { SelectionChangeCallback } from '../plugins/selectionTracker';
+import type { ImageUploadHandler } from '../commands/image';
 
 // Core
 import { DocExtension } from './core/DocExtension';
@@ -81,6 +82,8 @@ export interface StarterKitOptions {
   historyNewGroupDelay?: number;
   /** Selection change callback */
   onSelectionChange?: SelectionChangeCallback;
+  /** Persist inserted/pasted image bytes before publishing an opaque asset ID. */
+  imageUploadHandler?: ImageUploadHandler;
 }
 
 /**
@@ -145,7 +148,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
   add('textBox', TextBoxExtension());
   add('shape', ShapeExtension());
   add('imageDrag', ImageDragExtension());
-  add('imagePaste', ImagePasteExtension());
+  add('imagePaste', ImagePasteExtension({ imageUploadHandler: options.imageUploadHandler }));
   add('dropCursor', DropCursorExtension());
   add('horizontalRule', HorizontalRuleExtension());
   add('pageBreak', PageBreakExtension());

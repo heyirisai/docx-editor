@@ -244,6 +244,7 @@ export type ImageBlock = {
     kind: 'image';
     id: BlockId;
     src: string;
+    assetId?: string;
     width: number;
     height: number;
     alt?: string;
@@ -284,6 +285,7 @@ export type ImageMeasure = {
 export type ImageRun = {
     kind: 'image';
     src: string;
+    assetId?: string;
     width: number;
     height: number;
     alt?: string;

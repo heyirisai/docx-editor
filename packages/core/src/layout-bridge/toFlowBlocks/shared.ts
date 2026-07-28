@@ -64,6 +64,17 @@ export function constrainImageToPage(
 }
 
 let blockIdCounter = 0;
+let blockIdsByOwner = new WeakMap<object, Map<string, string[]>>();
+
+export interface BlockIdAllocator {
+  /**
+   * Return the stable ID for one converted role owned by a ProseMirror node.
+   *
+   * The occurrence index keeps IDs unique even when callers reuse the same
+   * immutable PM node instance in more than one place in a document.
+   */
+  idFor(owner: object, role: string): string;
+}
 
 /**
  * Generate a unique block ID.
@@ -73,8 +84,48 @@ export function nextBlockId(): string {
 }
 
 /**
+ * Create a per-conversion allocator backed by persistent PM-node identity.
+ *
+ * ProseMirror preserves object identity for unchanged subtrees. Reusing IDs
+ * for those nodes lets incremental page rendering distinguish an edited block
+ * from unchanged siblings instead of treating every layout pass as a new
+ * document.
+ */
+export function createBlockIdAllocator(): BlockIdAllocator {
+  const occurrencesByOwner = new WeakMap<object, Map<string, number>>();
+
+  return {
+    idFor(owner, role) {
+      let occurrencesByRole = occurrencesByOwner.get(owner);
+      if (!occurrencesByRole) {
+        occurrencesByRole = new Map();
+        occurrencesByOwner.set(owner, occurrencesByRole);
+      }
+      const occurrence = occurrencesByRole.get(role) ?? 0;
+      occurrencesByRole.set(role, occurrence + 1);
+
+      let idsByRole = blockIdsByOwner.get(owner);
+      if (!idsByRole) {
+        idsByRole = new Map();
+        blockIdsByOwner.set(owner, idsByRole);
+      }
+      let ids = idsByRole.get(role);
+      if (!ids) {
+        ids = [];
+        idsByRole.set(role, ids);
+      }
+      if (!ids[occurrence]) {
+        ids[occurrence] = nextBlockId();
+      }
+      return ids[occurrence];
+    },
+  };
+}
+
+/**
  * Reset the block ID counter (useful for testing).
  */
 export function resetBlockIdCounter(): void {
   blockIdCounter = 0;
+  blockIdsByOwner = new WeakMap();
 }

@@ -18,9 +18,11 @@ import { DocxInput } from '@eigenpal/docx-editor-core/utils';
 import { EditorHandle } from '@eigenpal/docx-editor-core';
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
+import * as _eigenpal_docx_editor_core_layout_painter from '@eigenpal/docx-editor-core/layout-painter';
 import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
 import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
 import { HeaderFooter } from '@eigenpal/docx-editor-core/types/document';
+import { ImageUploadHandler } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { Layout } from '@eigenpal/docx-editor-core/layout-engine';
 import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
 import { PrintOptions } from '@eigenpal/docx-editor-core';
@@ -71,8 +73,13 @@ export interface DocxEditorProps {
     externalPlugins?: prosemirror_state.Plugin[];
     fontFamilies?: ReadonlyArray<string | FontOption>;
     fonts?: ReadonlyArray<FontDefinition>;
+    // (undocumented)
+    forcePageVirtualization?: boolean;
     historyOverride?: HistoryOverride;
     i18n?: Translations;
+    // (undocumented)
+    imageAssetResolver?: _eigenpal_docx_editor_core_layout_painter.ImageAssetResolver;
+    imageUploadHandler?: ImageUploadHandler;
     initialZoom?: number;
     loadingIndicator?: ReactNode;
     marginGuideColor?: string;

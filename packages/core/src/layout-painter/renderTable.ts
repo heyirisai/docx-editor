@@ -130,6 +130,7 @@ function renderCellContent(
           itemClass: 'layout-cell-floating-image',
           sizing: 'fullSize',
           layerMode: 'behind',
+          imageAssetLoader: context.imageAssetLoader,
         })
       );
     }
@@ -218,6 +219,7 @@ function renderCellContent(
         itemClass: 'layout-cell-floating-image',
         sizing: 'fullSize',
         layerMode: 'front',
+        imageAssetLoader: context.imageAssetLoader,
       })
     );
   }

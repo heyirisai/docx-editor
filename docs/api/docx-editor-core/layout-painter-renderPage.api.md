@@ -7,6 +7,9 @@
 import { Node as Node_2 } from 'prosemirror-model';
 
 // @public
+export function A(fragment: TextBoxFragment, block: TextBoxBlock, measure: TextBoxMeasure, context: RenderContext, options?: RenderTextBoxFragmentOptions): HTMLElement;
+
+// @public
 export interface a {
     // (undocumented)
     block: FlowBlock;
@@ -23,23 +26,42 @@ export function applyPageStyles(element: HTMLElement, width: number, height: num
 export type B = Map<string, a>;
 
 // @public
-export const b: readonly e[];
+export const b: readonly h[];
 
-// @public (undocumented)
+// @public
+export function C(image: HTMLImageElement, source: e, loader?: j): void;
+
+// @public
 export interface c {
-    imageEl: HTMLElement;
-    pos: number;
+    // (undocumented)
+    assetId: string;
+    // (undocumented)
+    height?: number;
+    // (undocumented)
+    signal: AbortSignal;
+    // (undocumented)
+    width?: number;
 }
 
 // @public
-export type d = 'inline' | 'squareLeft' | 'squareRight' | 'behind' | 'inFront';
+export function D(block: ParagraphBlock, line: MeasuredLine): Run[];
+
+// @public (undocumented)
+export type d = (request: c) => Promise<R>;
+
+// @public
+export function E(value: string): ImageLayoutTarget | undefined;
 
 // @public (undocumented)
 export interface e {
-    choice: ImageLayoutTarget;
-    i18nDescKey: string;
-    i18nLabelKey: string;
-    iconHint: d;
+    // (undocumented)
+    assetId?: string;
+    // (undocumented)
+    height?: number;
+    // (undocumented)
+    src?: string;
+    // (undocumented)
+    width?: number;
 }
 
 // @public
@@ -52,18 +74,10 @@ export const F: {
     run: string;
 };
 
-// @public
-export class f {
-    constructor(options?: P);
-    getPageCount(): number;
-    getPageElement(index: number): HTMLElement | null;
-    mount(container: HTMLElement): void;
-    paint(layout: Layout): void;
-    // (undocumented)
-    resolvedCommentIds: Set<number>;
-    scrollToPage(pageNumber: number): void;
-    setBlockLookup(lookup: B): void;
-    unmount(): void;
+// @public (undocumented)
+export interface f {
+    imageEl: HTMLElement;
+    pos: number;
 }
 
 // @public (undocumented)
@@ -75,6 +89,8 @@ export function floatingImageIsBehindDoc(img: {
 export interface FloatingImagePaintRecord {
     // (undocumented)
     alt?: string;
+    // (undocumented)
+    assetId?: string;
     // (undocumented)
     cropBottom?: number;
     // (undocumented)
@@ -105,6 +121,8 @@ export interface FloatingImagePaintRecord {
 // @public (undocumented)
 export interface FloatingImagesLayerOptions {
     // (undocumented)
+    imageAssetLoader?: j;
+    // (undocumented)
     itemClass: string;
     // (undocumented)
     layerClass: string;
@@ -125,12 +143,15 @@ export interface FootnoteRenderItem {
 }
 
 // @public
-export const g: {
-    textBox: string;
-};
+export type g = 'inline' | 'squareLeft' | 'squareRight' | 'behind' | 'inFront';
 
-// @public
-export function h(container: HTMLElement, focusedIds: Set<string>): void;
+// @public (undocumented)
+export interface h {
+    choice: ImageLayoutTarget;
+    i18nDescKey: string;
+    i18nLabelKey: string;
+    iconHint: g;
+}
 
 // @public
 export interface HeaderFooterContent {
@@ -170,7 +191,18 @@ export const I: {
 };
 
 // @public
-export function i(blocks: FlowBlock[], measures: Measure[]): B;
+export class i {
+    constructor(options?: P);
+    getPageCount(): number;
+    getPageElement(index: number): HTMLElement | null;
+    mount(container: HTMLElement): void;
+    paint(layout: Layout): void;
+    // (undocumented)
+    resolvedCommentIds: Set<number>;
+    scrollToPage(pageNumber: number): void;
+    setBlockLookup(lookup: B): void;
+    unmount(): void;
+}
 
 // @public
 export function isFloatingImageRun(run: ImageRun): boolean;
@@ -179,13 +211,25 @@ export function isFloatingImageRun(run: ImageRun): boolean;
 export function isTextWrappingFloatingImageRun(run: ImageRun): boolean;
 
 // @public
-export function j(imageEl: HTMLElement, zoom?: number): {
-    horizontalEmu: number;
-    verticalEmu: number;
-} | undefined;
+export class j {
+    constructor(resolver: d, options?: k);
+    // (undocumented)
+    dispose(): void;
+    holdLeases(): () => void;
+    // (undocumented)
+    observe(image: HTMLImageElement, request: Omit<c, 'signal'>): void;
+    // (undocumented)
+    releaseSubtree(root: ParentNode): void;
+    resolveSubtree(root: ParentNode): Promise<void>;
+}
 
-// @public
-export function k(options?: P): f;
+// @public (undocumented)
+export interface k {
+    // (undocumented)
+    maxConcurrent?: number;
+    // (undocumented)
+    rootMargin?: string;
+}
 
 // @public
 export const L: {
@@ -198,16 +242,21 @@ export const L: {
 };
 
 // @public
-export function l(wrapType: WrapType, cssFloat?: ImageAttrs['cssFloat'] | null): ImageLayoutTarget | null;
+export const l: {
+    textBox: string;
+};
 
 // @public
-export function m(doc: Node_2, from: number, to: number): Set<string>;
+export function m(container: HTMLElement, focusedIds: Set<string>): void;
 
 // @public
-export function n(target: EventTarget | null): HTMLElement | null;
+export function n(blocks: FlowBlock[], measures: Measure[]): B;
 
 // @public
-export function o(target: EventTarget | null): c | null;
+export function o(imageEl: HTMLElement, zoom?: number): {
+    horizontalEmu: number;
+    verticalEmu: number;
+} | undefined;
 
 // @public
 export interface P {
@@ -219,7 +268,7 @@ export interface P {
 }
 
 // @public
-export function p(_option: e, _currentWrapType: WrapType): boolean;
+export function p(options?: P): i;
 
 // @public
 export const PAGE_CLASS_NAMES: {
@@ -230,10 +279,29 @@ export const PAGE_CLASS_NAMES: {
 };
 
 // @public
-export function q(fragment: ImageFragment, block: ImageBlock, _measure: ImageMeasure, _context: RenderContext, options?: RenderImageFragmentOptions): HTMLElement;
+export interface PrintPageMaterialization {
+    // (undocumented)
+    populated: number;
+    // (undocumented)
+    release: () => void;
+}
 
 // @public
-export function r(fragment: Fragment, context: RenderContext, options?: RenderFragmentOptions): HTMLElement;
+export function q(wrapType: WrapType, cssFloat?: ImageAttrs['cssFloat'] | null): ImageLayoutTarget | null;
+
+// @public (undocumented)
+export interface R {
+    // (undocumented)
+    release?: () => void;
+    // (undocumented)
+    src: string;
+}
+
+// @public
+export function r(doc: Node_2, from: number, to: number): Set<string>;
+
+// @public (undocumented)
+export function renderAllPagesForPrint(container: HTMLElement): Promise<PrintPageMaterialization>;
 
 // @public
 export function renderAllPagesNow(container: HTMLElement): number;
@@ -241,6 +309,8 @@ export function renderAllPagesNow(container: HTMLElement): number;
 // @public
 export interface RenderContext {
     contentWidth?: number;
+    // (undocumented)
+    imageAssetLoader?: j;
     insideTableCell?: boolean;
     pageNumber: number;
     positioning?: 'absolute' | 'flow';
@@ -265,8 +335,12 @@ export interface RenderPageOptions {
     footerContent?: HeaderFooterContent;
     footerDistance?: number;
     footnoteArea?: FootnoteRenderItem[];
+    // (undocumented)
+    forcePageVirtualization?: boolean;
     headerContent?: HeaderFooterContent;
     headerDistance?: number;
+    // (undocumented)
+    imageAssetLoader?: j;
     pageBorders?: {
         top?: BorderSpec;
         bottom?: BorderSpec;
@@ -309,7 +383,7 @@ export function resolveHeaderFooterFloatLeft(width: number, h: {
 } | undefined, layout: HeaderFooterLayoutInfo): string;
 
 // @public
-export function s(block: ParagraphBlock, line: MeasuredLine, alignment: 'left' | 'center' | 'right' | 'justify' | undefined, doc: Document, options?: RenderLineOptions): HTMLElement;
+export function s(target: EventTarget | null): HTMLElement | null;
 
 // @public
 export const T: {
@@ -324,18 +398,24 @@ export const T: {
 };
 
 // @public
-export function t(fragment: ParagraphFragment, block: ParagraphBlock, measure: ParagraphMeasure, context: RenderContext, options?: RenderParagraphOptions): HTMLElement;
+export function t(target: EventTarget | null): f | null;
 
 // @public
-export function u(fragment: TableFragment, block: TableBlock, measure: TableMeasure, context: RenderContext, options?: RenderTableFragmentOptions): HTMLElement;
+export function u(_option: h, _currentWrapType: WrapType): boolean;
 
 // @public
-export function v(fragment: TextBoxFragment, block: TextBoxBlock, measure: TextBoxMeasure, context: RenderContext, options?: RenderTextBoxFragmentOptions): HTMLElement;
+export function v(fragment: Fragment, context: RenderContext, options?: RenderFragmentOptions): HTMLElement;
 
 // @public
-export function w(block: ParagraphBlock, line: MeasuredLine): Run[];
+export function w(fragment: ImageFragment, block: ImageBlock, _measure: ImageMeasure, context: RenderContext, options?: RenderImageFragmentOptions): HTMLElement;
 
 // @public
-export function x(value: string): ImageLayoutTarget | undefined;
+export function x(block: ParagraphBlock, line: MeasuredLine, alignment: 'left' | 'center' | 'right' | 'justify' | undefined, doc: Document, options?: RenderLineOptions): HTMLElement;
+
+// @public
+export function y(fragment: ParagraphFragment, block: ParagraphBlock, measure: ParagraphMeasure, context: RenderContext, options?: RenderParagraphOptions): HTMLElement;
+
+// @public
+export function z(fragment: TableFragment, block: TableBlock, measure: TableMeasure, context: RenderContext, options?: RenderTableFragmentOptions): HTMLElement;
 
 ```

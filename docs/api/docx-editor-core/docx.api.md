@@ -74,6 +74,12 @@ export interface EndnoteMap {
 }
 
 // @public
+export interface ExternalMediaParseOptions {
+    // (undocumented)
+    entries: readonly ExternalMediaManifestEntry[];
+}
+
+// @public
 export function extractTextBoxContentElements(txbxContent: Element_2 | null): {
     paragraphElements: Element_2[];
     tableElements: Element_2[];
@@ -385,6 +391,16 @@ export function parseImage(node: Element_2, rels: RelationshipMap | undefined, m
 export function parseNumbering(numberingXml: string | null): NumberingMap;
 
 // @public
+export interface ParseOptions {
+    detectVariables?: boolean;
+    externalMedia?: ExternalMediaParseOptions;
+    onProgress?: ProgressCallback;
+    parseHeadersFooters?: boolean;
+    parseNotes?: boolean;
+    preloadFonts?: boolean;
+}
+
+// @public
 export function parseShading(shdElement: Element_2 | null): ShadingProperties | undefined;
 
 // @public
@@ -428,6 +444,9 @@ export function parseTextBoxFromShape(wsp: Element_2, size: ImageSize, position?
 
 // @public
 export function pixelsToEmu(px: number): number;
+
+// @public
+export type ProgressCallback = (stage: string, percent: number) => void;
 
 // @public
 export function renderListMarker(lvlText: string, counters: number[], formats: NumberFormat[]): string;

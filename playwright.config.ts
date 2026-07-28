@@ -22,6 +22,12 @@ const nuxtDevServer = {
   reuseExistingServer: !process.env.CI,
   timeout: 120 * 1000,
 };
+const collaborationDevServer = {
+  command: "bun run --filter './examples/collaboration' dev",
+  url: 'http://localhost:5273',
+  reuseExistingServer: !process.env.CI,
+  timeout: 60 * 1000,
+};
 
 export default defineConfig({
   testDir: './e2e',
@@ -85,7 +91,9 @@ export default defineConfig({
 
   /* Run dev servers before tests */
   webServer: process.env.PERF_REACT_ONLY
-    ? [reactDevServer]
+    ? process.env.COLLAB_PERF_MULTI
+      ? [reactDevServer, collaborationDevServer]
+      : [reactDevServer]
     : [reactDevServer, vueDevServer, nuxtDevServer],
 
   /* Output directory for screenshots */

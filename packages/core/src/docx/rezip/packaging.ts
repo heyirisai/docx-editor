@@ -43,6 +43,33 @@ export const COMMENTS_EXTENSIBLE_CONTENT_TYPE =
 const NUMBERING_CONTENT_TYPE =
   'application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml';
 
+const COMMENT_PARTS = [
+  {
+    partName: '/word/comments.xml',
+    contentType: COMMENTS_CONTENT_TYPE,
+    target: 'comments.xml',
+    relType: RELATIONSHIP_TYPES.comments,
+  },
+  {
+    partName: '/word/commentsExtended.xml',
+    contentType: COMMENTS_EXTENDED_CONTENT_TYPE,
+    target: 'commentsExtended.xml',
+    relType: RELATIONSHIP_TYPES.commentsExtended,
+  },
+  {
+    partName: '/word/commentsIds.xml',
+    contentType: COMMENTS_IDS_CONTENT_TYPE,
+    target: 'commentsIds.xml',
+    relType: RELATIONSHIP_TYPES.commentsIds,
+  },
+  {
+    partName: '/word/commentsExtensible.xml',
+    contentType: COMMENTS_EXTENSIBLE_CONTENT_TYPE,
+    target: 'commentsExtensible.xml',
+    relType: RELATIONSHIP_TYPES.commentsExtensible,
+  },
+] as const;
+
 /**
  * Ensure every header/footer in `doc.package.relationships` is wired up in
  * `[Content_Types].xml` and `word/_rels/document.xml.rels`. For blank documents
@@ -181,33 +208,6 @@ export async function ensureNumberingPart(
  * Reads each shared file once, applies all modifications, writes once.
  */
 async function ensureAllCommentParts(zip: JSZip, compressionLevel: number): Promise<void> {
-  const COMMENT_PARTS = [
-    {
-      partName: '/word/comments.xml',
-      contentType: COMMENTS_CONTENT_TYPE,
-      target: 'comments.xml',
-      relType: RELATIONSHIP_TYPES.comments,
-    },
-    {
-      partName: '/word/commentsExtended.xml',
-      contentType: COMMENTS_EXTENDED_CONTENT_TYPE,
-      target: 'commentsExtended.xml',
-      relType: RELATIONSHIP_TYPES.commentsExtended,
-    },
-    {
-      partName: '/word/commentsIds.xml',
-      contentType: COMMENTS_IDS_CONTENT_TYPE,
-      target: 'commentsIds.xml',
-      relType: RELATIONSHIP_TYPES.commentsIds,
-    },
-    {
-      partName: '/word/commentsExtensible.xml',
-      contentType: COMMENTS_EXTENSIBLE_CONTENT_TYPE,
-      target: 'commentsExtensible.xml',
-      relType: RELATIONSHIP_TYPES.commentsExtensible,
-    },
-  ];
-
   // Content types — single read/write
   const ctFile = zip.file('[Content_Types].xml');
   if (ctFile) {
@@ -255,6 +255,52 @@ async function ensureAllCommentParts(zip: JSZip, compressionLevel: number): Prom
   }
 }
 
+async function removeAllCommentParts(zip: JSZip, compressionLevel: number): Promise<void> {
+  for (const { partName } of COMMENT_PARTS) {
+    zip.remove(partName.slice(1));
+  }
+
+  const ctFile = zip.file('[Content_Types].xml');
+  if (ctFile) {
+    let ctXml = await ctFile.async('text');
+    for (const { partName } of COMMENT_PARTS) {
+      ctXml = ctXml.replace(
+        new RegExp(
+          `<Override\\b(?=[^>]*\\bPartName="${partName.replace('.', '\\.')}")[^>]*/>`,
+          'gi'
+        ),
+        ''
+      );
+    }
+    zip.file('[Content_Types].xml', ctXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+
+  const relsPath = 'word/_rels/document.xml.rels';
+  const relsFile = zip.file(relsPath);
+  if (relsFile) {
+    let relsXml = await relsFile.async('text');
+    for (const { target, relType } of COMMENT_PARTS) {
+      relsXml = relsXml.replace(
+        new RegExp(
+          `<Relationship\\b(?=[^>]*(?:\\bTarget="${target.replace(
+            '.',
+            '\\.'
+          )}"|\\bType="${relType}"))[^>]*/>`,
+          'gi'
+        ),
+        ''
+      );
+    }
+    zip.file(relsPath, relsXml, {
+      compression: 'DEFLATE',
+      compressionOptions: { level: compressionLevel },
+    });
+  }
+}
+
 /**
  * Serialize all comment-side XML parts (comments + extended + ids + extensible)
  * into the ZIP and register them in content types and rels.
@@ -265,7 +311,11 @@ export async function serializeCommentsToZip(
   compressionLevel: number
 ): Promise<void> {
   const comments = doc.package.document.comments;
-  if (!comments || comments.length === 0) return;
+  if (comments === undefined) return;
+  if (comments.length === 0) {
+    await removeAllCommentParts(zip, compressionLevel);
+    return;
+  }
 
   const { xml: commentsXml, paraInfos } = serializeCommentsWithInfo(comments);
   zip.file('word/comments.xml', commentsXml, {

@@ -33,7 +33,7 @@ import {
 } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import { fromProseDoc } from '@eigenpal/docx-editor-core/prosemirror/conversion/fromProseDoc';
 import { schema, ensureParaIdsInState } from '@eigenpal/docx-editor-core/prosemirror';
-import { singletonManager } from '@eigenpal/docx-editor-core/prosemirror/schema';
+import type { ImageUploadHandler } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import {
   createSuggestionModePlugin,
   setSuggestionMode,
@@ -84,6 +84,8 @@ import {
   buildBlockLookup,
   enclosingSdtGroupIds,
   applySdtFocus,
+  LazyImageAssetLoader,
+  type ImageAssetResolver,
 } from '@eigenpal/docx-editor-core/layout-painter';
 import type { Document } from '@eigenpal/docx-editor-core/types/document';
 import type { LayoutSelectionGate } from '@eigenpal/docx-editor-core/prosemirror';
@@ -212,6 +214,12 @@ export interface UseDocxEditorOptions {
   editorMode?: MaybeRef<'editing' | 'suggesting' | 'viewing'>;
   /** Author name attached to tracked changes minted in suggesting mode. */
   author?: MaybeRef<string>;
+  /** Resolve media bytes only when the corresponding image nears the viewport. */
+  imageAssetResolver?: MaybeRef<ImageAssetResolver | undefined>;
+  /** Persist inserted/pasted image bytes before publishing an opaque asset ID. */
+  imageUploadHandler?: ImageUploadHandler;
+  /** Use page shells even for short image-dense documents. */
+  forcePageVirtualization?: MaybeRef<boolean>;
 }
 
 export interface UseDocxEditorReturn {
@@ -290,7 +298,13 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
     syncCoordinator,
     editorMode,
     author,
+    imageAssetResolver,
+    imageUploadHandler,
+    forcePageVirtualization = false,
   } = options;
+  let imageAssetLoader = unref(imageAssetResolver)
+    ? new LazyImageAssetLoader(unref(imageAssetResolver)!, { maxConcurrent: 4 })
+    : undefined;
 
   // State
   const document = shallowRef<Document | null>(null);
@@ -311,8 +325,12 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
    */
   const layout = shallowRef<Layout | null>(null);
 
-  // Use the singleton extension manager — same schema used by toProseDoc/commands
-  const mgr = singletonManager;
+  // Keep image-paste policy scoped to this editor instance. Collaboration
+  // hosts can therefore persist bytes before publishing an opaque asset ID
+  // without changing legacy editors that still use inline image data.
+  const mgr = new ExtensionManager(createStarterKit({ imageUploadHandler }));
+  mgr.buildSchema();
+  mgr.initializeRuntime();
 
   // ========================================================================
   // Layout pipeline
@@ -402,6 +420,8 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         titlePage: hasTitlePg,
         watermark,
         footnotesByPage,
+        imageAssetLoader,
+        forcePageVirtualization: unref(forcePageVirtualization),
       } as Parameters<typeof renderPages>[2]);
 
       // renderPages sets display:flex on the container — fix scrolling
@@ -424,6 +444,26 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       syncCoordinator?.onLayoutComplete(layoutSeq);
     }
   }
+
+  watch(
+    () => unref(imageAssetResolver),
+    (resolver, previousResolver) => {
+      if (resolver === previousResolver) return;
+      imageAssetLoader?.dispose();
+      imageAssetLoader = resolver
+        ? new LazyImageAssetLoader(resolver, { maxConcurrent: 4 })
+        : undefined;
+      if (editorView.value) runLayoutPipeline(editorView.value.state);
+    }
+  );
+  watch(
+    () => unref(forcePageVirtualization),
+    (next, previous) => {
+      if (next !== previous && editorView.value) {
+        runLayoutPipeline(editorView.value.state);
+      }
+    }
+  );
 
   // rAF-coalescing layout scheduler (shared with React via core). Body
   // doc-change transactions schedule through this so a burst of keystrokes
@@ -669,7 +709,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
       if (!hf) continue;
       const kind = pkg.headers?.has(rId) ? 'header' : 'footer';
 
-      const mgr = new ExtensionManager(createStarterKit());
+      const mgr = new ExtensionManager(createStarterKit({ imageUploadHandler }));
       mgr.buildSchema();
       mgr.initializeRuntime();
       hfManagers.set(rId, mgr);
@@ -873,8 +913,10 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
   }
 
   function destroy() {
+    imageAssetLoader?.dispose();
     destroyEditorView(); // cancels the layout scheduler
     destroyHfPMs();
+    mgr.destroy();
     document.value = null;
   }
 

@@ -6,11 +6,10 @@
  * `comments.xml` is an orphan that Word treats as corruption ("unreadable
  * content") and strict validators reject.
  *
- * Orphans only enter the model from imported documents (the editor and the
- * headless comment API always add and remove markers together). We therefore
- * repair them once, at parse time, on freshly-owned data — keeping the model
- * invariant "every comment range resolves to a comment" true everywhere
- * downstream, instead of scrubbing the model on the way out.
+ * Imported documents can contain orphans, and controlled collaboration export
+ * can remove comments independently from its projected document. Repair those
+ * freshly-owned models before they cross a parser or export boundary so the
+ * invariant "every comment range resolves to a comment" remains true.
  */
 
 import type { BlockContent, Document } from '../types/document';

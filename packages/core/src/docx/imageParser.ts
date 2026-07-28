@@ -387,7 +387,7 @@ export function resolveImageData(
   rId: string,
   rels: RelationshipMap | undefined,
   media: Map<string, MediaFile> | undefined
-): { src?: string; mimeType?: string; filename?: string } {
+): { assetId?: string; src?: string; mimeType?: string; filename?: string } {
   if (!rId || !rels) {
     return {};
   }
@@ -427,6 +427,7 @@ export function resolveImageData(
     const mediaFile = findMediaCaseInsensitive(media, normalizedPath);
     if (mediaFile) {
       return {
+        assetId: mediaFile.assetId,
         src: mediaFile.dataUrl || mediaFile.base64, // Use data URL or base64
         mimeType: mediaFile.mimeType,
         filename,
@@ -438,6 +439,7 @@ export function resolveImageData(
     const altMediaFile = findMediaCaseInsensitive(media, altPath);
     if (altMediaFile) {
       return {
+        assetId: altMediaFile.assetId,
         src: altMediaFile.dataUrl || altMediaFile.base64,
         mimeType: altMediaFile.mimeType,
         filename,
@@ -449,6 +451,7 @@ export function resolveImageData(
     const prefixedMediaFile = findMediaCaseInsensitive(media, withWordPrefix);
     if (prefixedMediaFile) {
       return {
+        assetId: prefixedMediaFile.assetId,
         src: prefixedMediaFile.dataUrl || prefixedMediaFile.base64,
         mimeType: prefixedMediaFile.mimeType,
         filename,
@@ -529,6 +532,7 @@ function parseInline(
   if (props.alt) image.alt = props.alt;
   if (props.title) image.title = props.title;
   if (props.decorative) image.decorative = true;
+  if (imageData.assetId) image.assetId = imageData.assetId;
   if (imageData.src) image.src = imageData.src;
   if (imageData.mimeType) image.mimeType = imageData.mimeType;
   if (imageData.filename) image.filename = imageData.filename;
@@ -637,6 +641,7 @@ function parseAnchor(
   if (props.alt) image.alt = props.alt;
   if (props.title) image.title = props.title;
   if (props.decorative) image.decorative = true;
+  if (imageData.assetId) image.assetId = imageData.assetId;
   if (imageData.src) image.src = imageData.src;
   if (imageData.mimeType) image.mimeType = imageData.mimeType;
   if (imageData.filename) image.filename = imageData.filename;

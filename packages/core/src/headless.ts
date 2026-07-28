@@ -161,6 +161,27 @@ export {
 // ============================================================================
 
 export { parseDocx } from './docx/parser';
+export type { ExternalMediaParseOptions, ParseOptions, ProgressCallback } from './docx/parser';
+export {
+  exportCollaborationDocument,
+  parseCollaborationPackage,
+  projectProseMirrorDocument,
+  rehydrateCollaborationDocument,
+  CollaborationExportFidelityError,
+  CollaborationIdentityMismatchError,
+  IncompleteCollaborationManifestError,
+  MissingCollaborationAssetError,
+} from './collaboration';
+export type {
+  CollaborationExportFidelityFailure,
+  CollaborationExportAsset,
+  CollaborationExportInput,
+  CollaborationJsonNode,
+  CollaborationProjection,
+  CollaborationProjectionOptions,
+  FidelitySidecar,
+  ParsedCollaborationPackage,
+} from './collaboration';
 export {
   serializeDocument as serializeDocx,
   serializeDocumentBody,

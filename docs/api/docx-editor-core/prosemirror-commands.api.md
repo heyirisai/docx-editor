@@ -171,6 +171,23 @@ export function getWatermarkFromState(state: EditorState): Watermark | null;
 // @public
 export type ImageLayoutTarget = AnchorWrapType | 'squareLeft' | 'squareRight' | 'inline';
 
+// @public
+export interface ImageUploadContext {
+    // (undocumented)
+    height: number;
+    // (undocumented)
+    width: number;
+}
+
+// @public
+export type ImageUploadHandler = (file: File, context: ImageUploadContext) => Promise<ImageUploadResult>;
+
+// @public
+export interface ImageUploadResult {
+    // (undocumented)
+    assetId: string;
+}
+
 // @public (undocumented)
 export function increaseIndent(amount?: number): Command;
 
@@ -184,11 +201,19 @@ export const INSERT_IMAGE_MAX_WIDTH_PX = 612;
 export function insertHyperlink(text: string, href: string, tooltip?: string): Command;
 
 // @public
-export function insertImageFromFile(view: EditorView, file: File, opts?: {
+export function insertImageFromFile(view: EditorView, file: File, opts?: InsertImageFromFileOptions): Promise<void>;
+
+// @public
+export interface InsertImageFromFileOptions {
+    // (undocumented)
+    imageUploadHandler?: ImageUploadHandler;
+    // (undocumented)
     maxWidth?: number;
+    // (undocumented)
     onError?: (error: unknown) => void;
+    // (undocumented)
     onInserted?: () => void;
-}): void;
+}
 
 // @public
 export function insertImageNode(state: EditorState, dispatch: ((tr: Transaction) => void) | undefined, imageNode: Node_2, pos: number): boolean;

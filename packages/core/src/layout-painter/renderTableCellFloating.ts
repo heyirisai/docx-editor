@@ -20,6 +20,7 @@ import { imageWrapTextFromCssFloat, isFloatingImageRun } from './floatingImageFl
 /** Info about a floating image extracted from a cell paragraph */
 export interface CellFloatingImage {
   src: string;
+  assetId?: string;
   width: number;
   height: number;
   alt?: string;
@@ -116,6 +117,7 @@ export function extractCellFloatingImages(
 
       result.push({
         src: imgRun.src,
+        assetId: imgRun.assetId,
         width: imgRun.width,
         height: imgRun.height,
         alt: imgRun.alt,

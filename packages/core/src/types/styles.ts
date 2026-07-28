@@ -302,14 +302,35 @@ export type RelationshipMap = Map<string, Relationship>;
 export interface MediaFile {
   /** File path in ZIP */
   path: string;
+  /**
+   * Stable host-owned identity used when media bytes live outside the parsed
+   * collaboration package. This is an identifier, never an authorization
+   * credential or a resolved URL.
+   */
+  assetId?: string;
   /** Original filename */
   filename?: string;
   /** MIME type */
   mimeType: string;
-  /** Binary data */
-  data: ArrayBuffer;
+  /** Binary data. Absent when the parser is operating in external-media mode. */
+  data?: ArrayBuffer;
   /** Base64 encoded data for rendering */
   base64?: string;
   /** Data URL for direct use in src attributes */
   dataUrl?: string;
+}
+
+/**
+ * One immutable media entry supplied by a host that stores DOCX assets
+ * outside the collaboration package.
+ */
+export interface ExternalMediaManifestEntry {
+  /** Stable opaque identity used by collaborative image nodes. */
+  assetId: string;
+  /** Canonical package path, e.g. `word/media/image1.png`. */
+  path: string;
+  /** Original media MIME type. */
+  mimeType: string;
+  /** Original filename when it differs from the final package-path segment. */
+  filename?: string;
 }

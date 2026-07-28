@@ -231,7 +231,6 @@ export function createImageRun(node: PMNode): Run {
   const image: Image = {
     type: 'image',
     rId: attrs.rId || '',
-    src: attrs.src,
     alt: attrs.alt || undefined,
     title: attrs.title || undefined,
     size: {
@@ -240,6 +239,8 @@ export function createImageRun(node: PMNode): Run {
     },
     wrap,
   };
+  if (attrs.assetId) image.assetId = attrs.assetId;
+  if (attrs.src) image.src = attrs.src;
 
   // Parse CSS transform string back to ImageTransform for round-trip
   if (attrs.transform) {

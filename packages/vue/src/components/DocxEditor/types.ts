@@ -22,6 +22,8 @@ import type { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
 import type { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
 import type { ContentControlFilter, ContentControlValue } from '@eigenpal/docx-editor-core/agent';
 import type { Translations } from '@eigenpal/docx-editor-i18n';
+import type { ImageAssetResolver } from '@eigenpal/docx-editor-core/layout-painter';
+import type { ImageUploadHandler } from '@eigenpal/docx-editor-core/prosemirror/commands';
 
 export type EditorMode = 'editing' | 'suggesting' | 'viewing';
 
@@ -68,6 +70,12 @@ export interface DocxEditorProps {
   colorMode?: 'light' | 'dark' | 'system';
   /** External ProseMirror plugins supplied by the host app. */
   externalPlugins?: Plugin[];
+  /** Resolve media bytes only when the corresponding image nears the viewport. */
+  imageAssetResolver?: ImageAssetResolver;
+  /** Persist inserted/pasted image bytes before publishing an opaque asset ID. */
+  imageUploadHandler?: ImageUploadHandler;
+  /** Use page shells even for short image-dense documents. */
+  forcePageVirtualization?: boolean;
   /** Whether to show the zoom controls in the toolbar. */
   showZoomControl?: boolean;
   /** Initial zoom level. */
