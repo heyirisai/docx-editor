@@ -1,5 +1,12 @@
 # @eigenpal/nuxt-docx-editor
 
+## 1.12.0
+
+### Patch Changes
+
+- Updated dependencies [fbea20d]
+  - @eigenpal/docx-editor-vue@1.12.0
+
 ## 1.11.0
 
 ### Patch Changes
