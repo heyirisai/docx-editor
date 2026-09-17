@@ -67,6 +67,13 @@ export function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
     hyperlink.children.push(createTabRun());
   } else if (node.type.name === 'hardBreak') {
     hyperlink.children.push(createBreakRun());
+  } else if (node.type.name === 'rawXml') {
+    // Preserved source carries the hyperlink mark like any other inline node.
+    // Without this branch a grouped drawing inside a `w:hyperlink` is dropped.
+    hyperlink.children.push({
+      type: 'run',
+      content: [{ type: 'rawXml', xml: String(node.attrs.xml ?? '') }],
+    });
   }
 }
 

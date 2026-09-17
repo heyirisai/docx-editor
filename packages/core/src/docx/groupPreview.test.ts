@@ -144,4 +144,36 @@ describe('deriveGroupPreviewImages', () => {
     const el = parseXmlDocument(hostile) as XmlElement;
     expect(() => deriveGroupPreviewImages(el, rels, mediaMap(EMBEDDED))).not.toThrow();
   });
+
+  test("a picture in a NESTED group uses that group's coordinate space", () => {
+    // Outer group: 1828800x914400 EMU mapped 1:1. Inner group sits at
+    // (914400, 0) and halves its children (chExt 2x ext), so a picture at
+    // inner-local (914400, 0) lands at outer 914400 + 914400/2 = 1371600 EMU.
+    const nested = GROUP.replace(
+      '<pic:pic>',
+      `<wpg:grpSp><wpg:grpSpPr><a:xfrm>
+         <a:off x="914400" y="0"/><a:ext cx="914400" cy="457200"/>
+         <a:chOff x="0" y="0"/><a:chExt cx="1828800" cy="914400"/>
+       </a:xfrm></wpg:grpSpPr>
+       <pic:pic>
+         <pic:blipFill><a:blip r:embed="rId7"/></pic:blipFill>
+         <pic:spPr><a:xfrm><a:off x="914400" y="0"/><a:ext cx="914400" cy="457200"/></a:xfrm></pic:spPr>
+       </pic:pic>
+       </wpg:grpSp><pic:pic>`
+    );
+    const out = deriveGroupPreviewImages(
+      parseXmlDocument(nested) as XmlElement,
+      rels,
+      mediaMap(EMBEDDED)
+    );
+    expect(out).toHaveLength(2);
+    const offsets = out.map((d) => d.image.position?.horizontal.posOffset).sort((a, b) => a! - b!);
+    // Outer picture at 0; nested one at 1371600 — NOT 914400, which is what
+    // applying only the outer group's transform would give.
+    expect(offsets[0]).toBe(0);
+    expect(offsets[1]).toBe(1371600);
+    // And it is scaled by the inner group too: 914400 * 0.5 EMU wide.
+    const nestedImg = out.find((d) => d.image.position?.horizontal.posOffset === 1371600)!;
+    expect(nestedImg.image.size?.width).toBe(457200);
+  });
 });

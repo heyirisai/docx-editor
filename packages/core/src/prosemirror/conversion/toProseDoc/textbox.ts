@@ -50,10 +50,16 @@ export function convertParagraphWithTextBoxes(
   // on export merges them into the NEXT paragraph — so two boxes that shared
   // one host paragraph ended up anchored to different ones and drifted apart.
   // Clearing it keeps them as their own paragraphs beside the first.
+  // `shouldExportTextBoxInsideFollowingParagraph` is
+  // `anchorTarget === 'followingBlock' || isFloatingTextBoxAttrs(attrs)`, so
+  // clearing the anchor alone still leaves a FLOATING box queued into the next
+  // paragraph. Mark it as its own block instead.
   const detachFromFollowingBlock = (node: PMNode): PMNode =>
-    node.attrs.anchorTarget
-      ? node.type.create({ ...node.attrs, anchorTarget: null }, node.content, node.marks)
-      : node;
+    node.type.create(
+      { ...node.attrs, anchorTarget: null, displayMode: 'block' },
+      node.content,
+      node.marks
+    );
 
   for (const tb of anchored) {
     const hostParaId = takeHostParaId();

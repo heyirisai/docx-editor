@@ -379,7 +379,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
+    notes:
+      'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------
@@ -632,7 +633,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'none',
     tier: 'community',
-    notes: 'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
+    notes:
+      'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -736,13 +738,24 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'fields.other-codes',
-    name: 'Other field codes (DATE, REF, MERGEFIELD...)',
+    name: 'Other field codes (REF, MERGEFIELD...)',
     category: 'fields',
     editing: 'none',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes: 'Last-computed field results display; the field codes themselves round-trip untouched.',
+  },
+  {
+    id: 'fields.date-time',
+    name: 'DATE / TIME fields',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes:
+      'Recomputed on open like Word, and rendered through the field\'s `\\@` picture (e.g. `DATE \\@ "MMMM yyyy"` → September 2026) rather than the browser locale default, so a date sized for its text box still fits.',
   },
   {
     id: 'fields.citations',
@@ -788,8 +801,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes:
-      'Add and remove items from the editor; the section configuration itself is read-only.',
+    notes: 'Add and remove items from the editor; the section configuration itself is read-only.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -820,7 +832,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
+    notes:
+      'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
   },
   {
     id: 'structure.ole',
@@ -840,7 +853,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
+    notes:
+      'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------

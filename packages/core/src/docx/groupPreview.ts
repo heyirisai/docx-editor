@@ -26,16 +26,6 @@ function findDeepByLocalName(root: XmlElement, localName: string, depth = 0): Xm
   return null;
 }
 
-function findAllDeepByLocalName(root: XmlElement, localName: string, depth = 0): XmlElement[] {
-  if (depth >= MAX_DEPTH) return [];
-  const out: XmlElement[] = [];
-  for (const child of getChildElements(root)) {
-    if (getLocalName(child.name ?? '') === localName) out.push(child);
-    out.push(...findAllDeepByLocalName(child, localName, depth + 1));
-  }
-  return out;
-}
-
 /**
  * `r:embed` off an `a:blip`. The relationships namespace is conventionally
  * bound to `r`, but nothing requires it, so fall back to matching on the
@@ -87,6 +77,60 @@ function readAnchorPosition(anchor: XmlElement, axis: 'positionH' | 'positionV')
   return { relativeTo, offset: offset ?? 0, alignment, hasOffset: offset !== null };
 }
 
+/** Maps a coordinate in some group's child space onto the page, in EMU. */
+interface GroupFrame {
+  scaleX: number;
+  scaleY: number;
+  chOffX: number;
+  chOffY: number;
+  baseX: number;
+  baseY: number;
+}
+
+const mapX = (f: GroupFrame, x: number): number => f.baseX + (x - f.chOffX) * f.scaleX;
+const mapY = (f: GroupFrame, y: number): number => f.baseY + (y - f.chOffY) * f.scaleY;
+
+/**
+ * Pictures inside a group, each paired with the frame of the group that
+ * actually contains it. A nested `wpg:grpSp` introduces its own child
+ * coordinate space, so applying the outer group's scale to its pictures puts
+ * them in the wrong place and at the wrong size.
+ */
+function collectGroupPictures(
+  container: XmlElement,
+  frame: GroupFrame,
+  depth: number,
+  out: Array<{ pic: XmlElement; frame: GroupFrame }>
+): void {
+  if (depth >= MAX_DEPTH) return;
+  for (const child of getChildElements(container)) {
+    const name = getLocalName(child.name ?? '');
+    if (name === 'pic') {
+      out.push({ pic: child, frame });
+      continue;
+    }
+    if (name === 'grpSp') {
+      const xfrm = readXfrm(findDeepByLocalName(child, 'xfrm'));
+      let inner = frame;
+      if (xfrm?.off && xfrm.ext) {
+        const chExt = xfrm.chExt ?? xfrm.ext;
+        const chOff = xfrm.chOff ?? { x: 0, y: 0 };
+        inner = {
+          scaleX: (chExt.x === 0 ? 1 : xfrm.ext.x / chExt.x) * frame.scaleX,
+          scaleY: (chExt.y === 0 ? 1 : xfrm.ext.y / chExt.y) * frame.scaleY,
+          chOffX: chOff.x,
+          chOffY: chOff.y,
+          baseX: mapX(frame, xfrm.off.x),
+          baseY: mapY(frame, xfrm.off.y),
+        };
+      }
+      collectGroupPictures(child, inner, depth + 1, out);
+      continue;
+    }
+    collectGroupPictures(child, frame, depth + 1, out);
+  }
+}
+
 /**
  * Anchored images for each picture inside a grouped drawing, or `[]` when the
  * element holds no group (a lone shape has nothing to show).
@@ -109,6 +153,14 @@ export function deriveGroupPreviewImages(
   const scaleX = groupXfrm.chExt.x === 0 ? 1 : groupXfrm.ext.x / groupXfrm.chExt.x;
   const scaleY = groupXfrm.chExt.y === 0 ? 1 : groupXfrm.ext.y / groupXfrm.chExt.y;
   const chOff = groupXfrm.chOff ?? { x: 0, y: 0 };
+  const rootFrame: GroupFrame = {
+    scaleX,
+    scaleY,
+    chOffX: chOff.x,
+    chOffY: chOff.y,
+    baseX: 0,
+    baseY: 0,
+  };
 
   const posH = readAnchorPosition(anchor, 'positionH');
   const posV = readAnchorPosition(anchor, 'positionV');
@@ -116,7 +168,9 @@ export function deriveGroupPreviewImages(
   const relativeHeight = num(getAttribute(anchor, null, 'relativeHeight')) ?? undefined;
 
   const out: DrawingContent[] = [];
-  for (const pic of findAllDeepByLocalName(group, 'pic')) {
+  const pictures: Array<{ pic: XmlElement; frame: GroupFrame }> = [];
+  collectGroupPictures(group, rootFrame, 0, pictures);
+  for (const { pic, frame } of pictures) {
     const rId = blipRelationshipId(findDeepByLocalName(pic, 'blip'));
     if (!rId) continue;
     const resolved = resolveImageData(rId, rels ?? undefined, media ?? undefined);
@@ -135,8 +189,8 @@ export function deriveGroupPreviewImages(
       mimeType: resolved.mimeType,
       filename: resolved.filename,
       size: {
-        width: Math.round(childXfrm.ext.x * scaleX),
-        height: Math.round(childXfrm.ext.y * scaleY),
+        width: Math.round(childXfrm.ext.x * frame.scaleX),
+        height: Math.round(childXfrm.ext.y * frame.scaleY),
       },
       wrap: { type: behindDoc ? 'behind' : 'inFront' },
       position: {
@@ -158,7 +212,7 @@ export function deriveGroupPreviewImages(
                 >['horizontal']['alignment'],
               }
             : {
-                posOffset: Math.round((posH?.offset ?? 0) + (childXfrm.off.x - chOff.x) * scaleX),
+                posOffset: Math.round((posH?.offset ?? 0) + mapX(frame, childXfrm.off.x)),
               }),
         },
         vertical: {
@@ -172,7 +226,7 @@ export function deriveGroupPreviewImages(
                 >['vertical']['alignment'],
               }
             : {
-                posOffset: Math.round((posV?.offset ?? 0) + (childXfrm.off.y - chOff.y) * scaleY),
+                posOffset: Math.round((posV?.offset ?? 0) + mapY(frame, childXfrm.off.y)),
               }),
         },
       },

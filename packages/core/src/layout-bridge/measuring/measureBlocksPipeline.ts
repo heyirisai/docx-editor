@@ -86,7 +86,11 @@ export type FloatPageGeometry = PageGeometry;
  * space through the whole next section.
  */
 function startsNewPage(block: FlowBlock): boolean {
-  if (block.kind === 'pageBreak' || block.kind === 'sectionBreak') return true;
+  if (block.kind === 'pageBreak') return true;
+  // Only a section break that actually starts a page is a boundary — a
+  // `continuous` one stays put, and clearing zones there drops the wrap for a
+  // float that is still on this page.
+  if (block.kind === 'sectionBreak') return (block.type ?? 'nextPage') !== 'continuous';
   const attrs = (block as { attrs?: { pageBreakBefore?: boolean } }).attrs;
   return Boolean(attrs?.pageBreakBefore);
 }
