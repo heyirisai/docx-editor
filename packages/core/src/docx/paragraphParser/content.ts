@@ -40,6 +40,7 @@ import {
   elementToXml,
   type XmlElement,
 } from '../xmlParser';
+import type { RunContent } from '../../types/content';
 import { parseRun } from '../runParser';
 import { parseHyperlink as parseHyperlinkFromModule } from '../hyperlinkParser';
 import {
@@ -441,6 +442,33 @@ function parseSimpleField(
 // ============================================================================
 
 /**
+ * Positions, in `w:fldChar` order within the paragraph, of the markers with no
+ * partner — a paragraph-spanning field (the TOC wrapper) leaves its `begin`
+ * here, and the paragraph holding the other end leaves that `end`. Only those
+ * markers are passed through; fields nested inside them still get modelled.
+ */
+function unpairedFieldCharPositions(children: XmlElement[]): Set<number> {
+  const unpaired = new Set<number>();
+  const openBegins: number[] = [];
+  let position = 0;
+  for (const child of children) {
+    if (getLocalName(child.name) !== 'r') continue;
+    for (const runChild of getChildElements(child)) {
+      if (getLocalName(runChild.name) !== 'fldChar') continue;
+      const kind = getAttribute(runChild, 'w', 'fldCharType');
+      if (kind === 'begin') openBegins.push(position);
+      else if (kind === 'end') {
+        if (openBegins.length === 0) unpaired.add(position);
+        else openBegins.pop();
+      }
+      position++;
+    }
+  }
+  for (const begin of openBegins) unpaired.add(begin);
+  return unpaired;
+}
+
+/**
  * Parse all content within a paragraph
  *
  * Returns the parsed content and any complex fields that span multiple runs
@@ -457,8 +485,9 @@ export function parseParagraphContents(
   const contents: ParagraphContent[] = [];
   const children = getChildElements(paraElement);
 
-  // State for tracking complex fields
-  let inComplexField = false;
+  // Depth, not a flag: a TOC field's result holds one nested PAGEREF field per
+  // entry, and treating the inner `begin` as a new field loses the outer one.
+  let complexFieldDepth = 0;
   let complexFieldInstr = '';
   let complexFieldCodeRuns: Run[] = [];
   let complexFieldResultRuns: Run[] = [];
@@ -467,79 +496,97 @@ export function parseParagraphContents(
   let complexFieldDirty = false;
   let complexFieldFormatting: Run['formatting'] | undefined;
 
+  // A field straddling a paragraph boundary cannot be modelled by this
+  // per-paragraph walker, so its own markers ride through as run content (the
+  // serializer re-emits them). Fields fully contained in this paragraph — the
+  // PAGEREF in a TOC entry — are still modelled normally.
+  const unpairedFieldChars = unpairedFieldCharPositions(children);
+  let fieldCharPosition = 0;
+
   for (const child of children) {
     const localName = getLocalName(child.name);
 
     switch (localName) {
       case 'r': {
-        // Check for field characters in this run
         const runElement =
           trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
         const run = parseRun(runElement, styles, theme, rels, media);
 
-        // Look for field characters
-        let hasFieldBegin = false;
-        let hasFieldSeparate = false;
-        let hasFieldEnd = false;
-        let instrText = '';
+        // Split at run-CONTENT granularity: Word packs entry text and a whole
+        // field into one w:r, so treating the run as a unit loses its text.
+        let buffer: RunContent[] = [];
+        const placeRun = (piece: Run): void => {
+          if (complexFieldDepth === 0) contents.push(piece);
+          else if (afterSeparator) complexFieldResultRuns.push(piece);
+          else complexFieldCodeRuns.push(piece);
+        };
+        const flushBuffer = (): void => {
+          if (buffer.length === 0) return;
+          placeRun({ ...run, content: buffer });
+          buffer = [];
+        };
 
-        for (const content of run.content) {
-          if (content.type === 'fieldChar') {
-            if (content.charType === 'begin') {
-              hasFieldBegin = true;
-              if (content.fldLock) complexFieldLock = true;
-              if (content.dirty) complexFieldDirty = true;
-            } else if (content.charType === 'separate') {
-              hasFieldSeparate = true;
-            } else if (content.charType === 'end') {
-              hasFieldEnd = true;
-            }
-          } else if (content.type === 'instrText') {
-            instrText += content.text;
+        // An empty run carries only w:rPr (Word emits these); it has no content
+        // to split, and dropping it would lose a run boundary.
+        if (run.content.length === 0) {
+          if (complexFieldDepth > 0 && !complexFieldFormatting && run.formatting) {
+            complexFieldFormatting = run.formatting;
           }
+          placeRun(run);
+          break;
         }
 
-        if (hasFieldBegin) {
-          // Starting a new complex field
-          inComplexField = true;
-          afterSeparator = false;
-          complexFieldInstr = '';
-          complexFieldCodeRuns = [];
-          complexFieldResultRuns = [];
-          complexFieldLock = false;
-          complexFieldDirty = false;
-          // The structural run carrying `begin` holds the field's run
-          // properties. Capture them so the result keeps its formatting even
-          // when there is no separate result run to read it from.
-          complexFieldFormatting = run.formatting;
-        }
-
-        if (inComplexField) {
-          if (instrText) {
-            complexFieldInstr += instrText;
-          }
-          // Prefer any field run that actually carries formatting (the begin
-          // run is often empty in docs that put `w:rPr` on a later code run).
-          if (!complexFieldFormatting && run.formatting) {
+        for (const item of run.content) {
+          // A field's w:rPr often sits on a later run, so capture it before the
+          // structural branches below `continue` past it.
+          if (complexFieldDepth > 0 && !complexFieldFormatting && run.formatting) {
             complexFieldFormatting = run.formatting;
           }
 
-          if (hasFieldSeparate) {
-            afterSeparator = true;
-          }
-
-          if (afterSeparator && !hasFieldEnd) {
-            // Add to result runs (excluding the separator run itself)
-            if (!hasFieldSeparate) {
-              complexFieldResultRuns.push(run);
+          if (item.type === 'fieldChar') {
+            const unpaired =
+              item.charType !== 'separate' && unpairedFieldChars.has(fieldCharPosition);
+            fieldCharPosition++;
+            if (unpaired) {
+              // Half of a paragraph-spanning field: pass it through untouched.
+              buffer.push(item);
+              continue;
             }
-          } else if (!afterSeparator && !hasFieldBegin) {
-            // Add to code runs
-            complexFieldCodeRuns.push(run);
           }
 
-          if (hasFieldEnd) {
-            // Close the complex field
+          if (item.type === 'fieldChar' && item.charType === 'begin') {
+            flushBuffer();
+            if (complexFieldDepth === 0) {
+              afterSeparator = false;
+              complexFieldInstr = '';
+              complexFieldCodeRuns = [];
+              complexFieldResultRuns = [];
+              complexFieldLock = Boolean(item.fldLock);
+              complexFieldDirty = Boolean(item.dirty);
+              // Structural runs hold the w:rPr Word styles the result with.
+              complexFieldFormatting = run.formatting;
+            } else {
+              // Nested field — keep its markup verbatim inside the result.
+              buffer.push(item);
+            }
+            complexFieldDepth++;
+            continue;
+          }
+
+          if (item.type === 'fieldChar' && item.charType === 'separate') {
+            flushBuffer();
+            if (complexFieldDepth === 1) afterSeparator = true;
+            else buffer.push(item);
+            continue;
+          }
+
+          if (item.type === 'fieldChar' && item.charType === 'end') {
+            flushBuffer();
+            complexFieldDepth--;
+            if (complexFieldDepth > 0) {
+              buffer.push(item);
+              continue;
+            }
             const complexField: ComplexField = {
               type: 'complexField',
               instruction: complexFieldInstr.trim(),
@@ -547,18 +594,21 @@ export function parseParagraphContents(
               fieldCode: complexFieldCodeRuns,
               fieldResult: complexFieldResultRuns,
             };
-
             if (complexFieldFormatting) complexField.formatting = complexFieldFormatting;
             if (complexFieldLock) complexField.fldLock = true;
             if (complexFieldDirty) complexField.dirty = true;
-
             contents.push(complexField);
-            inComplexField = false;
+            continue;
           }
-        } else {
-          // Regular run, not part of a field
-          contents.push(run);
+
+          // Keep the item in the code runs too: the serializer only rebuilds an
+          // instruction when `fieldCode` is empty.
+          if (item.type === 'instrText' && complexFieldDepth === 1 && !afterSeparator) {
+            complexFieldInstr += item.text;
+          }
+          buffer.push(item);
         }
+        flushBuffer();
         break;
       }
 

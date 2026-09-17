@@ -28,6 +28,7 @@ import type {
   RunPropertyChange,
 } from '../../types/document';
 import { escapeXml, intAttr } from './xmlUtils';
+import { isWellFormedXmlElement } from '../xmlParser';
 import { serializeDrawingContent, serializeShapeContent } from './runSerializer/drawing';
 
 export { resetAutoIdCounter } from './runSerializer/drawing';
@@ -577,9 +578,16 @@ function serializeRunContent(content: RunContent): string {
     case 'noBreakHyphen':
       return serializeNoBreakHyphen(content);
     case 'drawing':
+      // Canvas-only picture lifted out of a preserved group — the group's own
+      // markup is written instead, so emitting this too would duplicate it.
+      if (content.image?.renderOnly) return '';
       return serializeDrawingContent(content);
     case 'shape':
       return serializeShapeContent(content);
+    case 'rawXml':
+      // Verbatim into the package, so re-check rather than trust the node: a
+      // malformed value here makes Word reject the whole part.
+      return isWellFormedXmlElement(content.xml) ? content.xml : '';
     default:
       return '';
   }

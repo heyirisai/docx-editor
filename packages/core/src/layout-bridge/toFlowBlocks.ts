@@ -88,8 +88,8 @@ function convertParagraphAttrs(
   // rides on _originalFormatting and overrides any explicit before/after with
   // Word's ~14px auto value — measure it here so pagination matches the rendered
   // editor (issue #811).
-  const autoBefore = pmAttrs._originalFormatting?.beforeAutospacing;
-  const autoAfter = pmAttrs._originalFormatting?.afterAutospacing;
+  const autoBefore = pmAttrs.beforeAutospacing ?? pmAttrs._originalFormatting?.beforeAutospacing;
+  const autoAfter = pmAttrs.afterAutospacing ?? pmAttrs._originalFormatting?.afterAutospacing;
   if (
     autoBefore ||
     autoAfter ||
@@ -646,6 +646,7 @@ function convertImage(
     cropBottom: (attrs.cropBottom as number | null) ?? undefined,
     cropLeft: (attrs.cropLeft as number | null) ?? undefined,
     opacity: (attrs.opacity as number | null) ?? undefined,
+    renderOnly: (attrs.renderOnly as boolean | null) ?? undefined,
     anchor: shouldAnchor
       ? {
           isAnchored: true,

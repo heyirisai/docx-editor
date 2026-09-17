@@ -9,6 +9,7 @@
 import type {
   ParagraphContent,
   Run,
+  RunContent,
   Hyperlink,
   BookmarkStart,
   BookmarkEnd,
@@ -181,14 +182,11 @@ export function serializeComplexField(field: ComplexField): string {
   if (field.fieldCode.length > 0) {
     parts.push(...field.fieldCode.map((run) => serializeRun(run)));
   } else {
-    // Fallback: create instrText from instruction
-    const needsPreserve =
-      field.instruction.startsWith(' ') ||
-      field.instruction.endsWith(' ') ||
-      field.instruction.includes('  ');
-    const spaceAttr = needsPreserve ? ' xml:space="preserve"' : '';
+    // Word pads the instruction with single spaces (` TOC \o "1-3" `); match
+    // that so a field rebuilt from the model matches one Word wrote.
+    const padded = ` ${field.instruction.trim()} `;
     parts.push(
-      `<w:r>${rPrXml}<w:instrText${spaceAttr}>${escapeXml(field.instruction)}</w:instrText></w:r>`
+      `<w:r>${rPrXml}<w:instrText xml:space="preserve">${escapeXml(padded)}</w:instrText></w:r>`
     );
   }
 
@@ -335,6 +333,34 @@ function serializeMoveRangeStart(
 }
 
 /**
+ * Content whose serialized form must survive a deletion untouched — its nested
+ * `<w:t>`, if any, belongs to an inner document rather than to this run.
+ */
+function isOpaqueRunContent(content: RunContent | undefined): boolean {
+  return content?.type === 'drawing' || content?.type === 'rawXml';
+}
+
+/** Split a run into consecutive same-kind segments, preserving content order. */
+function splitRunOnOpaqueContent(run: Run): Run[] {
+  const segments: RunContent[][] = [];
+  for (const content of run.content) {
+    const last = segments[segments.length - 1];
+    if (last && isOpaqueRunContent(last[0]) === isOpaqueRunContent(content)) last.push(content);
+    else segments.push([content]);
+  }
+  if (segments.length === 0) return [run];
+  return segments.map((content) => ({ ...run, content }));
+}
+
+function rewriteAsDeleted(xml: string): string {
+  return xml
+    .replace(/<w:t\b/g, '<w:delText')
+    .replace(/<\/w:t>/g, '</w:delText>')
+    .replace(/<w:instrText\b/g, '<w:delInstrText')
+    .replace(/<\/w:instrText>/g, '</w:delInstrText>');
+}
+
+/**
  * Serialize a tracked change wrapper (ins/del/moveFrom/moveTo)
  */
 function serializeTrackedChange(
@@ -352,20 +378,17 @@ function serializeTrackedChange(
   const contentXml = change.content
     .map((item) => {
       if (item.type === 'run') {
-        const xml = serializeRun(item);
-        // A deleted drawing run keeps its content verbatim: a picture has no
-        // `<w:t>`, and a shape's textbox text (`<w:txbxContent><w:t>`) must NOT
-        // be rewritten to `<w:delText>` — that markup belongs only to a run's
-        // own deleted text, not to a nested textbox document.
-        const isDrawingRun = item.content.some((c) => c.type === 'drawing');
-        if ((tag === 'del' || tag === 'moveFrom') && !isDrawingRun) {
-          return xml
-            .replace(/<w:t\b/g, '<w:delText')
-            .replace(/<\/w:t>/g, '</w:delText>')
-            .replace(/<w:instrText\b/g, '<w:delInstrText')
-            .replace(/<\/w:instrText>/g, '</w:delInstrText>');
-        }
-        return xml;
+        if (tag !== 'del' && tag !== 'moveFrom') return serializeRun(item);
+        // Only the run's OWN text becomes `<w:delText>`. A picture has no
+        // `<w:t>`, and the `<w:t>` nested in a shape's textbox or in preserved
+        // `mc:AlternateContent` belongs to that inner document, not to this run.
+        // A `w:r` can hold both, so split it rather than exempting the whole run.
+        return splitRunOnOpaqueContent(item)
+          .map((segment) => {
+            const xml = serializeRun(segment);
+            return isOpaqueRunContent(segment.content[0]) ? xml : rewriteAsDeleted(xml);
+          })
+          .join('');
       }
       if (item.type === 'hyperlink') return serializeHyperlink(item);
       return '';

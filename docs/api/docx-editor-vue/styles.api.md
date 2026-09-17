@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const EDITOR_CSS_PATH = "@eigenpal/docx-editor-vue/styles.css";
+export const EDITOR_CSS_PATH = "@heyirisai/docx-editor-vue/styles.css";
 
 // @public
 export const Z_INDEX: {

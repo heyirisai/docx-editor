@@ -142,6 +142,26 @@ export function isWatermarkShape(shape: XmlElement, idLower: string): boolean {
  * @param media - The package media map (for resolving image data).
  * @returns The watermark, or undefined when the header has none.
  */
+/**
+ * Whether `extractWatermark` would claim a shape inside this subtree.
+ *
+ * A watermark authored as `mc:AlternateContent` is reachable from BOTH the
+ * header's watermark model and the run parser's preserved-source fallback.
+ * Serializing it twice puts two copies in the part, so the preserve path uses
+ * this to stand down — the watermark model already round-trips it.
+ */
+export function containsWatermarkShape(root: XmlElement | null | undefined): boolean {
+  if (!root) return false;
+  for (const shape of findAllDeep(root, 'v', 'shape')) {
+    const idLower = (getAttribute(shape, null, 'id') ?? '').toLowerCase();
+    const textpath = getChildElements(shape).find(
+      (c) => c.name === 'v:textpath' || c.name?.endsWith(':textpath')
+    );
+    if (isWatermarkShape(shape, idLower) || textpath) return true;
+  }
+  return false;
+}
+
 export function extractWatermark(
   hdrRoot: XmlElement | null | undefined,
   rels: RelationshipMap | null = null,

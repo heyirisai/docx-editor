@@ -21,6 +21,7 @@ import { isFloatingImageRun } from '../floatingImageFlow';
 import { applyImageVisualAttrs, hasImageVisualAttrs } from '../renderImage';
 import { setImageAssetSource, type LazyImageAssetLoader } from '../imageAssets';
 import { resolveFontFamily } from '../../utils/fontResolver';
+import { formatWordDate } from '../../docx/dateFormat';
 import {
   PARAGRAPH_CLASS_NAMES,
   isTextRun,
@@ -458,6 +459,7 @@ function renderInlineImageRun(
 ): HTMLElement {
   const img = doc.createElement('img');
   img.className = `${PARAGRAPH_CLASS_NAMES.run} ${PARAGRAPH_CLASS_NAMES.image}`;
+  if (run.renderOnly) img.dataset.renderOnly = '1';
 
   setImageAssetSource(
     img,
@@ -676,11 +678,17 @@ export function renderFieldRun(run: FieldRun, doc: Document, context: RenderCont
       text = String(context.totalPages);
       break;
     case 'DATE':
-      text = new Date().toLocaleDateString();
+    case 'TIME': {
+      // Word recomputes these on open, so always render `now` — never the value
+      // cached in the file — through the field's `\@` picture when it has one.
+      const now = new Date();
+      if (run.fieldFormat) {
+        text = formatWordDate(now, run.fieldFormat);
+      } else {
+        text = run.fieldType === 'DATE' ? now.toLocaleDateString() : now.toLocaleTimeString();
+      }
       break;
-    case 'TIME':
-      text = new Date().toLocaleTimeString();
-      break;
+    }
     // OTHER fields use fallback
   }
 

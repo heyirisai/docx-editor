@@ -24,10 +24,14 @@ export function addRelationship(originalBuffer: ArrayBuffer, relationship: {
 }>;
 
 // @public
+export function adoptSavedBuffer(doc: Document_2, buffer: ArrayBuffer): ArrayBuffer;
+
+// @public
 export function applyUpdatesToZip(zip: JSZip, updates: Map<string, string | ArrayBuffer>, options?: RepackOptions): Promise<ArrayBuffer>;
 
 // @public
-export function collectHeaderFooterUpdates(doc: Document_2): Map<string, string>;
+export function collectHeaderFooterUpdates(doc: Document_2,
+existsInTarget?: (path: string) => boolean): Map<string, string>;
 
 // @public
 export const COMMENTS_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml";
@@ -40,6 +44,9 @@ export const COMMENTS_EXTENSIBLE_CONTENT_TYPE = "application/vnd.openxmlformats-
 
 // @public (undocumented)
 export const COMMENTS_IDS_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml";
+
+// @public (undocumented)
+export function commitHeaderFooterSnapshots(doc: Document_2): void;
 
 // @public
 export function createDocx(doc: Document_2): Promise<ArrayBuffer>;

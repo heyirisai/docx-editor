@@ -5,15 +5,15 @@
 ```ts
 
 import { Component } from 'vue';
-import { createRenderedDomContext } from '@eigenpal/docx-editor-core/plugin-api/RenderedDomContext';
-import { EditorPluginCore } from '@eigenpal/docx-editor-core/plugin-api';
+import { createRenderedDomContext } from '@heyirisai/docx-editor-core/plugin-api/RenderedDomContext';
+import { EditorPluginCore } from '@heyirisai/docx-editor-core/plugin-api';
 import { EditorView } from 'prosemirror-view';
-import { PanelConfig } from '@eigenpal/docx-editor-core/plugin-api';
+import { PanelConfig } from '@heyirisai/docx-editor-core/plugin-api';
 import { default as PluginHost } from './PluginHost.vue';
-import { PluginPanelProps } from '@eigenpal/docx-editor-core/plugin-api';
-import { PositionCoordinates } from '@eigenpal/docx-editor-core/plugin-api';
-import { RenderedDomContext } from '@eigenpal/docx-editor-core/plugin-api';
-import { RenderedDomContextImpl } from '@eigenpal/docx-editor-core/plugin-api/RenderedDomContext';
+import { PluginPanelProps } from '@heyirisai/docx-editor-core/plugin-api';
+import { PositionCoordinates } from '@heyirisai/docx-editor-core/plugin-api';
+import { RenderedDomContext } from '@heyirisai/docx-editor-core/plugin-api';
+import { RenderedDomContextImpl } from '@heyirisai/docx-editor-core/plugin-api/RenderedDomContext';
 import { VNode } from 'vue';
 
 export { createRenderedDomContext }

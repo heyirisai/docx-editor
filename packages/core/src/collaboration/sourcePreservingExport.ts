@@ -1,5 +1,5 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import type JSZip from 'jszip';
+import JSZip from 'jszip';
 import { extractParagraphXml, findParagraphOffsets } from '../docx/selectiveXmlPatch';
 import type { BlockContent } from '../types/content';
 
@@ -39,7 +39,7 @@ interface ParagraphChangeAnalysis {
  * Attributes added solely to support collaboration are not serialized into
  * OOXML and therefore do not constitute a document edit.
  */
-function comparableJson(value: unknown): unknown {
+export function comparableJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(comparableJson);
   if (!value || typeof value !== 'object') return value;
 
@@ -329,7 +329,6 @@ export async function preserveSourceXmlAroundParagraphChanges(input: {
   changedParagraphIds: ReadonlySet<string>;
   preserveCommentParts?: boolean;
 }): Promise<ArrayBuffer> {
-  const JSZip = (await import('jszip')).default;
   const [sourceZip, exportZip] = await Promise.all([
     JSZip.loadAsync(input.sourceBuffer),
     JSZip.loadAsync(input.fullyRepackedBuffer),

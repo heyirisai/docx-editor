@@ -67,6 +67,7 @@ export type {
   NoBreakHyphenContent,
   DrawingContent,
   ShapeContent,
+  RawXmlContent,
   RunContent,
   Run,
   Hyperlink,

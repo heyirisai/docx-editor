@@ -25,5 +25,11 @@ export default defineConfig({
   },
   minify: true,
   noExternal: ['@eigenpal/docx-editor-core'],
-  external: ['prosemirror-model', 'prosemirror-state', 'prosemirror-view', 'react', 'ai'],
+  // Every prosemirror package must stay external, NOT just the ones this
+  // package imports directly: `noExternal` inlines core, and core imports the
+  // rest. Bundling a copy of prosemirror-tables re-runs its module-level
+  // `Selection.jsonID('cell', CellSelection)` beside the host app's copy, which
+  // throws "Duplicate use of selection JSON ID cell" at import time. Mirrors
+  // the `/^prosemirror-/` external in vite.config.ts.
+  external: [/^prosemirror-/, 'react', 'ai'],
 });

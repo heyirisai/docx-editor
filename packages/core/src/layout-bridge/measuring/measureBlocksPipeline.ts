@@ -79,6 +79,13 @@ export type MeasureBlockFn = (
  */
 export type FloatPageGeometry = PageGeometry;
 
+/** A block that forces the start of a new page. */
+function startsNewPage(block: FlowBlock): boolean {
+  if (block.kind === 'pageBreak') return true;
+  const attrs = (block as { attrs?: { pageBreakBefore?: boolean } }).attrs;
+  return Boolean(attrs?.pageBreakBefore);
+}
+
 /**
  * Walk `blocks` and produce one `Measure` per block. Before measuring, this
  * extracts floating exclusion zones (images / floating tables / floating
@@ -107,28 +114,56 @@ export function measureBlocksWithFloats(
     pageGeometry
   );
 
-  const marginRelative = floatingZonesWithAnchors.filter((z) => z.isMarginRelative);
-  const paragraphRelative = floatingZonesWithAnchors.filter((z) => !z.isMarginRelative);
+  // Explicit page breaks partition everything below. Re-anchoring a group to
+  // its earliest member is only sound within one page: merging across a break
+  // would move a later float's zone to an anchor before the break, where the
+  // clearing in the measure loop drops it and its own anchor can no longer
+  // bring it back — leaving page two unwrapped.
+  let pageIndex = 0;
+  const pageOfBlock: number[] = [];
+  const firstBlockOfPage = new Map<number, number>([[0, 0]]);
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i];
+    if (i > 0 && block && startsNewPage(block)) {
+      pageIndex++;
+      firstBlockOfPage.set(pageIndex, i);
+    }
+    pageOfBlock[i] = pageIndex;
+  }
+  const pageOf = (z: FloatingZoneWithAnchor): number => pageOfBlock[z.anchorBlockIndex] ?? 0;
 
-  // Margin-relative zones at the same Y likely belong to the same page —
-  // group by topY and re-anchor to the earliest block index so subsequent
-  // paragraphs see the combined zone.
-  const marginByTopY = new Map<number, FloatingZoneWithAnchor[]>();
-  for (const z of marginRelative) {
-    const group = marginByTopY.get(z.topY) ?? [];
-    group.push(z);
-    marginByTopY.set(z.topY, group);
+  const byPage = new Map<number, FloatingZoneWithAnchor[]>();
+  for (const z of floatingZonesWithAnchors) {
+    const page = byPage.get(pageOf(z)) ?? [];
+    page.push(z);
+    byPage.set(pageOf(z), page);
   }
 
-  // Paragraph-relative zones merge only when (a) Y ranges overlap AND
-  // (b) anchors are within ANCHOR_PROXIMITY blocks. The proximity bound
-  // keeps unrelated floats in distant sections from being merged just
-  // because their paragraph-local topY values happen to overlap.
-  const paragraphGroups = groupOverlappingZones(paragraphRelative, ANCHOR_PROXIMITY);
-
   const adjustedZones: FloatingZoneWithAnchor[] = [];
-  collectReanchoredToEarliest(paragraphGroups, adjustedZones);
-  collectReanchoredToEarliest(Array.from(marginByTopY.values()), adjustedZones);
+  for (const pageZones of byPage.values()) {
+    const marginRelative = pageZones.filter((z) => z.isMarginRelative);
+    const paragraphRelative = pageZones.filter((z) => !z.isMarginRelative);
+
+    // Margin-relative zones at the same Y likely belong to the same page —
+    // group by topY and re-anchor to the earliest block index so subsequent
+    // paragraphs see the combined zone.
+    const marginByTopY = new Map<number, FloatingZoneWithAnchor[]>();
+    for (const z of marginRelative) {
+      const group = marginByTopY.get(z.topY) ?? [];
+      group.push(z);
+      marginByTopY.set(z.topY, group);
+    }
+
+    // Paragraph-relative zones merge only when (a) Y ranges overlap AND
+    // (b) anchors are within ANCHOR_PROXIMITY blocks. The proximity bound
+    // keeps unrelated floats in distant sections from being merged just
+    // because their paragraph-local topY values happen to overlap.
+    collectReanchoredToEarliest(
+      groupOverlappingZones(paragraphRelative, ANCHOR_PROXIMITY),
+      adjustedZones
+    );
+    collectReanchoredToEarliest(Array.from(marginByTopY.values()), adjustedZones);
+  }
 
   const zonesByAnchor = new Map<number, FloatingImageZone[]>();
   for (const z of adjustedZones) {
@@ -138,11 +173,13 @@ export function measureBlocksWithFloats(
     // keep its content-relative topY/bottomY (cumulativeY is then the running
     // content offset for the blocks it covers).
     //
-    // Caveat: this pre-pagination pass has no page/section model, so "top of
-    // content" means the start of the whole flow. Exact for the common case
-    // (single banner near the document start); a band anchored on a later page
-    // or in a later section with different geometry can over-reach. Follow-up.
-    const anchor = z.fullWidthBlock && z.isMarginRelative ? 0 : z.anchorBlockIndex;
+    // "Top of content" means the first block of the band's own page, as far as
+    // explicit breaks reveal pages here. A later section with different
+    // geometry can still over-reach — that needs real pagination.
+    const anchor =
+      z.fullWidthBlock && z.isMarginRelative
+        ? (firstBlockOfPage.get(pageOf(z)) ?? 0)
+        : z.anchorBlockIndex;
     const existing = zonesByAnchor.get(anchor) ?? [];
     // Strip the anchor-tracking fields; the rest IS a FloatingImageZone. Spread
     // (rather than copying each field) so new zone fields can't be dropped here.
@@ -162,6 +199,10 @@ export function measureBlocksWithFloats(
     if (anchorIndices.has(blockIndex)) {
       cumulativeY = 0;
       activeZones = zonesByAnchor.get(blockIndex) ?? [];
+    } else if (activeZones.length > 0 && startsNewPage(block)) {
+      // Word wraps text around a float only on the page holding it. This pass
+      // runs before pagination, so a page break is the only boundary we can see.
+      activeZones = [];
     }
 
     const zones = activeZones.length > 0 ? activeZones : undefined;

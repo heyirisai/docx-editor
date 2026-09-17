@@ -43,8 +43,14 @@ const NAMESPACES: Record<string, string> = {
   wps: 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
 };
 
-function buildNamespaceDeclarations(): string {
-  return Object.entries(NAMESPACES)
+function buildNamespaceDeclarations(captured?: Record<string, string>): string {
+  // See documentSerializer: a prefix the preserved markup inherited but this
+  // table never lists would export as an undeclared prefix.
+  const merged: Record<string, string> = { ...NAMESPACES };
+  for (const [prefix, uri] of Object.entries(captured ?? {})) {
+    if (!(prefix in merged)) merged[prefix] = uri;
+  }
+  return Object.entries(merged)
     .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
     .join(' ');
 }
@@ -72,7 +78,7 @@ function serializeBlock(block: BlockContent): string {
  */
 export function serializeHeaderFooter(hf: HeaderFooter): string {
   const rootTag = hf.type === 'header' ? 'w:hdr' : 'w:ftr';
-  const nsDecl = buildNamespaceDeclarations();
+  const nsDecl = buildNamespaceDeclarations(hf.rootNamespaces);
 
   // Serialize content blocks
   let contentXml = hf.content.map((block) => serializeBlock(block)).join('');

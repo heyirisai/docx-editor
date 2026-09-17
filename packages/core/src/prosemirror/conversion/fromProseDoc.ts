@@ -51,6 +51,9 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
     finalSectionProperties: baseDocument?.package.document.finalSectionProperties,
     sections: baseDocument?.package.document.sections,
     comments: baseDocument?.package.document.comments,
+    // Preserved fragments can use a prefix only the source root declared, so
+    // this has to survive the save that rebuilds the body from PM.
+    rootNamespaces: baseDocument?.package.document.rootNamespaces,
   };
 
   // If we have a base document, preserve its package structure
@@ -110,7 +113,13 @@ function extractBlocks(pmDoc: PMNode): BlockContent[] {
       blocks.push(convertPMBlockSdt(node));
     } else if (node.type.name === 'textBox') {
       const attrs = node.attrs as TextBoxAttrs;
-      if (shouldExportTextBoxInsideFollowingParagraph(attrs)) {
+      // A box that owned its host paragraph goes back into one. Merging it into
+      // the next paragraph instead would hand that paragraph's paraId to this
+      // content and drop the host's own id.
+      if (attrs.hostParaId) {
+        flushPendingTextBoxes();
+        blocks.push(convertPMTextBox(node));
+      } else if (shouldExportTextBoxInsideFollowingParagraph(attrs)) {
         pendingAnchoredTextBoxRuns.push(convertPMTextBoxRun(node));
       } else {
         flushPendingTextBoxes();

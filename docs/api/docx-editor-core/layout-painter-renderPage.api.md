@@ -106,6 +106,7 @@ export interface FloatingImagePaintRecord {
     // (undocumented)
     pmStart?: number;
     relativeHeight?: number;
+    renderOnly?: boolean;
     // (undocumented)
     src: string;
     // (undocumented)

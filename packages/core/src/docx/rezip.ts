@@ -68,6 +68,8 @@ export {
   COMMENTS_IDS_CONTENT_TYPE,
   COMMENTS_EXTENSIBLE_CONTENT_TYPE,
   collectHeaderFooterUpdates,
+  commitHeaderFooterSnapshots,
+  adoptSavedBuffer,
 } from './rezip/packaging';
 export { createEmptyDocx } from './rezip/createEmpty';
 

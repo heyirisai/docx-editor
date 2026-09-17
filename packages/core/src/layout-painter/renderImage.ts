@@ -161,6 +161,7 @@ export function renderImageFragment(
 
   // Store metadata
   containerEl.dataset.blockId = String(fragment.blockId);
+  if (block.renderOnly) containerEl.dataset.renderOnly = '1';
 
   if (fragment.pmStart !== undefined) {
     containerEl.dataset.pmStart = String(fragment.pmStart);

@@ -39,9 +39,23 @@ import type {
 } from '../types/document';
 import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
-import { parseXml, findChildren, getAttribute, type XmlElement } from './xmlParser';
+import {
+  parseXml,
+  findChildren,
+  getAttribute,
+  rootNamespaceDeclarations,
+  type XmlElement,
+} from './xmlParser';
 import { parseBlockContent } from './blockContentParser';
 import { extractWatermark } from './vmlWatermarkParser';
+import { comparableJson } from '../collaboration/sourcePreservingExport';
+
+/** Fingerprint of a header/footer's editable model, compared on save to spot an edit. */
+export function headerFooterSnapshot(hf: HeaderFooter): string {
+  // Key-order independent: the serializer can rebuild identical content with a
+  // different key order, which an order-sensitive compare would read as an edit.
+  return JSON.stringify(comparableJson({ content: hf.content, watermark: hf.watermark }));
+}
 
 // ============================================================================
 // HEADER/FOOTER MAP INTERFACE
@@ -215,6 +229,8 @@ export function parseHeader(
     result.watermark = watermark;
   }
 
+  result.rootNamespaces = rootNamespaceDeclarations(rootElement);
+  result.originalSnapshot = headerFooterSnapshot(result);
   return result;
 }
 
@@ -269,6 +285,8 @@ export function parseFooter(
     inHeaderFooter: true,
   });
 
+  result.rootNamespaces = rootNamespaceDeclarations(rootElement);
+  result.originalSnapshot = headerFooterSnapshot(result);
   return result;
 }
 

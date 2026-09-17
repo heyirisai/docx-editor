@@ -127,6 +127,229 @@ export function elementToXml(element: XmlElement): string {
 }
 
 /**
+ * The `xmlns:` bindings declared on an element, so a rebuilt part can re-declare
+ * whatever its preserved markup inherited from the original root.
+ */
+export function rootNamespaceDeclarations(element: XmlElement): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(element.attributes ?? {})) {
+    if (key.startsWith('xmlns:')) out[key.slice(6)] = String(value);
+  }
+  return out;
+}
+
+/**
+ * Prefix -> URI for every namespace Word writes, so a captured fragment can be
+ * re-declared wherever it lands. It must stay a superset of the root sets the
+ * serializers emit: `footnotes.xml`/`endnotes.xml`/`comments.xml` use a fixed
+ * block with no per-document capture, so a prefix missing here (`a16:creationId`
+ * appears in nearly every Word drawing) exports unbound and voids the part.
+ */
+const OOXML_NAMESPACES: Record<string, string> = {
+  a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
+  a14: 'http://schemas.microsoft.com/office/drawing/2010/main',
+  a16: 'http://schemas.microsoft.com/office/drawing/2014/main',
+  adec: 'http://schemas.microsoft.com/office/drawing/2017/decorative',
+  aink: 'http://schemas.microsoft.com/office/drawing/2016/ink',
+  am3d: 'http://schemas.microsoft.com/office/drawing/2017/model3d',
+  asvg: 'http://schemas.microsoft.com/office/drawing/2016/SVG/main',
+  c: 'http://schemas.openxmlformats.org/drawingml/2006/chart',
+  cx: 'http://schemas.microsoft.com/office/drawing/2014/chartex',
+  cx1: 'http://schemas.microsoft.com/office/drawing/2015/9/8/chartex',
+  cx2: 'http://schemas.microsoft.com/office/drawing/2015/10/21/chartex',
+  cx3: 'http://schemas.microsoft.com/office/drawing/2016/5/9/chartex',
+  cx4: 'http://schemas.microsoft.com/office/drawing/2016/5/10/chartex',
+  cx5: 'http://schemas.microsoft.com/office/drawing/2016/5/11/chartex',
+  cx6: 'http://schemas.microsoft.com/office/drawing/2016/5/12/chartex',
+  cx7: 'http://schemas.microsoft.com/office/drawing/2016/5/13/chartex',
+  cx8: 'http://schemas.microsoft.com/office/drawing/2016/5/14/chartex',
+  dgm: 'http://schemas.openxmlformats.org/drawingml/2006/diagram',
+  m: 'http://schemas.openxmlformats.org/officeDocument/2006/math',
+  mc: 'http://schemas.openxmlformats.org/markup-compatibility/2006',
+  o: 'urn:schemas-microsoft-com:office:office',
+  oel: 'http://schemas.microsoft.com/office/2019/extlst',
+  pic: 'http://schemas.openxmlformats.org/drawingml/2006/picture',
+  r: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships',
+  v: 'urn:schemas-microsoft-com:vml',
+  w: 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
+  w10: 'urn:schemas-microsoft-com:office:word',
+  w14: 'http://schemas.microsoft.com/office/word/2010/wordml',
+  w15: 'http://schemas.microsoft.com/office/word/2012/wordml',
+  w16: 'http://schemas.microsoft.com/office/word/2018/wordml',
+  w16cex: 'http://schemas.microsoft.com/office/word/2018/wordml/cex',
+  w16cid: 'http://schemas.microsoft.com/office/word/2016/wordml/cid',
+  w16du: 'http://schemas.microsoft.com/office/word/2023/wordml/word16du',
+  w16sdtdh: 'http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash',
+  w16sdtfl: 'http://schemas.microsoft.com/office/word/2024/wordml/sdtformatlock',
+  w16se: 'http://schemas.microsoft.com/office/word/2015/wordml/symex',
+  wne: 'http://schemas.microsoft.com/office/word/2006/wordml',
+  wp: 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing',
+  wp14: 'http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing',
+  wpc: 'http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas',
+  wpg: 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup',
+  wpi: 'http://schemas.microsoft.com/office/word/2010/wordprocessingInk',
+  wps: 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape',
+};
+
+function prefixOf(name: string): string | null {
+  const i = name.indexOf(':');
+  return i > 0 ? name.slice(0, i) : null;
+}
+
+/**
+ * Collect prefixes used without a binding in scope. `inScope` holds only what
+ * ancestors WITHIN the fragment declared, never what the original root did.
+ */
+function collectUnbound(el: XmlElement, inScope: Set<string>, unbound: Set<string>): void {
+  let scope = inScope;
+  for (const key of Object.keys(el.attributes ?? {})) {
+    if (!key.startsWith('xmlns:')) continue;
+    if (scope === inScope) scope = new Set(inScope);
+    scope.add(key.slice(6));
+  }
+
+  const own = el.name ? prefixOf(el.name) : null;
+  if (own && !scope.has(own)) unbound.add(own);
+
+  for (const key of Object.keys(el.attributes ?? {})) {
+    if (key.startsWith('xmlns:') || key === 'xmlns') continue;
+    const p = prefixOf(key);
+    // `xml:` is bound by the spec and never declared.
+    if (p && p !== 'xml' && !scope.has(p)) unbound.add(p);
+  }
+
+  for (const child of el.elements ?? []) collectUnbound(child, scope, unbound);
+}
+
+/**
+ * Elements OOXML allows directly inside a `w:r` (ECMA-376 §17.3.2). Anything
+ * else — `w:p`, `w:tbl`, `w:sectPr` — is block level, and the serializer emits
+ * preserved source verbatim INSIDE a run, so writing one there produces markup
+ * Word refuses to open.
+ */
+const RUN_CONTENT_ELEMENTS = new Set([
+  'mc:AlternateContent',
+  'w:annotationRef',
+  'w:br',
+  'w:commentReference',
+  'w:continuationSeparator',
+  'w:cr',
+  'w:delInstrText',
+  'w:delText',
+  'w:drawing',
+  'w:endnoteRef',
+  'w:endnoteReference',
+  'w:fldChar',
+  'w:footnoteRef',
+  'w:footnoteReference',
+  'w:instrText',
+  'w:lastRenderedPageBreak',
+  'w:noBreakHyphen',
+  'w:object',
+  'w:pict',
+  'w:ptab',
+  'w:ruby',
+  'w:separator',
+  'w:softHyphen',
+  'w:sym',
+  'w:t',
+  'w:tab',
+]);
+
+/**
+ * Whether `xml` is a single well-formed element using only known prefixes.
+ * Preserved markup is written into the saved package verbatim, so anything
+ * failing this is dropped rather than left to corrupt the part — Word refuses
+ * to open a document.xml with unbalanced tags or an unbound prefix.
+ *
+ * `xml-js` is not a validating parser (it silently closes `<w:t>unclosed`), so
+ * this uses `DOMParser` wherever one exists — including the paste path, which
+ * is the only way an untrusted value can reach a node — and falls back to the
+ * shape check in a bare Node process.
+ *
+ * `requireBoundPrefixes` additionally rejects a prefix that neither the table
+ * nor the fragment itself binds, and `runContentOnly` rejects a root element
+ * that cannot legally sit inside a `w:r`. Parsed-from-source markup relies on
+ * the destination root (`rootNamespaces`) for prefixes and is already run
+ * content by construction, so only the paste boundary sets either.
+ */
+export function isWellFormedXmlElement(
+  xml: string,
+  options?: { requireBoundPrefixes?: boolean; runContentOnly?: boolean }
+): boolean {
+  if (typeof xml !== 'string' || xml.trim().length === 0) return false;
+  if (/]]>/.test(xml)) return false;
+
+  const Parser = (globalThis as { DOMParser?: typeof DOMParser }).DOMParser;
+  if (Parser) {
+    // Declare every prefix the fragment references — the known ones properly,
+    // anything else with a placeholder. This checks STRUCTURE only: whether an
+    // exotic prefix resolves is the destination root's business (it may be in
+    // the captured `rootNamespaces`), and failing it here would silently drop
+    // markup that would have exported just fine.
+    const bindings = new Map(Object.entries(OOXML_NAMESPACES));
+    try {
+      const unbound = new Set<string>();
+      for (const el of parseXml(xml).elements ?? []) {
+        if (el.type === 'element') collectUnbound(el, new Set(), unbound);
+      }
+      for (const prefix of unbound) {
+        if (bindings.has(prefix)) continue;
+        if (options?.requireBoundPrefixes) return false;
+        bindings.set(prefix, `urn:ep-unbound:${prefix}`);
+      }
+    } catch {
+      return false;
+    }
+    const declarations = [...bindings].map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`).join(' ');
+    try {
+      const doc = new Parser().parseFromString(
+        `<epRoot ${declarations}>${xml}</epRoot>`,
+        'application/xml'
+      );
+      if (doc.getElementsByTagName('parsererror').length > 0) return false;
+      const roots = doc.documentElement?.children;
+      if ((roots?.length ?? 0) !== 1) return false;
+      if (options?.runContentOnly && !RUN_CONTENT_ELEMENTS.has(roots![0].tagName)) return false;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  try {
+    const parsed = parseXml(xml);
+    const elements = (parsed.elements ?? []).filter((el) => el.type === 'element');
+    if (elements.length !== 1) return false;
+    if (options?.runContentOnly && !RUN_CONTENT_ELEMENTS.has(elements[0].name ?? '')) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Serialize an element for re-insertion elsewhere, declaring any prefix it uses
+ * but inherits from its original root — otherwise the part is invalid XML.
+ */
+export function elementToSelfContainedXml(element: XmlElement): string {
+  const unbound = new Set<string>();
+  collectUnbound(element, new Set(), unbound);
+
+  const missing = [...unbound].filter((p) => p in OOXML_NAMESPACES);
+  if (missing.length === 0) return elementToXml(element);
+
+  const withDecls: XmlElement = {
+    ...element,
+    attributes: {
+      ...(element.attributes ?? {}),
+      ...Object.fromEntries(missing.map((p) => [`xmlns:${p}`, OOXML_NAMESPACES[p]])),
+    },
+  };
+  return elementToXml(withDecls);
+}
+
+/**
  * Parse XML string to a more convenient format
  */
 export function parseXmlDocument(xml: string): XmlElement | null {

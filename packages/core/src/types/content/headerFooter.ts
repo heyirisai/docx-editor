@@ -41,6 +41,13 @@ export interface HeaderFooter {
    * still round-tripping. Only headers carry watermarks; footers never do.
    */
   watermark?: Watermark;
+  /**
+   * Snapshot of `content`+`watermark` as first parsed. An unchanged model leaves
+   * the original part untouched in the ZIP rather than re-serializing it.
+   */
+  originalSnapshot?: string;
+  /** `xmlns:` bindings from the part's original root, re-declared on save. */
+  rootNamespaces?: Record<string, string>;
 }
 
 /**

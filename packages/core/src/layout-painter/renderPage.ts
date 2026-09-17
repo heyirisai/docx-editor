@@ -110,6 +110,8 @@ export {
  * These are positioned absolutely within the page's content area.
  */
 interface PageFloatingImage {
+  /** Painted from a preserved group; marked so hit-testing skips it. */
+  renderOnly?: boolean;
   src: string;
   assetId?: string;
   width: number;
@@ -455,6 +457,7 @@ function extractFloatingImagesFromParagraph(
       cropLeft: imgRun.cropLeft,
       opacity: imgRun.opacity,
       relativeHeight: imgRun.relativeHeight,
+      renderOnly: imgRun.renderOnly,
     });
   }
 
@@ -963,14 +966,22 @@ export function renderPage(
     // band shift up so it stays on the page. Pinning the BOTTOM at the
     // distance (the old behavior) floated every footer a full band-height
     // too high.
-    footerEl.style.top = `${page.size.h - Math.max(footerDistance, interactiveFooterHeight)}px`;
+    // Word puts the footer flow origin at `max(w:footer, in-flow height)` from
+    // the page bottom. The interactive box top can sit ABOVE that when it grows
+    // to cover an upward float, so keep the two separate: the box is the click
+    // target, `footerBandTop` is where content actually starts.
+    const footerBandTop = page.size.h - Math.max(footerDistance, footerFlowHeight);
+    const footerElTop = page.size.h - Math.max(footerDistance, interactiveFooterHeight);
+    footerEl.style.top = `${footerElTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
     footerEl.style.height = `${interactiveFooterHeight}px`;
     footerEl.style.minHeight = `${interactiveFooterHeight}px`;
 
-    let shouldClipFooter = !footerOverflows;
+    // Content anchored above the band (negative visualTop) paints outside the
+    // box; clipping would cut it off, so only clip when everything sits inside.
+    let shouldClipFooter = !footerOverflows && footerVisualTop >= 0;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const layout: HeaderFooterLayoutInfo = {
         // Top-anchored at the footer distance, like the band above.
@@ -987,11 +998,11 @@ export function renderPage(
         options,
         layout
       );
-      // The box shrank from `actualFooterHeight` to `interactiveFooterHeight`
-      // with its bottom pinned, so its top moved down by the difference. Offset
-      // the content up by the same amount to keep it painted in place (a normal
-      // footer with no float has a zero delta, so this is a no-op there).
-      footerContentEl.style.top = `${-footerVisualTop - (actualFooterHeight - interactiveFooterHeight)}px`;
+      // Place the flow origin on the band top. Deriving this from the visual
+      // bounds instead fed an upward float's own offset back in and cancelled
+      // it exactly. A footer with no float has bandTop === footerElTop, so this
+      // stays a no-op there.
+      footerContentEl.style.top = `${footerBandTop - footerElTop}px`;
       if (footerContentEl.querySelector('img')) {
         shouldClipFooter = false;
       }

@@ -514,6 +514,7 @@ export interface DocumentBody {
     comments?: Comment_2[];
     content: BlockContent[];
     finalSectionProperties?: SectionProperties;
+    rootNamespaces?: Record<string, string>;
     sections?: Section[];
 }
 
@@ -843,6 +844,8 @@ export function hasTemplateVariables(text: string): boolean;
 export interface HeaderFooter {
     content: BlockContent[];
     hdrFtrType: HeaderFooterType;
+    originalSnapshot?: string;
+    rootNamespaces?: Record<string, string>;
     // (undocumented)
     type: 'header' | 'footer';
     watermark?: Watermark;
@@ -903,6 +906,7 @@ interface Image_2 {
     padding?: ImagePadding;
     position?: ImagePosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     rId: string;
     size: ImageSize;
     src?: string;
@@ -1608,7 +1612,7 @@ export interface Run {
 }
 
 // @public
-export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
+export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent | RawXmlContent;
 
 // @public
 export function sanitizeVariableName(name: string): string;

@@ -32,9 +32,17 @@ export function convertParagraphWithTextBoxes(
   const nodes: PMNode[] = [];
   const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
   const { anchored, inFlow } = partitionTextBoxesByAnchor(textBoxes);
+  // Dropping the host below would strand its paraId on the next paragraph, so
+  // hand the id to the first box; only it rebuilds the host on export.
+  let hostParaId = isEmptyAfterExtraction ? (block.paraId ?? null) : null;
+  const takeHostParaId = (): string | null => {
+    const id = hostParaId;
+    hostParaId = null;
+    return id;
+  };
 
   for (const tb of anchored) {
-    nodes.push(convertTextBox(tb, styleResolver, theme));
+    nodes.push(convertTextBox(tb, styleResolver, theme, takeHostParaId()));
   }
 
   if (!isEmptyAfterExtraction) {
@@ -42,7 +50,7 @@ export function convertParagraphWithTextBoxes(
   }
 
   for (const tb of inFlow) {
-    nodes.push(convertTextBox(tb, styleResolver, theme));
+    nodes.push(convertTextBox(tb, styleResolver, theme, takeHostParaId()));
   }
   return nodes;
 }
@@ -105,7 +113,8 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
 function convertTextBox(
   textBox: TextBox,
   styleResolver: StyleResolver | null,
-  theme?: Theme | null
+  theme?: Theme | null,
+  hostParaId?: string | null
 ): PMNode {
   const widthPx = textBox.size?.width ? emuToPixels(textBox.size.width) : 200;
   const heightPx = textBox.size?.height ? emuToPixels(textBox.size.height) : undefined;
@@ -164,6 +173,7 @@ function convertTextBox(
       marginBottom,
       marginLeft,
       marginRight,
+      hostParaId: hostParaId ?? null,
       ...textBoxAnchorAttrsFromDocx(textBox),
     },
     contentNodes

@@ -27,6 +27,7 @@ export type {
   NoBreakHyphenContent,
   DrawingContent,
   ShapeContent,
+  RawXmlContent,
   RunContent,
   Run,
 } from './content/run';

@@ -65,7 +65,7 @@ const NAMESPACES = {
 /**
  * Build namespace declaration string for document element
  */
-function buildNamespaceDeclarations(): string {
+function buildNamespaceDeclarations(captured?: Record<string, string>): string {
   // Minimal set of commonly used namespaces
   const minimalNamespaces = {
     wpc: NAMESPACES.wpc,
@@ -94,7 +94,14 @@ function buildNamespaceDeclarations(): string {
     wps: NAMESPACES.wps,
   };
 
-  return Object.entries(minimalNamespaces)
+  // Re-declare prefixes the source root had but this table lacks (a16 etc.),
+  // else preserved markup that inherited them exports as invalid XML.
+  const merged: Record<string, string> = { ...minimalNamespaces };
+  for (const [prefix, uri] of Object.entries(captured ?? {})) {
+    if (!(prefix in merged)) merged[prefix] = uri;
+  }
+
+  return Object.entries(merged)
     .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
     .join(' ');
 }
@@ -169,7 +176,7 @@ export function serializeDocument(doc: Document): string {
   parts.push('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>');
 
   // Document element with namespaces
-  const nsDecl = buildNamespaceDeclarations();
+  const nsDecl = buildNamespaceDeclarations(doc.package.document.rootNamespaces);
   parts.push(`<w:document ${nsDecl} mc:Ignorable="w14 w15 w16se w16cid w16 w16cex w16sdtdh wp14">`);
 
   // Document body

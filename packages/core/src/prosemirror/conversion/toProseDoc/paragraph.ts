@@ -293,6 +293,11 @@ function paragraphFormattingToAttrs(
     attrs.alignment = formatting?.alignment ?? stylePpr?.alignment;
     attrs.spaceBefore = formatting?.spaceBefore ?? stylePpr?.spaceBefore;
     attrs.spaceAfter = formatting?.spaceAfter ?? stylePpr?.spaceAfter;
+    // Auto spacing is inherited like any other pPr value; reading it only off
+    // the paragraph left style-declared autospacing rendering at the literal
+    // w:before/w:after Word ignores.
+    attrs.beforeAutospacing = formatting?.beforeAutospacing ?? stylePpr?.beforeAutospacing;
+    attrs.afterAutospacing = formatting?.afterAutospacing ?? stylePpr?.afterAutospacing;
     attrs.lineSpacing = formatting?.lineSpacing ?? stylePpr?.lineSpacing;
     attrs.lineSpacingRule = formatting?.lineSpacingRule ?? stylePpr?.lineSpacingRule;
     // Carry through only the inline-explicit flags (never style-resolved).
@@ -356,6 +361,8 @@ function paragraphFormattingToAttrs(
     attrs.alignment = formatting?.alignment;
     attrs.spaceBefore = formatting?.spaceBefore;
     attrs.spaceAfter = formatting?.spaceAfter;
+    attrs.beforeAutospacing = formatting?.beforeAutospacing;
+    attrs.afterAutospacing = formatting?.afterAutospacing;
     attrs.lineSpacing = formatting?.lineSpacing;
     attrs.lineSpacingRule = formatting?.lineSpacingRule;
     if (formatting?.spacingExplicit) attrs.spacingExplicit = formatting.spacingExplicit;

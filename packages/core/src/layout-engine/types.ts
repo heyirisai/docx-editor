@@ -177,6 +177,8 @@ export type ImageRun = {
   position?: ImageRunPosition;
   /** OOXML z-order among overlapping anchored objects (higher on top). */
   relativeHeight?: number;
+  /** Painted from a preserved group; not selectable, since edits cannot save. */
+  renderOnly?: boolean;
   /** Wrap type from DOCX (inline, square, tight, through, topAndBottom, etc.) */
   wrapType?: string;
   /** Display mode for CSS rendering */
@@ -225,6 +227,8 @@ export type FieldRun = RunFormatting & {
   fieldType: 'PAGE' | 'NUMPAGES' | 'DATE' | 'TIME' | 'OTHER';
   /** Fallback text if field can't be resolved */
   fallback?: string;
+  /** `\@` date/time picture, e.g. `MMMM yy`. */
+  fieldFormat?: string;
   pmStart?: number;
   pmEnd?: number;
 };
@@ -509,6 +513,8 @@ export type ImageBlock = {
   cropLeft?: number;
   /** a:alphaModFix → CSS opacity in [0, 1]. */
   opacity?: number;
+  /** Painted from a preserved group; not selectable, since edits cannot save. */
+  renderOnly?: boolean;
   anchor?: {
     isAnchored?: boolean;
     offsetH?: number;

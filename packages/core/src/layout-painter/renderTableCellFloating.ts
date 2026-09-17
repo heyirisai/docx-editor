@@ -19,6 +19,8 @@ import { imageWrapTextFromCssFloat, isFloatingImageRun } from './floatingImageFl
 
 /** Info about a floating image extracted from a cell paragraph */
 export interface CellFloatingImage {
+  /** Painted from a preserved group; marked so hit-testing skips it. */
+  renderOnly?: boolean;
   src: string;
   assetId?: string;
   width: number;
@@ -133,6 +135,7 @@ export function extractCellFloatingImages(
         wrapType: imgRun.wrapType,
         pmStart: imgRun.pmStart,
         pmEnd: imgRun.pmEnd,
+        renderOnly: imgRun.renderOnly,
       });
     }
 

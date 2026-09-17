@@ -204,23 +204,23 @@ export default [
   },
 
   // renderPage.ts sits at the default cap; bumped minimally for the
-  // page-overlay z-band import.
+  // page-overlay z-band import and the float paint-record fields.
   {
     files: ['packages/core/src/layout-painter/renderPage.ts'],
     rules: {
-      'max-lines': ['error', { max: 1010, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1025, skipBlankLines: false, skipComments: false }],
     },
   },
 
   // layout-engine/types.ts is the canonical schema definition for the
   // layout model — single file by design (cross-referencing types). Bumped
   // modestly above the default to accommodate new revision-tracking,
-  // table-pagination, and anchored-object z-order/crop fields without
-  // forcing a split that would obscure the schema.
+  // table-pagination, anchored-object z-order/crop, and field-picture fields
+  // without forcing a split that would obscure the schema.
   {
     files: ['packages/core/src/layout-engine/types.ts'],
     rules: {
-      'max-lines': ['error', { max: 1095, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1105, skipBlankLines: false, skipComments: false }],
     },
   },
 
