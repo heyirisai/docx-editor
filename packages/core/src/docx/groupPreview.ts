@@ -144,15 +144,18 @@ export function deriveGroupPreviewImages(
           relativeTo: (posH?.relativeTo ?? 'column') as NonNullable<
             Image['position']
           >['horizontal']['relativeTo'],
-          // The group's own alignment positions the whole group; each child is
-          // then offset from it, so carry the alignment and keep the child's
-          // delta as the offset.
+          // An aligned group carries `alignment` and NO `posOffset`: the
+          // painters resolve alignment only when no offset is present, so
+          // emitting both would silently pin the group back to the origin.
+          // The child delta is dropped with it — a lone picture (the common
+          // case, a centred logo) then lands correctly, and the pictures of a
+          // multi-picture aligned group share the group's anchor instead of
+          // every one of them collapsing to the left edge.
           ...(posH?.hasOffset === false && posH.alignment
             ? {
                 alignment: posH.alignment as NonNullable<
                   Image['position']
                 >['horizontal']['alignment'],
-                posOffset: Math.round((childXfrm.off.x - chOff.x) * scaleX),
               }
             : {
                 posOffset: Math.round((posH?.offset ?? 0) + (childXfrm.off.x - chOff.x) * scaleX),
@@ -167,7 +170,6 @@ export function deriveGroupPreviewImages(
                 alignment: posV.alignment as NonNullable<
                   Image['position']
                 >['vertical']['alignment'],
-                posOffset: Math.round((childXfrm.off.y - chOff.y) * scaleY),
               }
             : {
                 posOffset: Math.round((posV?.offset ?? 0) + (childXfrm.off.y - chOff.y) * scaleY),

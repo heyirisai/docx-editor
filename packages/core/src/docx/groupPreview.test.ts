@@ -128,6 +128,9 @@ describe('deriveGroupPreviewImages', () => {
     expect(out).toHaveLength(1);
     expect(out[0].image.position?.horizontal.alignment).toBe('center');
     expect(out[0].image.position?.horizontal.relativeTo).toBe('margin');
+    // The painters check `posOffset` BEFORE alignment, so emitting both would
+    // pin the group back to the origin and make the alignment inert.
+    expect(out[0].image.position?.horizontal.posOffset).toBeUndefined();
   });
 
   test('a deeply nested group does not blow the stack', () => {

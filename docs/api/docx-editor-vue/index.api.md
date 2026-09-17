@@ -5,32 +5,32 @@
 ```ts
 
 import { App } from 'vue';
-import { Comment as Comment_2 } from '@heyirisai/docx-editor-core/types/content';
-import { ContentControlFilter } from '@heyirisai/docx-editor-core/agent';
-import { ContentControlValue } from '@heyirisai/docx-editor-core/agent';
-import { createDocumentWithText } from '@heyirisai/docx-editor-core';
-import { createEmptyDocument } from '@heyirisai/docx-editor-core';
-import { CreateEmptyDocumentOptions } from '@heyirisai/docx-editor-core';
-import { en as defaultLocale } from '@heyirisai/docx-editor-i18n';
-import { Document as Document_2 } from '@heyirisai/docx-editor-core/types/document';
+import { Comment as Comment_2 } from '@eigenpal/docx-editor-core/types/content';
+import { ContentControlFilter } from '@eigenpal/docx-editor-core/agent';
+import { ContentControlValue } from '@eigenpal/docx-editor-core/agent';
+import { createDocumentWithText } from '@eigenpal/docx-editor-core';
+import { createEmptyDocument } from '@eigenpal/docx-editor-core';
+import { CreateEmptyDocumentOptions } from '@eigenpal/docx-editor-core';
+import { en as defaultLocale } from '@eigenpal/docx-editor-i18n';
+import { Document as Document_2 } from '@eigenpal/docx-editor-core/types/document';
 import { default as DocxEditor } from './components/DocxEditor.vue';
-import { DocxInput } from '@heyirisai/docx-editor-core/utils';
-import { EditorHandle } from '@heyirisai/docx-editor-core';
-import { EditorRefLike } from '@heyirisai/docx-editor-agents/bridge';
+import { DocxInput } from '@eigenpal/docx-editor-core/utils';
+import { EditorHandle } from '@eigenpal/docx-editor-core';
+import { EditorRefLike } from '@eigenpal/docx-editor-agents/bridge';
 import { EditorView } from 'prosemirror-view';
-import { FontDefinition } from '@heyirisai/docx-editor-core/utils';
-import { FontOption } from '@heyirisai/docx-editor-core/utils/fontOptions';
-import { ImageAssetResolver } from '@heyirisai/docx-editor-core/layout-painter';
-import { ImageUploadHandler } from '@heyirisai/docx-editor-core/prosemirror/commands';
+import { FontDefinition } from '@eigenpal/docx-editor-core/utils';
+import { FontOption } from '@eigenpal/docx-editor-core/utils/fontOptions';
+import { ImageAssetResolver } from '@eigenpal/docx-editor-core/layout-painter';
+import { ImageUploadHandler } from '@eigenpal/docx-editor-core/prosemirror/commands';
 import { MaybeRef } from 'vue';
 import { Plugin as Plugin_2 } from 'prosemirror-state';
-import { PMContentControl } from '@heyirisai/docx-editor-core/prosemirror';
-import { ScrollToParaIdOptions } from '@heyirisai/docx-editor-core/utils';
-import { SelectionState } from '@heyirisai/docx-editor-core/prosemirror';
+import { PMContentControl } from '@eigenpal/docx-editor-core/prosemirror';
+import { ScrollToParaIdOptions } from '@eigenpal/docx-editor-core/utils';
+import { SelectionState } from '@eigenpal/docx-editor-core/prosemirror';
 import { StyleValue } from 'vue';
-import { TFunction } from '@heyirisai/docx-editor-i18n';
-import { Theme } from '@heyirisai/docx-editor-core/types/document';
-import { Translations } from '@heyirisai/docx-editor-i18n';
+import { TFunction } from '@eigenpal/docx-editor-i18n';
+import { Theme } from '@eigenpal/docx-editor-core/types/document';
+import { Translations } from '@eigenpal/docx-editor-i18n';
 import { VNodeChild } from 'vue';
 
 export { createDocumentWithText }
