@@ -33,16 +33,34 @@ export function convertParagraphWithTextBoxes(
   const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
   const { anchored, inFlow } = partitionTextBoxesByAnchor(textBoxes);
   // Dropping the host below would strand its paraId on the next paragraph, so
-  // hand the id to the first box; only it rebuilds the host on export.
-  let hostParaId = isEmptyAfterExtraction ? (block.paraId ?? null) : null;
+  // hand the id to the first box; only it rebuilds the host on export. The
+  // REST must still report the host as their anchor: without it they fall
+  // through to `shouldExportTextBoxInsideFollowingParagraph` and get merged
+  // into the next paragraph, so two boxes that shared one anchor end up on
+  // different ones and shift apart on re-layout.
+  const hostId = isEmptyAfterExtraction ? (block.paraId ?? null) : null;
+  let hostParaIdTaken = false;
   const takeHostParaId = (): string | null => {
-    const id = hostParaId;
-    hostParaId = null;
-    return id;
+    if (hostParaIdTaken) return null;
+    hostParaIdTaken = true;
+    return hostId;
   };
 
+  // Boxes after the first still carried `anchorTarget: 'followingBlock'`, which
+  // on export merges them into the NEXT paragraph — so two boxes that shared
+  // one host paragraph ended up anchored to different ones and drifted apart.
+  // Clearing it keeps them as their own paragraphs beside the first.
+  const detachFromFollowingBlock = (node: PMNode): PMNode =>
+    node.attrs.anchorTarget
+      ? node.type.create({ ...node.attrs, anchorTarget: null }, node.content, node.marks)
+      : node;
+
   for (const tb of anchored) {
-    nodes.push(convertTextBox(tb, styleResolver, theme, takeHostParaId()));
+    const hostParaId = takeHostParaId();
+    const node = convertTextBox(tb, styleResolver, theme, hostParaId);
+    // Only the box that took the host id rebuilds the host paragraph; the rest
+    // must not drift onto the following one.
+    nodes.push(hostParaId || !hostId ? node : detachFromFollowingBlock(node));
   }
 
   if (!isEmptyAfterExtraction) {

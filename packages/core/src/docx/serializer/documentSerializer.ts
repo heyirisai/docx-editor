@@ -13,6 +13,7 @@
 
 import type { Document, DocumentBody, BlockContent } from '../../types/document';
 
+import { escapeXml } from './xmlUtils';
 import { serializeParagraph } from './paragraphSerializer';
 import { resetAutoIdCounter } from './runSerializer';
 import { serializeTable } from './tableSerializer';
@@ -102,7 +103,7 @@ function buildNamespaceDeclarations(captured?: Record<string, string>): string {
   }
 
   return Object.entries(merged)
-    .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
+    .map(([prefix, uri]) => `xmlns:${escapeXml(prefix)}="${escapeXml(uri)}"`)
     .join(' ');
 }
 

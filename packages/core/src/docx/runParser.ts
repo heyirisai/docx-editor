@@ -58,7 +58,6 @@ import {
 } from './xmlParser';
 import { resolveThemeFontRef } from './themeParser';
 import { isTextBoxDrawing } from './textBoxParser';
-import { containsWatermarkShape } from './vmlWatermarkParser';
 import { deriveGroupPreviewImages } from './groupPreview';
 import { parseImage } from './imageParser';
 import { parseVmlImageContent } from './vmlImageParser';
@@ -699,10 +698,6 @@ function parseRunContents(
             }
           }
         }
-        // A watermark inside AlternateContent is already modelled on the
-        // header (`hf.watermark`) and re-emitted by its serializer, so
-        // preserving the source here too would write it twice.
-        if (!modelled && containsWatermarkShape(child)) modelled = true;
         // Shapes and grouped drawings have no model, so carry the source
         // through instead of dropping it; the serializer writes it back as-is.
         if (!modelled) {

@@ -430,8 +430,15 @@ export function renderHeaderFooterContent(
         // Same stacking the body gives its floats — without it an anchored HF
         // box paints under body artwork it is meant to sit on.
         isFloating: block.displayMode === 'float',
+        // Only a FLOATING box stacks. An in-flow or topAndBottom box given a
+        // front z-index paints over the body and, being pointer-interactive,
+        // swallows clicks meant for the document text.
         zIndex:
-          block.wrapType === 'behind' ? -1 : headerFooterFrontZIndex(block.relativeHeight ?? 1),
+          block.displayMode !== 'float'
+            ? undefined
+            : block.wrapType === 'behind'
+              ? -1
+              : headerFooterFrontZIndex(block.relativeHeight ?? 1),
       };
       const fragEl = renderTextBoxFragment(
         syntheticFragment,

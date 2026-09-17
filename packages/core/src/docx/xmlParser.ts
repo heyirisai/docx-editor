@@ -196,11 +196,22 @@ function prefixOf(name: string): string | null {
   return i > 0 ? name.slice(0, i) : null;
 }
 
+/** Recursion bound for walks over file- or clipboard-derived markup. */
+const MAX_ELEMENT_DEPTH = 64;
+
 /**
  * Collect prefixes used without a binding in scope. `inScope` holds only what
  * ancestors WITHIN the fragment declared, never what the original root did.
  */
-function collectUnbound(el: XmlElement, inScope: Set<string>, unbound: Set<string>): void {
+function collectUnbound(
+  el: XmlElement,
+  inScope: Set<string>,
+  unbound: Set<string>,
+  depth = 0
+): void {
+  // Both callers walk attacker-controlled XML (a preserved part on parse, a
+  // pasted fragment at the trust boundary), so the walk must be bounded.
+  if (depth >= MAX_ELEMENT_DEPTH) return;
   let scope = inScope;
   for (const key of Object.keys(el.attributes ?? {})) {
     if (!key.startsWith('xmlns:')) continue;
@@ -218,14 +229,18 @@ function collectUnbound(el: XmlElement, inScope: Set<string>, unbound: Set<strin
     if (p && p !== 'xml' && !scope.has(p)) unbound.add(p);
   }
 
-  for (const child of el.elements ?? []) collectUnbound(child, scope, unbound);
+  for (const child of el.elements ?? []) collectUnbound(child, scope, unbound, depth + 1);
 }
 
 /**
- * Elements OOXML allows directly inside a `w:r` (ECMA-376 §17.3.2). Anything
- * else — `w:p`, `w:tbl`, `w:sectPr` — is block level, and the serializer emits
- * preserved source verbatim INSIDE a run, so writing one there produces markup
- * Word refuses to open.
+ * Elements a PASTED fragment may carry. A subset of what `w:r` allows
+ * (ECMA-376 §17.3.2): block-level markup (`w:p`, `w:tbl`, `w:sectPr`) would be
+ * emitted inside a run and make the file unopenable, and the run-level
+ * constructs that CARRY BEHAVIOUR are excluded too —
+ * `w:instrText`/`w:delInstrText`/`w:fldChar` (a field instruction Word acts on,
+ * e.g. `DDEAUTO`, `INCLUDETEXT`) and `w:object` (an OLE embed). Those still
+ * round-trip fine when the PARSER produces them; nothing from the clipboard
+ * gets to introduce one.
  */
 const RUN_CONTENT_ELEMENTS = new Set([
   'mc:AlternateContent',
@@ -234,18 +249,14 @@ const RUN_CONTENT_ELEMENTS = new Set([
   'w:commentReference',
   'w:continuationSeparator',
   'w:cr',
-  'w:delInstrText',
   'w:delText',
   'w:drawing',
   'w:endnoteRef',
   'w:endnoteReference',
-  'w:fldChar',
   'w:footnoteRef',
   'w:footnoteReference',
-  'w:instrText',
   'w:lastRenderedPageBreak',
   'w:noBreakHyphen',
-  'w:object',
   'w:pict',
   'w:ptab',
   'w:ruby',

@@ -337,7 +337,7 @@ function serializeMoveRangeStart(
  * `<w:t>`, if any, belongs to an inner document rather than to this run.
  */
 function isOpaqueRunContent(content: RunContent | undefined): boolean {
-  return content?.type === 'drawing' || content?.type === 'rawXml';
+  return content?.type === 'drawing' || content?.type === 'rawXml' || content?.type === 'shape';
 }
 
 /** Split a run into consecutive same-kind segments, preserving content order. */

@@ -29,6 +29,8 @@
  */
 
 import type {
+  BlockContent,
+  RunContent,
   HeaderFooter,
   HeaderFooterType,
   HeaderReference,
@@ -41,14 +43,15 @@ import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
 import {
   parseXml,
+  parseXmlDocument,
   findChildren,
   getAttribute,
   rootNamespaceDeclarations,
   type XmlElement,
 } from './xmlParser';
 import { parseBlockContent } from './blockContentParser';
-import { extractWatermark } from './vmlWatermarkParser';
-import { comparableJson } from '../collaboration/sourcePreservingExport';
+import { containsWatermarkShape, extractWatermark } from './vmlWatermarkParser';
+import { comparableJson } from '../utils/comparableJson';
 
 /** Fingerprint of a header/footer's editable model, compared on save to spot an edit. */
 export function headerFooterSnapshot(hf: HeaderFooter): string {
@@ -98,6 +101,27 @@ function parseHeaderFooterType(typeAttr: string | null): HeaderFooterType {
     default:
       return 'default';
   }
+}
+
+/**
+ * Remove the first preserved `rawXml` run item holding a watermark shape.
+ * Returns true once it has dropped one.
+ */
+function dropFirstPreservedWatermark(blocks: BlockContent[]): boolean {
+  for (const block of blocks) {
+    if (block.type !== 'paragraph') continue;
+    for (const item of block.content) {
+      if (item.type !== 'run') continue;
+      const index = item.content.findIndex(
+        (c: RunContent) => c.type === 'rawXml' && containsWatermarkShape(parseXmlDocument(c.xml))
+      );
+      if (index >= 0) {
+        item.content.splice(index, 1);
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -227,6 +251,13 @@ export function parseHeader(
   const watermark = extractWatermark(rootElement, rels, media);
   if (watermark) {
     result.watermark = watermark;
+    // The same shape is also reachable through the run parser's preserved
+    // source, and this serializer emits both — so drop the one copy that the
+    // watermark model now owns. Scoped here, and to a single item, because
+    // `extractWatermark` returns the FIRST match and only headers call it:
+    // standing down inside the run parser instead would silently delete
+    // WordArt from footers and the body, which model no watermark at all.
+    dropFirstPreservedWatermark(result.content);
   }
 
   result.rootNamespaces = rootNamespaceDeclarations(rootElement);

@@ -11,6 +11,7 @@
  */
 
 import type { BlockContent, HeaderFooter } from '../../types/document';
+import { escapeXml } from './xmlUtils';
 import { serializeParagraph } from './paragraphSerializer';
 import { serializeTable } from './tableSerializer';
 import { serializeBlockSdt } from './sdtSerializer';
@@ -51,7 +52,7 @@ function buildNamespaceDeclarations(captured?: Record<string, string>): string {
     if (!(prefix in merged)) merged[prefix] = uri;
   }
   return Object.entries(merged)
-    .map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`)
+    .map(([prefix, uri]) => `xmlns:${escapeXml(prefix)}="${escapeXml(uri)}"`)
     .join(' ');
 }
 

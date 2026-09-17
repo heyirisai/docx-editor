@@ -61,9 +61,17 @@ describe('preserved-fragment validation', () => {
     expect(paste('<w:body/>')).toBe(false);
     expect(paste('<w:sectPr/>')).toBe(false);
 
-    // What the parser actually preserves stays accepted.
-    expect(paste('<w:fldChar w:fldCharType="separate"/>')).toBe(true);
-    expect(paste('<w:instrText xml:space="preserve"> TOC </w:instrText>')).toBe(true);
+    // Field instructions and OLE embeds carry behaviour Word acts on, so the
+    // clipboard may not introduce one even though the parser emits them.
+    expect(paste('<w:fldChar w:fldCharType="separate"/>')).toBe(false);
+    expect(paste('<w:instrText xml:space="preserve"> DDEAUTO WinWord </w:instrText>')).toBe(false);
+    expect(
+      paste('<w:instrText xml:space="preserve"> INCLUDEPICTURE "http://x" </w:instrText>')
+    ).toBe(false);
+    expect(paste('<w:object/>')).toBe(false);
+
+    // Inert content the clipboard may carry.
+    expect(paste('<w:t>hello</w:t>')).toBe(true);
     expect(
       paste(
         '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">' +

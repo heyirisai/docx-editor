@@ -79,9 +79,14 @@ export type MeasureBlockFn = (
  */
 export type FloatPageGeometry = PageGeometry;
 
-/** A block that forces the start of a new page. */
+/**
+ * A block that forces the start of a new page. A next-page `w:sectPr` arrives
+ * as its own `sectionBreak` block, and a cover whose section ends that way has
+ * no `pageBreak` at all — missing it lets the cover's float keep reserving
+ * space through the whole next section.
+ */
 function startsNewPage(block: FlowBlock): boolean {
-  if (block.kind === 'pageBreak') return true;
+  if (block.kind === 'pageBreak' || block.kind === 'sectionBreak') return true;
   const attrs = (block as { attrs?: { pageBreakBefore?: boolean } }).attrs;
   return Boolean(attrs?.pageBreakBefore);
 }

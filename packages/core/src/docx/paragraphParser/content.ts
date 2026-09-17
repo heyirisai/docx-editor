@@ -456,7 +456,10 @@ function unpairedFieldCharPositions(children: XmlElement[]): Set<number> {
     for (const runChild of getChildElements(child)) {
       if (getLocalName(runChild.name) !== 'fldChar') continue;
       const kind = getAttribute(runChild, 'w', 'fldCharType');
-      if (kind === 'begin') openBegins.push(position);
+      // `parseFieldChar` treats ANY value that is not separate/end — including
+      // a missing attribute — as a begin. Mirror that, or the walker opens a
+      // field this scan never marked unpaired and swallows the paragraph.
+      if (kind !== 'separate' && kind !== 'end') openBegins.push(position);
       else if (kind === 'end') {
         if (openBegins.length === 0) unpaired.add(position);
         else openBegins.pop();

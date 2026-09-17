@@ -102,8 +102,10 @@ describe('rawXml through ProseMirror', () => {
     expect(parse('&lt;w:t&gt;unclosed')).toBe(0);
     // Two elements — not a single self-contained fragment.
     expect(parse('&lt;w:t/&gt;&lt;w:t/&gt;')).toBe(0);
-    // Well-formed source, e.g. copied between documents.
-    expect(parse('&lt;w:fldChar w:fldCharType=&quot;begin&quot;/&gt;')).toBe(1);
+    // A field instruction or its markers may not arrive from the clipboard.
+    expect(parse('&lt;w:fldChar w:fldCharType=&quot;begin&quot;/&gt;')).toBe(0);
+    // Inert preserved markup still round-trips.
+    expect(parse('&lt;w:t&gt;hello&lt;/w:t&gt;')).toBe(1);
   });
 
   test('the source root namespaces survive the save', () => {

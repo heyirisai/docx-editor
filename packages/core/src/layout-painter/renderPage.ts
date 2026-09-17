@@ -984,8 +984,12 @@ export function renderPage(
     let shouldClipFooter = !footerOverflows && footerVisualTop >= 0;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const layout: HeaderFooterLayoutInfo = {
-        // Top-anchored at the footer distance, like the band above.
-        flowTop: page.size.h - Math.max(footerDistance, options.footerContent?.height ?? 0),
+        // MUST equal `footerBandTop` — the origin the content element is
+        // actually placed at. `resolveHeaderFooterFloatTop` subtracts this for
+        // page/margin-anchored objects and the off-page culling guard shares
+        // it, so deriving it from the float-inclusive total instead put both
+        // hundreds of px out whenever the footer held a tall anchored object.
+        flowTop: footerBandTop,
         flowLeft: page.margins.left,
         contentWidth: footerContentWidth,
         pageWidth: page.size.w,
