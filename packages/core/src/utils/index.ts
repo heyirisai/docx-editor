@@ -34,6 +34,7 @@ export {
   resolveColorToHex,
   resolveHighlightColor,
   resolveShadingColor,
+  resolveShadingBackgroundHex,
   isBlack,
   isWhite,
   getContrastingColor,

@@ -67,6 +67,12 @@ export interface TextBoxAttrs {
    * so the id stays attached to the content it labelled.
    */
   hostParaId?: string | null;
+  /**
+   * Canvas-only frame lifted out of preserved markup — a decorative filled
+   * shape with no text. Painted like any text box; export writes nothing for
+   * it, because the source markup round-trips verbatim.
+   */
+  renderOnly?: boolean | null;
 }
 
 export const TextBoxExtension = createNodeExtension({
@@ -107,6 +113,10 @@ export const TextBoxExtension = createNodeExtension({
       distLeft: { default: null },
       distRight: { default: null },
       hostParaId: { default: null },
+      // Canvas-only frame lifted out of preserved markup (a decorative filled
+      // shape with no text). Painted like any text box; `fromProseDoc` emits
+      // nothing for it, because the source markup is written back verbatim.
+      renderOnly: { default: null },
     },
     parseDOM: [
       {

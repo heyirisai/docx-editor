@@ -731,6 +731,7 @@ export type FlowBlock = ParagraphBlock | TableBlock | ImageBlock | TextBoxBlock 
 
 // @public (undocumented)
 export interface FooterReference {
+    inherited?: boolean;
     // (undocumented)
     rId: string;
     // (undocumented)
@@ -865,6 +866,7 @@ export type HeaderFooterMetrics = {
 
 // @public
 export interface HeaderReference {
+    inherited?: boolean;
     // (undocumented)
     rId: string;
     // (undocumented)
@@ -1223,6 +1225,7 @@ export type Page = {
     };
     orientation?: 'portrait' | 'landscape';
     sectionIndex?: number;
+    isSectionFirstPage?: boolean;
     headerFooterRefs?: {
         headerDefault?: string;
         headerFirst?: string;
@@ -1750,6 +1753,7 @@ export interface Shape {
     outline?: ShapeOutline;
     position?: ImagePosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     shapeType: ShapeType;
     size: ImageSize;
     spPrExtraXml?: string;
@@ -1916,6 +1920,7 @@ export interface TextBox {
     outline?: ShapeOutline;
     position?: ImagePosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     size: ImageSize;
     spPrExtraXml?: string;
     // (undocumented)

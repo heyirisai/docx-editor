@@ -353,6 +353,7 @@ export interface RenderPageOptions {
     };
     pageClassName?: string;
     resolvedCommentIds?: Set<number>;
+    sectionHeaderFooters?: SectionHeaderFooterContent[];
     showBorders?: boolean;
     showShadow?: boolean;
     theme?: Theme | null;
@@ -385,6 +386,20 @@ export function resolveHeaderFooterFloatLeft(width: number, h: {
 
 // @public
 export function s(target: EventTarget | null): HTMLElement | null;
+
+// @public
+export interface SectionHeaderFooterContent {
+    // (undocumented)
+    firstFooter?: HeaderFooterContent;
+    firstHeader?: HeaderFooterContent;
+    // (undocumented)
+    footer?: HeaderFooterContent;
+    footerDistance?: number;
+    // (undocumented)
+    header?: HeaderFooterContent;
+    headerDistance?: number;
+    titlePg?: boolean;
+}
 
 // @public
 export const T: {

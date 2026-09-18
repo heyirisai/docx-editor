@@ -723,6 +723,9 @@ export function resolveHighlightToCss(value: string): string;
 export function resolveIsDark(colorMode: ColorMode, systemDark: boolean): boolean;
 
 // @public
+export function resolveShadingBackgroundHex(shading: ShadingProperties | undefined | null, theme: Theme | null | undefined): string | undefined;
+
+// @public
 export function resolveShadingColor(color: ColorValue | undefined | null, theme: Theme | null | undefined): string;
 
 // @public

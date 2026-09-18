@@ -24,6 +24,16 @@ type FullPageOptions = RenderPageOptions & {
 };
 
 /**
+ * What a page's header/footer band is resolved from. `repopulatePageContent`
+ * keeps the existing bands and swaps only the content area, so when a page
+ * changes hands between sections that has to force the full rebuild instead —
+ * otherwise the page keeps the previous section's header.
+ */
+function sectionBandKey(page: Page): string {
+  return `${page.sectionIndex ?? 0}:${page.isSectionFirstPage ? 1 : 0}`;
+}
+
+/**
  * Build a RenderContext and resolved page options (with footnotes) for a page.
  * Centralises logic shared by populatePageShell, repopulatePageContent, and the eager render path.
  */
@@ -40,10 +50,35 @@ function buildPageRenderArgs(
     imageAssetLoader: options.imageAssetLoader,
   };
   const pageOptions: RenderPageOptions = { ...options };
-  // Per-page header/footer selection when titlePg is enabled
-  if (options.titlePg && page.number === 1) {
-    pageOptions.headerContent = options.firstPageHeaderContent;
-    pageOptions.footerContent = options.firstPageFooterContent;
+
+  // This page's own section decides its header and footer. A section that
+  // declares neither gets neither — the flat options are only the fallback for
+  // callers that have not resolved per-section content.
+  // Clamped: `page.sectionIndex` counts section breaks in the CURRENT editor
+  // state while this table is resolved from the imported document's sections.
+  // Deleting a section-break paragraph makes the two disagree until the next
+  // open — degrade to the nearest real section rather than dropping the band.
+  const sections = options.sectionHeaderFooters;
+  const section = sections?.length
+    ? sections[Math.min(page.sectionIndex ?? 0, sections.length - 1)]
+    : undefined;
+  if (section) {
+    pageOptions.headerContent = section.header;
+    pageOptions.footerContent = section.footer;
+    pageOptions.firstPageHeaderContent = section.firstHeader;
+    pageOptions.firstPageFooterContent = section.firstFooter;
+    pageOptions.titlePg = section.titlePg;
+    if (section.headerDistance !== undefined) pageOptions.headerDistance = section.headerDistance;
+    if (section.footerDistance !== undefined) pageOptions.footerDistance = section.footerDistance;
+  }
+
+  // Per-page header/footer selection when titlePg is enabled. `w:titlePg` is a
+  // SECTION property, so it applies to that section's first page — which is
+  // page 1 only for the first section.
+  const isFirstOfSection = section ? page.isSectionFirstPage : page.number === 1;
+  if (pageOptions.titlePg && isFirstOfSection) {
+    pageOptions.headerContent = pageOptions.firstPageHeaderContent;
+    pageOptions.footerContent = pageOptions.firstPageFooterContent;
   }
   if (options.footnotesByPage) {
     const fns = options.footnotesByPage.get(page.number);
@@ -65,7 +100,7 @@ interface PageContainerState {
   virtualized: boolean;
   totalPages: number;
   optionsHash: string;
-  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>;
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean; bandKey?: string }>;
   currentOptions: FullPageOptions;
   imageAssetLoader: FullPageOptions['imageAssetLoader'];
 }
@@ -88,6 +123,11 @@ function computePageFingerprint(page: Page): string {
     `m:${page.margins.top},${page.margins.right},${page.margins.bottom},${page.margins.left}`
   );
   parts.push(`n:${page.number}`);
+  // A page that moves to another section gets that section's header, and the
+  // section's FIRST page gets its `w:titlePg` variant — a page can keep its
+  // section and its fragments while gaining or losing that role.
+  if (page.sectionIndex) parts.push(`sec:${page.sectionIndex}`);
+  if (page.isSectionFirstPage) parts.push('sec1st');
   if (page.footnoteReservedHeight) parts.push(`fn:${page.footnoteReservedHeight}`);
 
   // Each fragment's stable properties
@@ -141,6 +181,22 @@ function computeOptionsHash(options: RenderPageOptions): string {
     );
   }
   if (options.titlePg) parts.push('titlePg');
+  if (options.sectionHeaderFooters) {
+    parts.push(
+      'sec-hf:' +
+        options.sectionHeaderFooters
+          .map((s, i) => {
+            const band = (c?: { blocks: unknown[]; height: number }) =>
+              c ? `${c.blocks.length},${c.height}` : '-';
+            // The distances place the bands, so a change to one has to rebuild
+            // the page even when every band height is unchanged.
+            return `${i}:${band(s?.header)}/${band(s?.footer)}/${band(s?.firstHeader)}/${band(
+              s?.firstFooter
+            )}/${s?.titlePg ? 1 : 0}/${s?.headerDistance ?? '-'}/${s?.footerDistance ?? '-'}`;
+          })
+          .join('|')
+    );
+  }
 
   // Theme changes
   if (options.theme) {
@@ -366,7 +422,10 @@ export function renderPages(
   }
 
   if (!useVirtualization) {
-    const pageDataMap = new Map<HTMLElement, { page: Page; index: number; rendered: boolean }>();
+    const pageDataMap = new Map<
+      HTMLElement,
+      { page: Page; index: number; rendered: boolean; bandKey?: string }
+    >();
     for (let i = 0; i < pages.length; i++) {
       pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: true });
     }
@@ -388,7 +447,10 @@ export function renderPages(
   // --- Virtualization via IntersectionObserver ---
 
   // Store page data for lazy rendering
-  const pageDataMap = new Map<HTMLElement, { page: Page; index: number; rendered: boolean }>();
+  const pageDataMap = new Map<
+    HTMLElement,
+    { page: Page; index: number; rendered: boolean; bandKey?: string }
+  >();
   for (let i = 0; i < pages.length; i++) {
     pageDataMap.set(pageShells[i], { page: pages[i], index: i, rendered: false });
   }
@@ -499,7 +561,7 @@ export function renderPages(
  */
 function populatePageShell(
   shell: HTMLElement,
-  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean; bandKey?: string }>,
   totalPages: number,
   options: FullPageOptions
 ): void {
@@ -514,6 +576,7 @@ function populatePageShell(
   }
 
   data.rendered = true;
+  data.bandKey = sectionBandKey(data.page);
 }
 
 /**
@@ -522,7 +585,7 @@ function populatePageShell(
  */
 function repopulatePageContent(
   shell: HTMLElement,
-  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean; bandKey?: string }>,
   totalPages: number,
   options: FullPageOptions
 ): void {
@@ -537,14 +600,18 @@ function repopulatePageContent(
   // Extract the new content area from the rendered page
   const newContentEl = fullPageEl.querySelector(`.${PAGE_CLASS_NAMES.content}`);
   const oldContentEl = shell.querySelector(`.${PAGE_CLASS_NAMES.content}`);
+  // The bands are only reusable while the page still belongs to the same
+  // section, in the same first-page role.
+  const bandsStillValid = data.bandKey === undefined || data.bandKey === sectionBandKey(data.page);
 
-  if (newContentEl && oldContentEl) {
+  if (newContentEl && oldContentEl && bandsStillValid) {
     // Replace only the content area — header/footer stay untouched
     options.imageAssetLoader?.releaseSubtree(oldContentEl);
     shell.replaceChild(newContentEl, oldContentEl);
     options.imageAssetLoader?.releaseSubtree(fullPageEl);
   } else {
-    // Fallback: full replace if structure doesn't match
+    // Full replace: the structure does not match, or the page changed section
+    // and needs new bands as well as new content.
     options.imageAssetLoader?.releaseSubtree(shell);
     options.imageAssetLoader?.releaseSubtree(fullPageEl);
     shell.innerHTML = '';
@@ -558,7 +625,7 @@ function repopulatePageContent(
  */
 function depopulatePageShell(
   shell: HTMLElement,
-  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
+  pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean; bandKey?: string }>,
   imageAssetLoader?: FullPageOptions['imageAssetLoader']
 ): void {
   const data = pageDataMap.get(shell);

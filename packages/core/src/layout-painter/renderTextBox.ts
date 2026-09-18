@@ -59,6 +59,14 @@ export function renderTextBoxFragment(
     containerEl.style.backgroundColor = block.fillColor;
   }
 
+  // A canvas-only frame is a decoration, not a box anyone edits: let clicks
+  // reach the body text painted over it, and mark it so the image/textbox
+  // interaction hit-tests skip it (same contract as `ImageBlock.renderOnly`).
+  if (block.renderOnly) {
+    containerEl.dataset.renderOnly = '1';
+    containerEl.style.pointerEvents = 'none';
+  }
+
   // Border/outline
   if (block.outlineWidth && block.outlineWidth > 0) {
     const style = block.outlineStyle || 'solid';

@@ -224,6 +224,7 @@ export interface ExtendMarginsForHeaderFooterInput {
         w: number;
         h: number;
     };
+    sections?: Array<SectionHeaderFooterContent | undefined>;
     warn?: (message: string) => void;
 }
 
@@ -614,6 +615,9 @@ export function resolveHeaderFooterVisualTop(run: ImageRun, paragraphY: number, 
 // @public
 export function resolveListTemplate(template: string, counters: number[], levelNumFmts: NumberFormat[] | undefined): string;
 
+// @public
+export function resolveSectionHeaderFooters(doc: Document_2 | null): SectionHeaderFooterRefs[];
+
 // @internal
 export function resolveTableColumnWidths(tableBlock: TableBlock, contentWidth: number): number[];
 
@@ -631,6 +635,21 @@ export interface RunMeasurement {
     metrics: FontMetrics;
     // (undocumented)
     width: number;
+}
+
+// @public
+export interface SectionHeaderFooterRefs {
+    // (undocumented)
+    firstFooter: HeaderFooter | null;
+    // (undocumented)
+    firstHeader: HeaderFooter | null;
+    // (undocumented)
+    footer: HeaderFooter | null;
+    footerDistance: number;
+    // (undocumented)
+    header: HeaderFooter | null;
+    headerDistance: number;
+    titlePg: boolean;
 }
 
 // @public

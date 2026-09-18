@@ -22,7 +22,7 @@ import type {
   Theme,
 } from '../../../types/document';
 import type { TableAttrs, TableRowAttrs, TableCellAttrs } from '../../schema/nodes';
-import { resolveColorToHex } from '../../../utils/colorResolver';
+import { resolveColorToHex, resolveShadingBackgroundHex } from '../../../utils/colorResolver';
 import { mergeTextFormatting } from '../../../utils/textFormattingMerge';
 import type { StyleResolver } from '../../styles';
 import { resolveTextFormatting } from './marks';
@@ -650,9 +650,12 @@ function convertTableCell(
     widthType = 'pct';
   }
 
-  // Cell's own shading wins; fall back to the table style's conditional row/col shading.
-  const backgroundColor = resolveColorToHex(
-    formatting?.shading?.fill ?? conditionalStyle?.tcPr?.shading?.fill,
+  // Cell's own shading wins; fall back to the table style's conditional row/col
+  // shading. Resolved pattern-aware (§17.3.5): a header row shaded
+  // `w:val="solid" w:color="2E5090" w:fill="auto"` paints the COLOR — reading
+  // `w:fill` alone left the row white under its white header text.
+  const backgroundColor = resolveShadingBackgroundHex(
+    formatting?.shading ?? conditionalStyle?.tcPr?.shading,
     theme
   );
 

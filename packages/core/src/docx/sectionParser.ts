@@ -741,7 +741,11 @@ function mergeRefsByType<T extends HeaderReference | FooterReference>(
 ): T[] | undefined {
   if (!prior || prior.length === 0) return own as T[] | undefined;
   const ownTypes = new Set((own ?? []).map((r) => r.type));
-  const inherited = prior.filter((r) => !ownTypes.has(r.type));
+  // Inherited refs are marked: a `first` one is inert without `w:titlePg`, and
+  // `resolveHeaderFooter` must not promote a borrowed one to the default.
+  const inherited = prior
+    .filter((r) => !ownTypes.has(r.type))
+    .map((r) => ({ ...r, inherited: true }) as T);
   if (inherited.length === 0) return own as T[] | undefined;
   return [...(own ?? []), ...inherited];
 }
@@ -751,8 +755,14 @@ function mergeRefsByType<T extends HeaderReference | FooterReference>(
  *
  * Per ECMA-376 §17.6, when a section omits a w:headerReference or
  * w:footerReference of a given type (default/first/even), it inherits the
- * reference of that type from the previous section. The w:titlePg flag
- * inherits the same way.
+ * reference of that type from the previous section.
+ *
+ * `w:titlePg` does NOT: it is a per-section toggle (§17.10.6), and a section
+ * that wants a different first page says so itself. Inheriting it was harmless
+ * while the first-page variant could only ever land on document page 1, but
+ * once it is resolved per section it hands every later section's opening page
+ * the FIRST section's cover header/footer. Word and LibreOffice both show a
+ * cover's first-page footer on the cover alone.
  *
  * Other section properties (pgSz, pgMar, cols, etc.) are not inherited —
  * each section's own values stand on their own.
@@ -768,12 +778,7 @@ export function applySectionInheritance(sections: Section[]): Section[] {
     const own = sections[i].properties;
     const headers = mergeRefsByType(own.headerReferences, prior.headerReferences);
     const footers = mergeRefsByType(own.footerReferences, prior.footerReferences);
-    const titlePg = own.titlePg !== undefined ? own.titlePg : prior.titlePg;
-    if (
-      headers === own.headerReferences &&
-      footers === own.footerReferences &&
-      titlePg === own.titlePg
-    ) {
+    if (headers === own.headerReferences && footers === own.footerReferences) {
       out.push(sections[i]);
       continue;
     }
@@ -783,7 +788,6 @@ export function applySectionInheritance(sections: Section[]): Section[] {
         ...own,
         headerReferences: headers,
         footerReferences: footers,
-        titlePg,
       },
     });
   }

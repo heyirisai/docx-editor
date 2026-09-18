@@ -82,6 +82,7 @@ export interface LayoutComputation {
     measures: Measure[];
     // (undocumented)
     pageBorders: SectionProperties['pageBorders'] | undefined;
+    sectionHeaderFooters: SectionHeaderFooterContent[];
     // (undocumented)
     watermark: Watermark | undefined;
 }

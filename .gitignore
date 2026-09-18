@@ -86,3 +86,8 @@ examples/vue/public/DC_Template_Descricao_Cargo_Controlado_Enterprise.docx
 
 # Local tarballs from scripts/pack-local.sh (consumer-app testing)
 .local-pack/
+
+# Scratch DOCX dropped into a demo while debugging a real document — often a
+# customer file, never something to commit. Named `scratch-` so it cannot
+# shadow the `*-test.docx` fixtures the demos legitimately ship.
+examples/*/public/scratch-*.docx

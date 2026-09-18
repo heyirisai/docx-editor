@@ -21,21 +21,29 @@ describe('applySectionInheritance', () => {
       }),
     ];
     const result = applySectionInheritance(sections);
+    // Inherited refs are marked so a borrowed `first` is not promoted to the
+    // default by the no-titlePg fallback in `resolveHeaderFooter`.
     expect(result[1].properties.headerReferences).toEqual([
       { type: 'default', rId: 'rId99' },
-      { type: 'first', rId: 'rId10' },
+      { type: 'first', rId: 'rId10', inherited: true },
     ]);
-    expect(result[1].properties.footerReferences).toEqual([{ type: 'default', rId: 'rId11' }]);
+    expect(result[1].properties.footerReferences).toEqual([
+      { type: 'default', rId: 'rId11', inherited: true },
+    ]);
   });
 
-  test('inherits titlePg when omitted, preserves own value when explicitly set', () => {
+  test('does NOT inherit titlePg — a cover\u2019s first page is the cover\u2019s alone', () => {
+    // `w:titlePg` is a per-section toggle (§17.10.6). A section that wants a
+    // different first page declares one; inheriting it gave every later
+    // section's opening page the cover's first-page header and footer.
     const sections = [
       makeSection({ titlePg: true }),
       makeSection({}),
       makeSection({ titlePg: false }),
     ];
     const result = applySectionInheritance(sections);
-    expect(result[1].properties.titlePg).toBe(true);
+    expect(result[0].properties.titlePg).toBe(true);
+    expect(result[1].properties.titlePg).toBeUndefined();
     expect(result[2].properties.titlePg).toBe(false);
   });
 
@@ -49,7 +57,10 @@ describe('applySectionInheritance', () => {
       makeSection({}),
     ];
     const result = applySectionInheritance(sections);
-    expect(result[2].properties.headerReferences).toEqual([{ type: 'default', rId: 'rId8' }]);
-    expect(result[2].properties.titlePg).toBe(true);
+    expect(result[2].properties.headerReferences).toEqual([
+      { type: 'default', rId: 'rId8', inherited: true },
+    ]);
+    // ...but the toggle stays where it was declared.
+    expect(result[2].properties.titlePg).toBeUndefined();
   });
 });

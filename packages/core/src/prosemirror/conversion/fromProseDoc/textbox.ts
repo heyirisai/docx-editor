@@ -56,6 +56,9 @@ export function convertPMTextBoxRun(node: PMNode): Run {
     },
     spPrExtraXml: attrs.spPrExtraXml ?? undefined,
   };
+  // Canvas-only frame: the source markup is written back verbatim, so the run
+  // serializer drops this shape rather than emitting a second copy of it.
+  if (attrs.renderOnly) shape.renderOnly = true;
 
   const position = textBoxPositionFromAttrs(attrs);
   if (position) {

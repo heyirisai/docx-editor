@@ -19,11 +19,15 @@ export type HeaderFooterType = 'default' | 'first' | 'even';
 export interface HeaderReference {
   type: HeaderFooterType;
   rId: string;
+  /** Carried over from the previous section (ECMA-376 §17.6), not declared here. */
+  inherited?: boolean;
 }
 
 export interface FooterReference {
   type: HeaderFooterType;
   rId: string;
+  /** Carried over from the previous section (ECMA-376 §17.6), not declared here. */
+  inherited?: boolean;
 }
 
 /**

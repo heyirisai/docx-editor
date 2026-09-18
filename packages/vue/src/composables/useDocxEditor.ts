@@ -377,6 +377,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageHeaderForRender,
         firstPageFooterForRender,
         hasTitlePg,
+        sectionHeaderFooters,
         watermark,
         footnotesByPage,
       } = computeLayout({
@@ -417,7 +418,10 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         footerContent: footerContentForRender,
         firstPageHeaderContent: firstPageHeaderForRender,
         firstPageFooterContent: firstPageFooterForRender,
-        titlePage: hasTitlePg,
+        // `titlePg` is the painter's name for it; `titlePage` was silently
+        // dropped, which the `as` cast below hid.
+        titlePg: hasTitlePg,
+        sectionHeaderFooters,
         watermark,
         footnotesByPage,
         imageAssetLoader,

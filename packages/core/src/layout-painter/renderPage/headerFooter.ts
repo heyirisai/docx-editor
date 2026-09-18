@@ -21,6 +21,7 @@ import type {
   TextBoxFragment,
 } from '../../layout-engine/types';
 import { assertExhaustiveFlowBlock } from '../../layout-engine/types';
+import { anchoredTopInHeaderFooterBand } from '../../layout-bridge/headerFooterLayout';
 import { renderParagraphFragment } from '../renderParagraph';
 import { renderTableFragment } from '../renderTable';
 import { applyImageVisualAttrs, hasImageVisualAttrs, renderImageFragment } from '../renderImage';
@@ -56,6 +57,29 @@ export interface HeaderFooterContent {
   visualBottom?: number;
 }
 
+/**
+ * One section's resolved header and footer, as the painter needs them.
+ *
+ * Word resolves headers per section, not per document: a cover section that
+ * declares none must not borrow the body's, and the body's must not be lost
+ * because some other section was resolved instead.
+ *
+ * @public
+ */
+export interface SectionHeaderFooterContent {
+  header?: HeaderFooterContent;
+  footer?: HeaderFooterContent;
+  /** Used on the section's first page when `titlePg` is set. */
+  firstHeader?: HeaderFooterContent;
+  firstFooter?: HeaderFooterContent;
+  /** `w:titlePg` for this section. */
+  titlePg?: boolean;
+  /** `w:header` — distance from the page top to the header content. */
+  headerDistance?: number;
+  /** `w:footer` — distance from the page bottom to the footer content. */
+  footerDistance?: number;
+}
+
 export interface HeaderFooterLayoutInfo {
   flowTop: number;
   flowLeft: number;
@@ -86,51 +110,14 @@ function resolveHeaderFooterFloatTop(
   },
   layout: HeaderFooterLayoutInfo
 ): number {
-  const v = floatImg.position.vertical;
-  if (!v) {
-    return floatImg.paragraphY;
-  }
-
-  const align = getPositionAlignment(v);
-  const offsetPx = v.posOffset !== undefined ? emuToPixels(v.posOffset) : undefined;
-
-  if (v.relativeTo === 'page') {
-    if (offsetPx !== undefined) {
-      return offsetPx - layout.flowTop;
-    }
-    if (align === 'top') {
-      return -layout.flowTop;
-    }
-    if (align === 'bottom') {
-      return layout.pageHeight - floatImg.height - layout.flowTop;
-    }
-    if (align === 'center') {
-      return (layout.pageHeight - floatImg.height) / 2 - layout.flowTop;
-    }
-  }
-
-  if (v.relativeTo === 'margin') {
-    const marginTop = layout.margins.top;
-    const marginHeight = layout.pageHeight - layout.margins.top - layout.margins.bottom;
-    if (offsetPx !== undefined) {
-      return marginTop + offsetPx - layout.flowTop;
-    }
-    if (align === 'top') {
-      return marginTop - layout.flowTop;
-    }
-    if (align === 'bottom') {
-      return marginTop + marginHeight - floatImg.height - layout.flowTop;
-    }
-    if (align === 'center') {
-      return marginTop + (marginHeight - floatImg.height) / 2 - layout.flowTop;
-    }
-  }
-
-  if (offsetPx !== undefined) {
-    return floatImg.paragraphY + offsetPx;
-  }
-
-  return floatImg.paragraphY;
+  // One implementation, shared with the measurement pass — the two had
+  // byte-identical copies of this and could drift apart.
+  return anchoredTopInHeaderFooterBand(
+    floatImg.position.vertical,
+    floatImg.paragraphY,
+    floatImg.height,
+    { flowTop: layout.flowTop, pageHeight: layout.pageHeight, margins: layout.margins }
+  );
 }
 
 /**

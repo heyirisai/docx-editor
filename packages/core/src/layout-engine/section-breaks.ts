@@ -5,7 +5,9 @@
  * This module manages the state transitions between sections during layout.
  */
 
-import type { SectionBreakBlock, PageMargins, ColumnLayout } from './types';
+import type { SectionBreakBlock, PageMargins, ColumnLayout, TableBlock } from './types';
+import type { createPaginator, PageState } from './paginator';
+import type { SectionLayoutConfig } from './index';
 
 /**
  * State tracking for sections during layout.
@@ -273,4 +275,123 @@ export function getEffectivePageSize(state: SectionState): { w: number; h: numbe
  */
 export function getEffectiveColumns(state: SectionState): ColumnLayout {
   return state.pendingColumns ?? state.activeColumns;
+}
+
+/** `w:hRule="exact"` — the row is exactly this tall and clips its content. */
+export function isExactHeightRow(block: TableBlock, rowIndex: number): boolean {
+  const row = block.rows[rowIndex];
+  return row?.heightRule === 'exact' && (row.height ?? 0) > 0;
+}
+
+/**
+ * Handle a section break block.
+ * @param block - The section break block (current section's properties)
+ * @param paginator - The paginator instance
+ * @param nextSectionConfig - Page layout for the NEXT section
+ * @param nextSectionType - Break type of the NEXT section (how it starts relative to current)
+ */
+export function handleSectionBreak(
+  _block: SectionBreakBlock,
+  paginator: ReturnType<typeof createPaginator>,
+  nextSectionConfig: SectionLayoutConfig,
+  nextSectionType?: SectionBreakBlock['type'],
+  nextSectionIndex?: number
+): void {
+  // ECMA-376 §17.6.22: w:type specifies how the NEXT section starts relative to this one.
+  // Default is 'nextPage' when w:type is absent.
+  const breakType = nextSectionType ?? 'nextPage';
+
+  // `forcePageBreak` reuses an untouched page rather than making a blank one,
+  // and a reused page still carries the OUTGOING section's stamp — so the new
+  // section's content would render under the old section's header. Re-stamp
+  // whichever page we land on.
+  const claim = (state: PageState): PageState => {
+    if (nextSectionIndex === undefined) return state;
+    if (state.page.sectionIndex !== nextSectionIndex) {
+      state.page.sectionIndex = nextSectionIndex;
+      state.page.isSectionFirstPage = true;
+    }
+    return state;
+  };
+
+  switch (breakType) {
+    case 'nextPage':
+      paginator.updatePageLayout(
+        nextSectionConfig.pageSize,
+        nextSectionConfig.margins,
+        true,
+        nextSectionIndex
+      );
+      claim(paginator.forcePageBreak());
+      break;
+
+    case 'evenPage': {
+      paginator.updatePageLayout(
+        nextSectionConfig.pageSize,
+        nextSectionConfig.margins,
+        true,
+        nextSectionIndex
+      );
+      const state = claim(paginator.forcePageBreak());
+      // If landed on odd page, add another page. The sheet we just made is
+      // then blank padding for the parity rule, not where the section opens —
+      // `w:titlePg` must follow the opening page.
+      if (state.page.number % 2 !== 0) {
+        state.page.isSectionFirstPage = false;
+        claim(paginator.forcePageBreak()).page.isSectionFirstPage = true;
+      }
+      break;
+    }
+
+    case 'oddPage': {
+      paginator.updatePageLayout(
+        nextSectionConfig.pageSize,
+        nextSectionConfig.margins,
+        true,
+        nextSectionIndex
+      );
+      const state = claim(paginator.forcePageBreak());
+      // Same as `evenPage`: the padding sheet is not the section's first page.
+      if (state.page.number % 2 === 0) {
+        state.page.isSectionFirstPage = false;
+        claim(paginator.forcePageBreak()).page.isSectionFirstPage = true;
+      }
+      break;
+    }
+
+    case 'continuous': {
+      // ECMA-376 §17.6.22: a `continuous` break normally keeps the current page
+      // geometry and defers the new size/margins to the next natural page break.
+      // BUT a continuous break that changes page size or orientation cannot
+      // share a physical sheet with the preceding section, so Word and
+      // LibreOffice promote it to a page break. Match that: if the next
+      // section's page size differs from the current page's, force the break.
+      const currentSize = paginator.getCurrentState().page.size;
+      const nextSize = nextSectionConfig.pageSize;
+      const pageSizeChanges =
+        nextSize != null &&
+        (Math.round(nextSize.w) !== Math.round(currentSize.w) ||
+          Math.round(nextSize.h) !== Math.round(currentSize.h));
+      if (pageSizeChanges) {
+        paginator.updatePageLayout(
+          nextSectionConfig.pageSize,
+          nextSectionConfig.margins,
+          true,
+          nextSectionIndex
+        );
+        claim(paginator.forcePageBreak());
+      } else {
+        paginator.updatePageLayout(
+          nextSectionConfig.pageSize,
+          nextSectionConfig.margins,
+          /* applyImmediately */ false,
+          nextSectionIndex
+        );
+      }
+      break;
+    }
+  }
+
+  // Update column layout for the next section
+  paginator.updateColumns(nextSectionConfig.columns ?? DEFAULT_COLUMNS);
 }

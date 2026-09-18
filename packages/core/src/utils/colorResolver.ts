@@ -19,7 +19,13 @@
  * - Value is in hex (00-FF), converted to 0-1 for calculation
  */
 
-import type { ColorValue, Theme, ThemeColorSlot, ThemeColorScheme } from '../types/document';
+import type {
+  ColorValue,
+  ShadingProperties,
+  Theme,
+  ThemeColorSlot,
+  ThemeColorScheme,
+} from '../types/document';
 
 /**
  * Default theme colors (Office 2016 default theme)
@@ -349,6 +355,65 @@ export function resolveColorToHex(
   }
 
   return undefined;
+}
+
+/**
+ * Resolve a `w:shd` to the background hex it paints (ECMA-376 §17.3.5).
+ *
+ * `w:shd` is a two-colour pattern, not a plain background: `w:fill` is the
+ * BACKGROUND and `w:color` the pattern FOREGROUND, and `w:val` says how much
+ * of the cell the foreground covers.
+ *
+ * - `nil` — nothing is painted.
+ * - `clear` — no pattern, so the background is `w:fill` (by far the most
+ *   common form, and the only one the render paths used to handle).
+ * - `solid` — the foreground covers 100%, so the background is `w:color`
+ *   and `w:fill` is irrelevant. Reading `w:fill` for these painted nothing
+ *   (it is typically `auto`), which left a table's header row white — and
+ *   with it the white header text the author paired with the dark fill.
+ * - `pct*` — the foreground covers that percentage; approximate the dither
+ *   by mixing the two colours, which is what the pattern averages to.
+ *
+ * Named line/grid patterns (`horzStripe`, `diagCross`, …) fall back to the
+ * fill: they are sparse enough that the background reads as the fill colour.
+ *
+ * @returns 6-char uppercase hex without `#`, or `undefined` if nothing paints.
+ *
+ * @public
+ */
+export function resolveShadingBackgroundHex(
+  shading: ShadingProperties | undefined | null,
+  theme: Theme | null | undefined
+): string | undefined {
+  if (!shading) return undefined;
+  const pattern = shading.pattern;
+  if (pattern === 'nil') return undefined;
+
+  const fill = resolveColorToHex(shading.fill, theme);
+  if (pattern === 'solid') return resolveColorToHex(shading.color, theme) ?? fill;
+
+  const pct = typeof pattern === 'string' ? /^pct(\d+)$/.exec(pattern) : null;
+  if (pct) {
+    const color = resolveColorToHex(shading.color, theme);
+    const ratio = Math.min(100, Math.max(0, Number(pct[1]))) / 100;
+    if (color && fill) return mixHex(fill, color, ratio);
+    // One side unresolved ("auto") — a partial pattern over an unpainted
+    // background still reads as the colour that IS set.
+    return color ?? fill;
+  }
+
+  return fill;
+}
+
+/** Blend `to` over `from` by `ratio` (0..1); both are 6-char hex. */
+function mixHex(from: string, to: string, ratio: number): string {
+  const channel = (hex: string, i: number): number => parseInt(hex.slice(i, i + 2), 16);
+  const out: string[] = [];
+  for (let i = 0; i < 6; i += 2) {
+    const value = Math.round(channel(from, i) * (1 - ratio) + channel(to, i) * ratio);
+    out.push(value.toString(16).padStart(2, '0'));
+  }
+  return out.join('').toUpperCase();
 }
 
 /**

@@ -583,6 +583,9 @@ function serializeRunContent(content: RunContent): string {
       if (content.image?.renderOnly) return '';
       return serializeDrawingContent(content);
     case 'shape':
+      // Canvas-only filled shape lifted out of preserved markup — same rule as
+      // a group's preview picture above: the original is written instead.
+      if (content.shape?.renderOnly) return '';
       return serializeShapeContent(content);
     case 'rawXml':
       // Verbatim into the package, so re-check rather than trust the node: a

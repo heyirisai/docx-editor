@@ -102,7 +102,9 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
       for (const rc of content.content) {
         if (rc.type === 'shape' && 'shape' in rc) {
           const shape = rc.shape as Shape;
-          if (shape.textBody && shape.textBody.content.length > 0) {
+          // A `renderOnly` shape is a decorative filled rectangle: it has a
+          // body but no paragraphs, and still has to reach the painter.
+          if (shape.textBody && (shape.textBody.content.length > 0 || shape.renderOnly)) {
             // Convert shape with text body to TextBox
             textBoxes.push({
               type: 'textBox',
@@ -117,6 +119,7 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
               margins: shape.textBody.margins,
               bodyPrXml: shape.textBody.bodyPrXml,
               spPrExtraXml: shape.spPrExtraXml,
+              renderOnly: shape.renderOnly,
             });
           }
         }
@@ -197,6 +200,7 @@ function convertTextBox(
       hostParaId: hostParaId ?? null,
       bodyPrXml: textBox.bodyPrXml ?? null,
       spPrExtraXml: textBox.spPrExtraXml ?? null,
+      renderOnly: textBox.renderOnly ?? null,
       ...textBoxAnchorAttrsFromDocx(textBox),
     },
     contentNodes

@@ -40,12 +40,14 @@ import {
   FOOTNOTE_COLUMN_GAP_PX,
   extendMarginsForHeaderFooter,
   twipsToPixels,
+  resolveSectionHeaderFooters,
   type FloatPageGeometry,
 } from '../layout-bridge';
 import {
   pageGeometryFromPage,
   type FootnoteRenderItem,
   type HeaderFooterContent,
+  type SectionHeaderFooterContent,
 } from '../layout-painter';
 import type {
   Document,
@@ -102,6 +104,8 @@ export interface LayoutComputation {
   firstPageHeaderForRender: HeaderFooterContent | undefined;
   firstPageFooterForRender: HeaderFooterContent | undefined;
   hasTitlePg: boolean;
+  /** Every section's resolved header/footer, in `Page.sectionIndex` order. */
+  sectionHeaderFooters: SectionHeaderFooterContent[];
   watermark: Watermark | undefined;
   headerDistancePx: number | undefined;
   footerDistancePx: number | undefined;
@@ -230,6 +234,43 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
 
   const headerContentForRender = convertHf(headerContent, hfMetricsHeader);
   const footerContentForRender = convertHf(footerContent, hfMetricsFooter);
+
+  // Per-section header/footer. Two sections usually share the same `rId`, so
+  // each distinct HeaderFooter is converted once.
+  //
+  // Known limit: every section's bands are measured with the FIRST section's
+  // width and margins. That was equally true when one header served the whole
+  // document, so this is not a new gap — but a section that changes page size
+  // or orientation will wrap its header against the wrong width. Fixing it
+  // means threading per-section geometry into the conversion and keying the
+  // cache on it as well as on the HeaderFooter.
+  const convertedHeaders = new Map<HeaderFooter, HeaderFooterContent | undefined>();
+  const convertedFooters = new Map<HeaderFooter, HeaderFooterContent | undefined>();
+  const convertOnce = (
+    hf: HeaderFooter | null | undefined,
+    metrics: typeof hfMetricsHeader | typeof hfMetricsFooter
+  ): HeaderFooterContent | undefined => {
+    if (!hf) return undefined;
+    const cache = metrics === hfMetricsHeader ? convertedHeaders : convertedFooters;
+    if (cache.has(hf)) return cache.get(hf);
+    const built = convertHf(hf, metrics);
+    cache.set(hf, built);
+    return built;
+  };
+  // Resolved here, not by the adapters: React and Vue were each picking their
+  // own section (the last vs the first), so the same file rendered differently
+  // in the two.
+  const sectionHeaderFooters: SectionHeaderFooterContent[] = resolveSectionHeaderFooters(
+    document
+  ).map((refs) => ({
+    header: convertOnce(refs.header, hfMetricsHeader),
+    footer: convertOnce(refs.footer, hfMetricsFooter),
+    firstHeader: refs.titlePg ? convertOnce(refs.firstHeader, hfMetricsHeader) : undefined,
+    firstFooter: refs.titlePg ? convertOnce(refs.firstFooter, hfMetricsFooter) : undefined,
+    titlePg: refs.titlePg,
+    headerDistance: refs.headerDistance,
+    footerDistance: refs.footerDistance,
+  }));
   const hasTitlePg = sectionProperties?.titlePg === true;
   const firstPageHeaderForRender = hasTitlePg
     ? convertHf(firstPageHeaderContent, hfMetricsHeader)
@@ -252,6 +293,7 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
       margins,
       finalMargins,
       bodyBlocks: blocks,
+      sections: sectionHeaderFooters,
       headers: [headerContentForRender, firstPageHeaderForRender],
       footers: [footerContentForRender, firstPageFooterForRender],
       warn: (msg) => console.warn(`[computeLayout] ${msg}`),
@@ -324,6 +366,7 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     firstPageHeaderForRender,
     firstPageFooterForRender,
     hasTitlePg,
+    sectionHeaderFooters,
     watermark,
     // Nullish, not truthy: an explicit `w:header="0"` must paint the header at
     // the page top, not fall back to the painter's 0.5in default (#740).

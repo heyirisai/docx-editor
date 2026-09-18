@@ -147,6 +147,22 @@ function extractTableVariables(table: Table): string[] {
  * 1. w:pPr/w:sectPr within a paragraph (marks end of a section)
  * 2. w:body/w:sectPr (final section properties)
  *
+ * A block-level SDT (`w:sdt`) is a transparent container: the paragraphs
+ * inside its `w:sdtContent` are body content, so one of them carrying
+ * `w:sectPr` ends a section exactly as a top-level paragraph would. We
+ * therefore recurse into `blockSdt` here, matching the traversal
+ * `toFlowBlocks` already does when it emits `sectionBreak` flow blocks.
+ * Without the recursion the two disagreed: the paginator numbered sections
+ * from the flow breaks while `sections` was short, so later pages resolved
+ * their header/footer against a clamped (wrong) section — a cover template
+ * whose section breaks live inside content controls painted the closing
+ * section's full-page artwork over its body pages.
+ *
+ * `content` stays a partition of TOP-LEVEL blocks: when the boundary falls
+ * inside an SDT, that SDT belongs to the section its paragraph closes, and
+ * a second boundary inside the same SDT yields an empty `content`. Only
+ * `properties` (and its ordering) drives layout; `content` is informational.
+ *
  * @param content - All block content
  * @param finalSectPr - Final section properties from body
  * @returns Array of sections
@@ -158,29 +174,37 @@ function buildSections(
   const sections: Section[] = [];
   let currentSectionContent: BlockContent[] = [];
 
+  /** Section-ending paragraphs in document order, descending into block SDTs. */
+  const endSection = (properties: SectionProperties): void => {
+    sections.push({ properties, content: currentSectionContent });
+    currentSectionContent = [];
+  };
+
+  const visit = (block: BlockContent): void => {
+    if (block.type === 'paragraph') {
+      if (block.sectionProperties) endSection(block.sectionProperties);
+      return;
+    }
+    if (block.type === 'blockSdt') {
+      for (const child of block.content) visit(child);
+    }
+  };
+
   for (const block of content) {
     currentSectionContent.push(block);
-
-    // Check if this paragraph ends a section
-    if (block.type === 'paragraph' && block.sectionProperties) {
-      // This paragraph ends a section
-      sections.push({
-        properties: block.sectionProperties,
-        content: currentSectionContent,
-      });
-
-      // Start new section
-      currentSectionContent = [];
-    }
+    visit(block);
   }
 
-  // Add final section with remaining content
-  if (currentSectionContent.length > 0 || sections.length === 0) {
-    sections.push({
-      properties: finalSectPr ?? getDefaultSectionProperties(),
-      content: currentSectionContent,
-    });
-  }
+  // `w:body/w:sectPr` always defines the final section (§17.6.17), so append
+  // it unconditionally: a document has exactly (inline `w:sectPr` count + 1)
+  // sections. Skipping it when no top-level content trails the last break --
+  // which happens whenever that break sits inside a block SDT that also holds
+  // the rest of the document -- left `sections` one short of the section-break
+  // count the paginator numbers pages with.
+  sections.push({
+    properties: finalSectPr ?? getDefaultSectionProperties(),
+    content: currentSectionContent,
+  });
 
   return sections;
 }

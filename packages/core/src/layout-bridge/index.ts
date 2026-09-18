@@ -159,6 +159,7 @@ export {
   getPageSize,
   getMargins,
   resolveHeaderFooter,
+  resolveSectionHeaderFooters,
   getColumns,
   columnWidthForSection,
   computePerBlockWidths,
@@ -168,3 +169,4 @@ export {
   DEFAULT_BODY_MARGIN_PX,
   DEFAULT_HF_DISTANCE_PX,
 } from './sectionGeometry';
+export type { SectionHeaderFooterRefs } from './sectionGeometry';

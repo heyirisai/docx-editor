@@ -42,9 +42,10 @@ import {
 } from './keep-together';
 import { isFloatingTextBoxBlock } from './textBoxFlow';
 import { buildTableRowBreakInfo, snapRowBreak } from './tableRowBreak';
+import { handleSectionBreak, isExactHeightRow } from './section-breaks';
 import { MIN_WRAP_SEGMENT_WIDTH } from '../layout-bridge/measuring/floatingZones';
 import { getParagraphFragmentPmRange } from './paragraphFragmentRange';
-import { balanceTerminalContinuousTextColumns } from './columnBalancing';
+import { balanceContinuousTextColumns } from './columnBalancing';
 import { getSpacingAfter, getSpacingBefore } from './paragraphSpacing';
 import { contentZIndex } from './zOrder';
 
@@ -280,19 +281,22 @@ export function layoutDocument(
       }
     }
 
+    // In a multi-column section a fragment spans ONE column, not the page.
+    // The measurer already breaks lines at the column width (see
+    // `computePerBlockWidths`), but the fragment box is what the painter
+    // aligns inside — a centred heading in a two-column section was centring
+    // across the whole page and landing on top of the other column.
+    const flowWidth =
+      paginator.columns.count > 1 ? paginator.columnWidth : paginator.getContentWidth();
+
     switch (block.kind) {
       case 'paragraph':
-        layoutParagraph(block, measure as ParagraphMeasure, paginator, paginator.getContentWidth());
+        layoutParagraph(block, measure as ParagraphMeasure, paginator, flowWidth);
         break;
 
       case 'table':
         if (block.floating) {
-          layoutFloatingTable(
-            block,
-            measure as TableMeasure,
-            paginator,
-            paginator.getContentWidth()
-          );
+          layoutFloatingTable(block, measure as TableMeasure, paginator, flowWidth);
         } else {
           layoutTable(block, measure as TableMeasure, paginator);
         }
@@ -319,21 +323,29 @@ export function layoutDocument(
         // type but fall back to current break's type (preserves explicit 'continuous')
         const nextType = sectionBreakTypes[sectionIdx + 1] ?? sectionBreakTypes[sectionIdx];
         const nextSectionConfig = sectionConfigs[sectionIdx + 1] ?? initialConfig;
-        handleSectionBreak(block as SectionBreakBlock, paginator, nextSectionConfig, nextType);
+        handleSectionBreak(
+          block as SectionBreakBlock,
+          paginator,
+          nextSectionConfig,
+          nextType,
+          sectionIdx + 1
+        );
 
+        // Balance the section we just entered when it is a continuous
+        // multi-column one. Its blocks run from here to the next section
+        // break (or the end of the document for the last section) — Word
+        // splits them evenly across the columns instead of filling the first.
         const nextBreakIndex = breakIndices[sectionIdx + 1];
-        const isTerminalSection = nextBreakIndex === undefined;
         if (
-          isTerminalSection &&
           (nextType ?? 'nextPage') === 'continuous' &&
           (nextSectionConfig.columns?.count ?? 1) > 1
         ) {
-          balanceTerminalContinuousTextColumns({
+          balanceContinuousTextColumns({
             blocks,
             measures,
             paginator,
             start: i + 1,
-            end: blocks.length,
+            end: nextBreakIndex ?? blocks.length,
           });
         }
 
@@ -586,10 +598,14 @@ function layoutTable(
       // pages") — this keeps the row's other columns on the page where they
       // start and flows a tall vertically-merged cell across the boundary.
       // `w:cantSplit` rows (§17.4.6) never break.
+      // `w:hRule="exact"` (§17.4.81) fixes the row's height: its content is
+      // clipped to it, so there is no line boundary to break at any more than
+      // there is on a `w:cantSplit` row.
       const budget = availableHeight - used;
-      const placeable = block.rows[cur]?.cantSplit
-        ? 0
-        : snapRowBreak(breakInfo, cur, startOff, budget);
+      const placeable =
+        block.rows[cur]?.cantSplit || isExactHeightRow(block, cur)
+          ? 0
+          : snapRowBreak(breakInfo, cur, startOff, budget);
       if (placeable > 0) {
         // Break this row mid-content at a whole-line boundary.
         used += placeable;
@@ -603,6 +619,20 @@ function layoutTable(
         // with overflow rather than loop forever (oversized-row guard).
         used += remaining;
         toRow = cur + 1;
+        // A fixed-height row taller than a WHOLE page is one object, not a
+        // flow: the rows after it sit at offsets its height already decided,
+        // so they are past the page edge too. Carrying them onto a fresh page
+        // put a full-bleed cover's trailing accent bar alone on a second page;
+        // keeping them here lets the page clip the lot, which is what Word and
+        // LibreOffice draw. A row that merely does not fit in what is LEFT of
+        // this page paginates normally — it is only oversized relative to the
+        // remaining space, and the rows after it still have somewhere to go.
+        if (isExactHeightRow(block, cur) && remaining > paginator.getContentHeight()) {
+          while (toRow < rows.length && isExactHeightRow(block, toRow)) {
+            used += rows[toRow].height;
+            toRow += 1;
+          }
+        }
       }
       break;
     }
@@ -917,80 +947,6 @@ function layoutTextBox(
   fragment.y = result.y;
 }
 
-/**
- * Handle a section break block.
- * @param block - The section break block (current section's properties)
- * @param paginator - The paginator instance
- * @param nextSectionConfig - Page layout for the NEXT section
- * @param nextSectionType - Break type of the NEXT section (how it starts relative to current)
- */
-function handleSectionBreak(
-  _block: SectionBreakBlock,
-  paginator: ReturnType<typeof createPaginator>,
-  nextSectionConfig: SectionLayoutConfig,
-  nextSectionType?: SectionBreakBlock['type']
-): void {
-  // ECMA-376 §17.6.22: w:type specifies how the NEXT section starts relative to this one.
-  // Default is 'nextPage' when w:type is absent.
-  const breakType = nextSectionType ?? 'nextPage';
-
-  switch (breakType) {
-    case 'nextPage':
-      paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
-      paginator.forcePageBreak();
-      break;
-
-    case 'evenPage': {
-      paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
-      const state = paginator.forcePageBreak();
-      // If landed on odd page, add another page
-      if (state.page.number % 2 !== 0) {
-        paginator.forcePageBreak();
-      }
-      break;
-    }
-
-    case 'oddPage': {
-      paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
-      const state = paginator.forcePageBreak();
-      // If landed on even page, add another page
-      if (state.page.number % 2 === 0) {
-        paginator.forcePageBreak();
-      }
-      break;
-    }
-
-    case 'continuous': {
-      // ECMA-376 §17.6.22: a `continuous` break normally keeps the current page
-      // geometry and defers the new size/margins to the next natural page break.
-      // BUT a continuous break that changes page size or orientation cannot
-      // share a physical sheet with the preceding section, so Word and
-      // LibreOffice promote it to a page break. Match that: if the next
-      // section's page size differs from the current page's, force the break.
-      const currentSize = paginator.getCurrentState().page.size;
-      const nextSize = nextSectionConfig.pageSize;
-      const pageSizeChanges =
-        nextSize != null &&
-        (Math.round(nextSize.w) !== Math.round(currentSize.w) ||
-          Math.round(nextSize.h) !== Math.round(currentSize.h));
-      if (pageSizeChanges) {
-        paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
-        paginator.forcePageBreak();
-      } else {
-        paginator.updatePageLayout(
-          nextSectionConfig.pageSize,
-          nextSectionConfig.margins,
-          /* applyImmediately */ false
-        );
-      }
-      break;
-    }
-  }
-
-  // Update column layout for the next section
-  paginator.updateColumns(nextSectionConfig.columns ?? DEFAULT_COLUMNS);
-}
-
 // Re-export types
 export * from './types';
 export { createPaginator } from './paginator';
@@ -1006,6 +962,8 @@ export type { KeepNextChain } from './keep-together';
 export {
   scheduleSectionBreak,
   applyPendingToActive,
+  handleSectionBreak,
+  isExactHeightRow,
   createInitialSectionState,
   getEffectiveMargins,
   getEffectivePageSize,

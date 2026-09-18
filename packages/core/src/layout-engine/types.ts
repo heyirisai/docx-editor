@@ -617,6 +617,13 @@ export type TextBoxBlock = {
   distBottom?: number;
   distLeft?: number;
   distRight?: number;
+  /**
+   * Canvas-only frame lifted out of preserved markup — a decorative filled
+   * shape with no text (`isFilledShapeDrawing`). The painter draws it and
+   * makes it click-through; export writes nothing for it. Mirrors
+   * `ImageBlock.renderOnly`.
+   */
+  renderOnly?: boolean;
   pmStart?: number;
   pmEnd?: number;
 };
@@ -676,141 +683,25 @@ export function assertExhaustiveFlowBlock(block: never, site: string): never {
 // MEASURES - Measurement results for blocks
 // =============================================================================
 
-/**
- * A measured line within a paragraph.
- */
-export type MeasuredLine = {
-  /** Starting run index (inclusive). */
-  fromRun: number;
-  /** Starting character index within fromRun. */
-  fromChar: number;
-  /** Ending run index (inclusive). */
-  toRun: number;
-  /** Ending character index within toRun (exclusive). */
-  toChar: number;
-  /** Total width of the line in pixels. */
-  width: number;
-  /** Ascent (height above baseline) in pixels. */
-  ascent: number;
-  /** Descent (height below baseline) in pixels. */
-  descent: number;
-  /** Total line height in pixels. */
-  lineHeight: number;
-  /** Left offset from floating images (pixels from content left edge). */
-  leftOffset?: number;
-  /** Right offset from floating images (pixels from content right edge). */
-  rightOffset?: number;
-  /** Optional split segments for centered floating exclusions. */
-  segments?: MeasuredLineSegment[];
-  /**
-   * Vertical space inserted before this line to skip past floats that leave
-   * no usable horizontal width at the natural line Y. Painters render this
-   * as marginTop on the line element; measurement adds it to totalHeight.
-   */
-  floatSkipBefore?: number;
-};
+// Defined in `measure-types.ts` (line budget) and re-exported here, which
+// stays the single import point for the engine, the adapters' `measureBlock`
+// and the painter.
+import type { Measure } from './measure-types';
 
-export type MeasuredLineSegment = {
-  fromRun: number;
-  fromChar: number;
-  toRun: number;
-  toChar: number;
-  width: number;
-  leftOffset: number;
-  availableWidth: number;
-};
-
-/**
- * Measurement result for a paragraph block.
- */
-export type ParagraphMeasure = {
-  kind: 'paragraph';
-  lines: MeasuredLine[];
-  totalHeight: number;
-};
-
-/**
- * Measurement result for an image block.
- */
-export type ImageMeasure = {
-  kind: 'image';
-  width: number;
-  height: number;
-};
-
-/**
- * Measurement result for a table cell.
- */
-export type TableCellMeasure = {
-  blocks: Measure[];
-  width: number;
-  height: number;
-  colSpan?: number;
-  rowSpan?: number;
-};
-
-/**
- * Measurement result for a table row.
- */
-export type TableRowMeasure = {
-  cells: TableCellMeasure[];
-  height: number;
-};
-
-/**
- * Measurement result for a table block.
- */
-export type TableMeasure = {
-  kind: 'table';
-  rows: TableRowMeasure[];
-  columnWidths: number[];
-  totalWidth: number;
-  totalHeight: number;
-};
-
-/**
- * Measurement result for section break (no visual size).
- */
-export type SectionBreakMeasure = {
-  kind: 'sectionBreak';
-};
-
-/**
- * Measurement result for page break (no visual size).
- */
-export type PageBreakMeasure = {
-  kind: 'pageBreak';
-};
-
-/**
- * Measurement result for column break (no visual size).
- */
-export type ColumnBreakMeasure = {
-  kind: 'columnBreak';
-};
-
-/**
- * Measurement result for a text box block.
- */
-export type TextBoxMeasure = {
-  kind: 'textBox';
-  width: number;
-  height: number;
-  /** Pre-measured inner paragraph measures (avoids re-measuring during render) */
-  innerMeasures: ParagraphMeasure[];
-};
-
-/**
- * Union of all measurement types.
- */
-export type Measure =
-  | ParagraphMeasure
-  | ImageMeasure
-  | TableMeasure
-  | TextBoxMeasure
-  | SectionBreakMeasure
-  | PageBreakMeasure
-  | ColumnBreakMeasure;
+export type {
+  MeasuredLine,
+  MeasuredLineSegment,
+  ParagraphMeasure,
+  ImageMeasure,
+  TableCellMeasure,
+  TableRowMeasure,
+  TableMeasure,
+  SectionBreakMeasure,
+  PageBreakMeasure,
+  ColumnBreakMeasure,
+  TextBoxMeasure,
+  Measure,
+} from './measure-types';
 
 // =============================================================================
 // FRAGMENTS - Positioned content on pages
@@ -953,6 +844,8 @@ export type Page = {
   orientation?: 'portrait' | 'landscape';
   /** Section index this page belongs to. */
   sectionIndex?: number;
+  /** First page of that section — where `w:titlePg` applies. */
+  isSectionFirstPage?: boolean;
   /** Header/footer references for this page. */
   headerFooterRefs?: {
     headerDefault?: string;

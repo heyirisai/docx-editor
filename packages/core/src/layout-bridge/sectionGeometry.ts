@@ -126,12 +126,76 @@ export function resolveHeaderFooter(
     if (first?.rId) firstFooter = footers.get(first.rId) ?? null;
   }
 
+  // Word quirk: when a section declares ONLY a first-page header/footer and no
+  // `w:titlePg`, that one serves as the default. It must be the section's own,
+  // though — a `first` ref inherited from a cover is inert here, and promoting
+  // one painted the cover's artwork on every page of the section.
   if (!sp?.titlePg) {
-    if (!header && firstHeader) header = firstHeader;
-    if (!footer && firstFooter) footer = firstFooter;
+    const ownFirst = (r: { type: string; inherited?: boolean } | undefined): boolean =>
+      r !== undefined && !r.inherited;
+    if (!header && firstHeader && ownFirst(sp?.headerReferences?.find((r) => r.type === 'first'))) {
+      header = firstHeader;
+    }
+    if (!footer && firstFooter && ownFirst(sp?.footerReferences?.find((r) => r.type === 'first'))) {
+      footer = firstFooter;
+    }
   }
 
   return { header, footer, firstHeader, firstFooter };
+}
+
+/** One section's header/footer references, resolved against the package. @public */
+export interface SectionHeaderFooterRefs {
+  header: HeaderFooter | null;
+  footer: HeaderFooter | null;
+  firstHeader: HeaderFooter | null;
+  firstFooter: HeaderFooter | null;
+  /** `w:titlePg` — the section's first page uses `firstHeader`/`firstFooter`. */
+  titlePg: boolean;
+  /** `w:header` distance in pixels. */
+  headerDistance: number;
+  /** `w:footer` distance in pixels. */
+  footerDistance: number;
+}
+
+/**
+ * Resolve every section's header and footer, in `Page.sectionIndex` order.
+ *
+ * Word resolves these per section. Picking one section's pair for the whole
+ * document silently gave a header to sections that declare none (whose body
+ * then got pushed down by a band they do not have) and dropped the header of
+ * every section that does. `applySectionInheritance` has already run, so a
+ * section that omits a reference carries the previous section's here.
+ *
+ * Both adapters call this so the two cannot resolve different sections.
+ *
+ * @public
+ */
+export function resolveSectionHeaderFooters(doc: Document | null): SectionHeaderFooterRefs[] {
+  const body = doc?.package?.document;
+  const propsList: Array<SectionProperties | null | undefined> = body?.sections?.length
+    ? body.sections.map((s) => s.properties)
+    : [body?.finalSectionProperties ?? null];
+  // `finalSectionProperties` is the live one: creating a header from the UI
+  // updates it without touching `sections`, and the last section IS the final
+  // one. Reading the stale copy left a freshly added header invisible.
+  if (propsList.length > 0 && body?.finalSectionProperties) {
+    propsList[propsList.length - 1] = body.finalSectionProperties;
+  }
+
+  return propsList.map((sp) => {
+    const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(doc, sp);
+    const margins = getMargins(sp);
+    return {
+      header,
+      footer,
+      firstHeader,
+      firstFooter,
+      titlePg: sp?.titlePg === true,
+      headerDistance: margins.header ?? DEFAULT_HF_DISTANCE_PX,
+      footerDistance: margins.footer ?? DEFAULT_HF_DISTANCE_PX,
+    };
+  });
 }
 
 /**

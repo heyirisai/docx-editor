@@ -311,6 +311,13 @@ export interface Shape {
   /** Custom geometry points */
   customGeometry?: string;
   /**
+   * Canvas-only shape lifted out of preserved markup so the page paints its
+   * fill; the serializer skips it. Set for decorative filled shapes with no
+   * text (`isFilledShapeDrawing`), whose original `mc:AlternateContent` is
+   * written back verbatim. Mirrors `Image.renderOnly`.
+   */
+  renderOnly?: boolean;
+  /**
    * `<wps:spPr>` children this model has no field for, verbatim — today
    * `<a:ln>` and `<a:effectLst>`. A shape that explicitly declares "no
    * outline" (`<a:ln><a:noFill/></a:ln>`) parses to no `outline`, so
@@ -356,4 +363,6 @@ export interface TextBox {
     left?: number;
     right?: number;
   };
+  /** See {@link Shape.renderOnly}. */
+  renderOnly?: boolean;
 }

@@ -29,7 +29,7 @@ import type {
 import { DEFAULT_TEXTBOX_MARGINS, DEFAULT_TEXTBOX_WIDTH } from '../layout-engine/types';
 import type { ParagraphAttrs as PMParagraphAttrs } from '../prosemirror/schema/nodes';
 import type { Theme, SectionProperties } from '../types/document';
-import { resolveColorToHex } from '../utils/colorResolver';
+import { resolveShadingBackgroundHex } from '../utils/colorResolver';
 
 import {
   twipsToPixels,
@@ -196,7 +196,8 @@ function convertParagraphAttrs(
     }
   }
 
-  const shadingHex = resolveColorToHex(pmAttrs.shading?.fill, theme);
+  // Pattern-aware: `w:shd w:val="solid"` paints `w:color`, not `w:fill`.
+  const shadingHex = resolveShadingBackgroundHex(pmAttrs.shading, theme);
   if (shadingHex) attrs.shading = `#${shadingHex}`;
 
   // Tab stops
@@ -690,6 +691,7 @@ function convertTextBoxNode(
     outlineWidth: attrs.outlineWidth as number | undefined,
     outlineColor: attrs.outlineColor as string | undefined,
     outlineStyle: attrs.outlineStyle as string | undefined,
+    renderOnly: (attrs.renderOnly as boolean | null) ?? undefined,
     margins: {
       top: (attrs.marginTop as number) ?? DEFAULT_TEXTBOX_MARGINS.top,
       bottom: (attrs.marginBottom as number) ?? DEFAULT_TEXTBOX_MARGINS.bottom,
@@ -787,10 +789,9 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
           const block = convertParagraph(node, pos, opts);
           const pmAttrs = node.attrs as PMParagraphAttrs;
 
-          blocks.push(block);
-
           // Emit section break block if this paragraph ends a section
           const secProps = pmAttrs._sectionProperties as SectionProperties | undefined;
+          blocks.push(block);
           if (secProps || pmAttrs.sectionBreakType) {
             const sectionBreak: SectionBreakBlock = {
               kind: 'sectionBreak',
@@ -827,6 +828,16 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
                   bottom: twipsToPixels(mergedTwips.bottom),
                   left: twipsToPixels(mergedTwips.left),
                   right: twipsToPixels(mergedTwips.right),
+                  // The band distances travel with the section too — the
+                  // header/footer margin extension needs this section's own.
+                  header:
+                    secProps.headerDistance !== undefined
+                      ? twipsToPixels(secProps.headerDistance)
+                      : undefined,
+                  footer:
+                    secProps.footerDistance !== undefined
+                      ? twipsToPixels(secProps.footerDistance)
+                      : undefined,
                 };
                 lastSectionMarginsTwips = mergedTwips;
               }

@@ -239,6 +239,18 @@ export function isShapeTextBox(wsp: XmlElement): boolean {
  * @returns TextBox object with placeholder content, or null if not a text box
  */
 export function parseTextBox(drawingEl: XmlElement): TextBox | null {
+  return parseWspDrawing(drawingEl, /* requireTextBox */ true);
+}
+
+/**
+ * Parse a `wps:wsp` drawing into the {@link TextBox} model.
+ *
+ * `requireTextBox` false accepts a shape with no `wps:txbx` — a decorative
+ * filled rectangle. Those carry no text, so the only thing worth modelling is
+ * the frame: size, anchor position, wrap, z-order, fill and outline. See
+ * {@link parseFilledShapeAsTextBox}.
+ */
+function parseWspDrawing(drawingEl: XmlElement, requireTextBox: boolean): TextBox | null {
   const children = getChildElements(drawingEl);
 
   // Find wp:inline or wp:anchor
@@ -261,7 +273,7 @@ export function parseTextBox(drawingEl: XmlElement): TextBox | null {
 
   // Check for text box
   const txbx = findByFullName(wsp, 'wps:txbx');
-  if (!txbx) return null;
+  if (!txbx && requireTextBox) return null;
 
   const wspChildren = getChildElements(wsp);
 
@@ -337,6 +349,45 @@ export function parseTextBox(drawingEl: XmlElement): TextBox | null {
   }
 
   return textBox;
+}
+
+/**
+ * Does this `w:drawing` hold a decorative filled shape (no text)?
+ *
+ * Modern templates paint their colour blocks — the navy band behind a
+ * section, the accent bar beside a heading — as anchored `wps:wsp` shapes
+ * with a solid fill and no `wps:txbx`. Nothing in the pipeline modelled them:
+ * `parseImage` returns null for a shape, `isTextBoxDrawing` requires a text
+ * box, and the layout engine has no shape block — so they vanished from the
+ * page while their text (laid over them in the body) kept its dark-on-dark
+ * colour. Treat them as empty text boxes so the existing anchored-frame path
+ * paints the fill.
+ *
+ * A shape with neither fill nor outline draws nothing, so it is not lifted.
+ */
+export function isFilledShapeDrawing(drawingEl: XmlElement): boolean {
+  const children = getChildElements(drawingEl);
+  const container = children.find((el) => el.name === 'wp:inline' || el.name === 'wp:anchor');
+  if (!container) return false;
+  const graphicData = findByFullName(findByFullName(container, 'a:graphic'), 'a:graphicData');
+  if (!graphicData) return false;
+  const wsp = findByFullName(graphicData, 'wps:wsp');
+  if (!wsp) return false;
+  // A shape that owns text is a text box; `enrichParagraphTextBoxes` has it.
+  if (findByFullName(wsp, 'wps:txbx')) return false;
+  const spPr = getChildElements(wsp).find((el) => el.name === 'wps:spPr');
+  if (!spPr) return false;
+  return !!parseFill(spPr ?? null) || !!parseOutline(spPr ?? null);
+}
+
+/**
+ * Parse a decorative filled shape (see {@link isFilledShapeDrawing}) as a
+ * text box with no content. The caller marks the resulting shape
+ * `renderOnly` — the original markup is preserved verbatim for the round
+ * trip, so this model exists only to paint.
+ */
+export function parseFilledShapeAsTextBox(drawingEl: XmlElement): TextBox | null {
+  return parseWspDrawing(drawingEl, /* requireTextBox */ false);
 }
 
 /**

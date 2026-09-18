@@ -32,7 +32,6 @@ import type {
   TextBoxFragment,
   SdtGroup,
 } from '../layout-engine/types';
-import { PAGE_OVERLAY_Z } from '../layout-engine/zOrder';
 import { renderSdtBoundaryBoxes } from './sdtBoundary';
 import { renderFragment } from './renderFragment';
 import { renderParagraphFragment } from './renderParagraph';
@@ -41,7 +40,6 @@ import { renderImageFragment } from './renderImage';
 import { renderTextBoxFragment } from './renderTextBox';
 import type { BlockLookup } from './index';
 import type { BorderSpec } from '../types/document';
-import { borderToStyle } from '../utils/formatToStyle';
 import type { Theme, Watermark } from '../types/document';
 import { renderWatermarkLayer } from './renderWatermark';
 import {
@@ -51,7 +49,6 @@ import {
   type FloatingImageZone,
 } from '../layout-bridge/measuring';
 import { resolveFontFamily } from '../utils/fontResolver';
-import { pointsToPixels } from '../utils/units';
 import {
   floatingTextBoxReservesBand,
   floatingTextBoxWrapsText,
@@ -72,8 +69,10 @@ import { renderFloatingImagesLayer } from './floatingImageLayer';
 import {
   renderHeaderFooterContent,
   type HeaderFooterContent,
+  type SectionHeaderFooterContent,
   type HeaderFooterLayoutInfo,
 } from './renderPage/headerFooter';
+import { renderPageBorderOverlay } from './renderPage/pageBorders';
 import {
   renderFootnoteArea,
   calculateFootnoteAreaRenderHeight,
@@ -91,7 +90,11 @@ export {
   type FloatingImagePaintRecord,
   type FloatingImagesLayerOptions,
 } from './floatingImageLayer';
-export type { HeaderFooterContent, HeaderFooterLayoutInfo } from './renderPage/headerFooter';
+export type {
+  HeaderFooterContent,
+  SectionHeaderFooterContent,
+  HeaderFooterLayoutInfo,
+} from './renderPage/headerFooter';
 export {
   resolveHeaderFooterFloatingTablePosition,
   resolveHeaderFooterFloatLeft,
@@ -199,6 +202,11 @@ export interface RenderPageOptions {
   backgroundColor?: string;
   /** Drop shadow on pages */
   showShadow?: boolean;
+  /**
+   * Resolved header/footer per section, indexed like `Page.sectionIndex`. Wins
+   * over the flat fields below, so a section that declares no header gets none.
+   */
+  sectionHeaderFooters?: SectionHeaderFooterContent[];
   /** Header content to render (used for all pages, or pages 2+ when titlePg is set). */
   headerContent?: HeaderFooterContent;
   /** Footer content to render (used for all pages, or pages 2+ when titlePg is set). */
@@ -275,95 +283,6 @@ export function applyPageStyles(
   if (options.showShadow) {
     element.style.boxShadow = '0 2px 8px rgba(0, 0, 0, 0.15)';
   }
-}
-
-function pageBorderShouldRender(
-  pageNumber: number,
-  display?: 'allPages' | 'firstPage' | 'notFirstPage'
-): boolean {
-  switch (display ?? 'allPages') {
-    case 'firstPage':
-      return pageNumber === 1;
-    case 'notFirstPage':
-      return pageNumber !== 1;
-    case 'allPages':
-    default:
-      return true;
-  }
-}
-
-function pageBorderSpacePx(border: BorderSpec | undefined): number {
-  return border?.space !== undefined ? pointsToPixels(border.space) : 0;
-}
-
-function applyPageBorderSide(
-  element: HTMLElement,
-  border: BorderSpec | undefined,
-  side: 'Top' | 'Bottom' | 'Left' | 'Right',
-  theme?: Theme | null
-): void {
-  if (!border || border.style === 'none' || border.style === 'nil') return;
-
-  const styles = borderToStyle(border, side, theme);
-  for (const [key, value] of Object.entries(styles)) {
-    (element.style as unknown as Record<string, string>)[key] = String(value);
-  }
-
-  const styleKey = `border${side}Style`;
-  const widthKey = `border${side}Width`;
-  const styleValue = (element.style as unknown as Record<string, string>)[styleKey];
-  if (styleValue === 'double') {
-    const widthValue = parseFloat((element.style as unknown as Record<string, string>)[widthKey]);
-    if (!Number.isFinite(widthValue) || widthValue < 3) {
-      (element.style as unknown as Record<string, string>)[widthKey] = '3px';
-    }
-  }
-}
-
-function renderPageBorderOverlay(
-  page: Page,
-  options: RenderPageOptions,
-  doc: Document
-): HTMLElement | null {
-  const pb = options.pageBorders;
-  if (!pb || !pageBorderShouldRender(page.number, pb.display)) return null;
-
-  const hasBorder = [pb.top, pb.bottom, pb.left, pb.right].some(
-    (border) => border && border.style !== 'none' && border.style !== 'nil'
-  );
-  if (!hasBorder) return null;
-
-  const offsetFrom = pb.offsetFrom ?? 'text';
-  const topOffset = pageBorderSpacePx(pb.top);
-  const rightOffset = pageBorderSpacePx(pb.right);
-  const bottomOffset = pageBorderSpacePx(pb.bottom);
-  const leftOffset = pageBorderSpacePx(pb.left);
-
-  const overlay = doc.createElement('div');
-  overlay.className = 'layout-page-border';
-  overlay.style.position = 'absolute';
-  overlay.style.pointerEvents = 'none';
-  overlay.style.boxSizing = 'border-box';
-  overlay.style.zIndex = pb.zOrder === 'back' ? '0' : String(PAGE_OVERLAY_Z);
-
-  if (offsetFrom === 'page') {
-    overlay.style.top = `${topOffset}px`;
-    overlay.style.right = `${rightOffset}px`;
-    overlay.style.bottom = `${bottomOffset}px`;
-    overlay.style.left = `${leftOffset}px`;
-  } else {
-    overlay.style.top = `${Math.max(0, page.margins.top - topOffset)}px`;
-    overlay.style.right = `${Math.max(0, page.margins.right - rightOffset)}px`;
-    overlay.style.bottom = `${Math.max(0, page.margins.bottom - bottomOffset)}px`;
-    overlay.style.left = `${Math.max(0, page.margins.left - leftOffset)}px`;
-  }
-
-  applyPageBorderSide(overlay, pb.top, 'Top', options.theme);
-  applyPageBorderSide(overlay, pb.bottom, 'Bottom', options.theme);
-  applyPageBorderSide(overlay, pb.left, 'Left', options.theme);
-  applyPageBorderSide(overlay, pb.right, 'Right', options.theme);
-
-  return overlay;
 }
 
 /**

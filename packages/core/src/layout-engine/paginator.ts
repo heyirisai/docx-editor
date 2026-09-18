@@ -33,6 +33,8 @@ export type PaginatorOptions = {
   pageSize: { w: number; h: number };
   /** Page margins. */
   margins: PageMargins;
+  /** Index of the section the first page belongs to (defaults to 0). */
+  sectionIndex?: number;
   /** Column configuration (optional). */
   columns?: ColumnLayout;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
@@ -69,6 +71,11 @@ export function createPaginator(options: PaginatorOptions) {
   // size and margins per ECMA-376 §17.6.22.
   let pendingPageSize: { w: number; h: number } | undefined;
   let pendingMargins: PageMargins | undefined;
+  // The section whose geometry is active. A `continuous` break defers the swap
+  // to the next page, and the header follows the geometry, so it is pended the
+  // same way.
+  let sectionIndex = options.sectionIndex ?? 0;
+  let pendingSectionIndex: number | undefined;
 
   const pages: Page[] = [];
   const states: PageState[] = [];
@@ -104,6 +111,20 @@ export function createPaginator(options: PaginatorOptions) {
   let columnRegionTop = margins.top;
 
   /**
+   * Lowest point any column of the CURRENT column region has reached. Single
+   * column content that follows a multi-column region must clear the tallest
+   * column, not just the one the cursor happens to sit in.
+   */
+  let columnRegionMaxY = margins.top;
+
+  /**
+   * The page's own content bottom, saved while a balanced column region
+   * shortens it (see `setColumnRegionBottom`). Restored when the region ends
+   * so the rest of the page keeps its full height.
+   */
+  let columnRegionSavedBottom: number | null = null;
+
+  /**
    * Get X position for a given column index.
    */
   function getColumnX(columnIndex: number): number {
@@ -119,8 +140,10 @@ export function createPaginator(options: PaginatorOptions) {
     if (pendingPageSize || pendingMargins) {
       if (pendingPageSize) pageSize = pendingPageSize;
       if (pendingMargins) margins = pendingMargins;
+      if (pendingSectionIndex !== undefined) sectionIndex = pendingSectionIndex;
       pendingPageSize = undefined;
       pendingMargins = undefined;
+      pendingSectionIndex = undefined;
       columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
     }
     const pageNumber = pages.length + 1;
@@ -136,6 +159,13 @@ export function createPaginator(options: PaginatorOptions) {
       fragments: [],
       margins: { ...margins },
       size: { ...pageSize },
+      // Which section's geometry this page is under — the painter reads it to
+      // pick that section's header and footer.
+      sectionIndex,
+      // `w:titlePg` is per section, so the painter needs the section's own
+      // first page, not the document's.
+      isSectionFirstPage:
+        pages.length === 0 || pages[pages.length - 1].sectionIndex !== sectionIndex,
       footnoteReservedHeight: footnoteHeight > 0 ? footnoteHeight : undefined,
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
       columns: columns.count > 1 ? { ...columns } : undefined,
@@ -155,6 +185,8 @@ export function createPaginator(options: PaginatorOptions) {
 
     // Reset column region to page top on new page
     columnRegionTop = topMargin;
+    columnRegionMaxY = topMargin;
+    columnRegionSavedBottom = null;
 
     if (options.onNewPage) {
       options.onNewPage(state);
@@ -192,11 +224,19 @@ export function createPaginator(options: PaginatorOptions) {
    * Advance to the next column, or create a new page if no more columns.
    */
   function advanceColumn(state: PageState): PageState {
+    columnRegionMaxY = Math.max(columnRegionMaxY, state.cursorY);
     // Check if there are more columns on this page
     if (state.columnIndex < columns.count - 1) {
       state.columnIndex += 1;
       state.cursorY = columnRegionTop;
       state.trailingSpacing = 0;
+      // The balanced height is a target for the columns that come BEFORE the
+      // last one. The last column takes whatever is left and is bounded only
+      // by the page, so a few pixels of estimation error spill into it
+      // instead of breaking the page (Word grows the region the same way).
+      if (columnRegionSavedBottom !== null && state.columnIndex === columns.count - 1) {
+        state.contentBottom = columnRegionSavedBottom;
+      }
       return state;
     }
 
@@ -312,20 +352,44 @@ export function createPaginator(options: PaginatorOptions) {
    * column advancement stays below existing content (for continuous breaks).
    */
   function updateColumns(newColumns: ColumnLayout): void {
+    // Close the outgoing region before switching: whatever follows starts
+    // below the TALLEST column and gets the page's full height back.
+    const state = getCurrentState();
+    if (columns.count > 1) {
+      state.cursorY = Math.max(state.cursorY, columnRegionMaxY);
+      state.trailingSpacing = 0;
+      if (columnRegionSavedBottom !== null) {
+        state.contentBottom = columnRegionSavedBottom;
+        columnRegionSavedBottom = null;
+      }
+    }
+
     columns = newColumns;
     columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
 
     // Update current page's column info for rendering
-    const state = getCurrentState();
     state.page.columns = columns.count > 1 ? { ...columns } : undefined;
 
     // Set column region top to current cursor position.
     // This ensures that when advancing columns, new columns start
     // at the same Y as where the multi-column content began (not page top).
     columnRegionTop = state.cursorY;
+    columnRegionMaxY = state.cursorY;
 
     // Reset to column 0 for the new column layout
     state.columnIndex = 0;
+  }
+
+  /**
+   * Shorten the current column region so its content balances across the
+   * columns (Word balances a continuous multi-column section rather than
+   * filling column 1 to the page bottom). The page's own bottom is restored
+   * when the region ends — see `updateColumns`.
+   */
+  function setColumnRegionBottom(bottom: number): void {
+    const state = getCurrentState();
+    if (columnRegionSavedBottom === null) columnRegionSavedBottom = state.contentBottom;
+    state.contentBottom = bottom;
   }
 
   /**
@@ -348,11 +412,13 @@ export function createPaginator(options: PaginatorOptions) {
   function updatePageLayout(
     newPageSize?: { w: number; h: number },
     newMargins?: PageMargins,
-    applyImmediately = true
+    applyImmediately = true,
+    newSectionIndex?: number
   ): void {
     if (!applyImmediately) {
       pendingPageSize = newPageSize ? { ...newPageSize } : pendingPageSize;
       pendingMargins = newMargins ? { ...newMargins } : pendingMargins;
+      pendingSectionIndex = newSectionIndex ?? pendingSectionIndex;
       return;
     }
     if (newPageSize) {
@@ -361,6 +427,9 @@ export function createPaginator(options: PaginatorOptions) {
     if (newMargins) {
       margins = { ...newMargins };
     }
+    if (newSectionIndex !== undefined) {
+      sectionIndex = newSectionIndex;
+    }
     if (getContentHeight() <= 0) {
       throw new Error('Paginator: section page size and margins yield no content area');
     }
@@ -368,6 +437,7 @@ export function createPaginator(options: PaginatorOptions) {
     // A pending swap is now superseded by this immediate swap.
     pendingPageSize = undefined;
     pendingMargins = undefined;
+    pendingSectionIndex = undefined;
   }
 
   return {
@@ -387,6 +457,8 @@ export function createPaginator(options: PaginatorOptions) {
     getCurrentState,
     /** Get available height in current column. */
     getAvailableHeight: () => getAvailableHeight(getCurrentState()),
+    /** Content height of a whole page under the active geometry. */
+    getContentHeight,
     /** Get content width for the active section. */
     getContentWidth,
     /** Check if height fits in current column. */
@@ -403,6 +475,8 @@ export function createPaginator(options: PaginatorOptions) {
     getColumnX,
     /** Update column layout (for section breaks). */
     updateColumns,
+    /** Shorten the current column region for balancing. */
+    setColumnRegionBottom,
     /** Update page size/margins for subsequent pages. */
     updatePageLayout,
   };

@@ -32,7 +32,9 @@ import { parseParagraph } from './paragraphParser';
 import { parseTable } from './tableParser';
 import {
   isTextBoxDrawing,
+  isFilledShapeDrawing,
   parseTextBox,
+  parseFilledShapeAsTextBox,
   getTextBoxContentElement,
   parseTextBoxContent,
 } from './textBoxParser';
@@ -165,9 +167,16 @@ function enrichParagraphTextBoxes(
   // Walk into <mc:AlternateContent> wrappers too: Word stores anchored
   // wps:wsp text boxes inside Choice Requires="wps" (Fallback is VML).
   function processDrawing(drawingEl: XmlElement): void {
-    if (!isTextBoxDrawing(drawingEl)) return;
+    const isTextBox = isTextBoxDrawing(drawingEl);
+    // A decorative filled shape has no text but still paints. It rides the
+    // text-box path (same anchored frame, fill and outline) with an empty
+    // body, and is marked `renderOnly` so the serializer leaves the original
+    // markup — preserved verbatim by the run parser — as the only thing
+    // written back. See `isFilledShapeDrawing`.
+    const isFilledShape = !isTextBox && isFilledShapeDrawing(drawingEl);
+    if (!isTextBox && !isFilledShape) return;
 
-    const textBox = parseTextBox(drawingEl);
+    const textBox = isTextBox ? parseTextBox(drawingEl) : parseFilledShapeAsTextBox(drawingEl);
     if (!textBox) return;
 
     // Navigate to wps:wsp to get the txbxContent element
@@ -210,6 +219,7 @@ function enrichParagraphTextBoxes(
       spPrExtraXml: textBox.spPrExtraXml,
     };
     if (textBox.id) shape.id = textBox.id;
+    if (isFilledShape) shape.renderOnly = true;
 
     const shapeContent: ShapeContent = { type: 'shape', shape };
 

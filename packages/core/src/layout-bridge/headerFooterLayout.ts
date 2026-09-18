@@ -192,6 +192,73 @@ export function resolveHeaderFooterVisualTop(
   return resolveAnchoredVisualTop(run, paragraphY, flowHeight, metrics);
 }
 
+/**
+ * Where an anchored object sits inside a header/footer band, measured from the
+ * band's own origin.
+ *
+ * The painter and the measurement pass both need this and each had its own
+ * copy, so they could drift. One implementation now; `flowTop` is the band
+ * origin measured from the page top.
+ *
+ * @public
+ */
+export function anchoredTopInHeaderFooterBand(
+  vertical: PositionedAxis | undefined,
+  paragraphY: number,
+  height: number,
+  frame: { flowTop: number; pageHeight: number; margins: { top: number; bottom: number } }
+): number {
+  const { flowTop, pageHeight, margins } = frame;
+
+  // Word keeps a floating object on its page: an offset that would put one
+  // above the page top is clamped there rather than drawn off the sheet. A
+  // cover block anchored in a footer with `relativeFrom="margin"` and a large
+  // negative offset resolves above the page, and without this it painted off
+  // the top edge and was clipped. `-flowTop` is the page top in band-relative
+  // coordinates. Measured against LibreOffice, which puts that block 0.05in
+  // from the page top where we had it 0.66in above it.
+  const onPage = (top: number): number => Math.max(top, -flowTop);
+
+  if (!vertical) return paragraphY;
+
+  const align = getPositionAlignment(vertical);
+  const offsetPx = vertical.posOffset !== undefined ? emuToPixels(vertical.posOffset) : undefined;
+
+  if (vertical.relativeTo === 'page') {
+    if (offsetPx !== undefined) return onPage(offsetPx - flowTop);
+    if (align === 'top') return onPage(-flowTop);
+    if (align === 'bottom') return onPage(pageHeight - height - flowTop);
+    if (align === 'center') return onPage((pageHeight - height) / 2 - flowTop);
+  }
+
+  if (vertical.relativeTo === 'margin') {
+    const marginTop = margins.top;
+    const marginHeight = pageHeight - margins.top - margins.bottom;
+    if (offsetPx !== undefined) return onPage(marginTop + offsetPx - flowTop);
+    if (align === 'top') return onPage(marginTop - flowTop);
+    if (align === 'bottom') return onPage(marginTop + marginHeight - height - flowTop);
+    if (align === 'center') return onPage(marginTop + (marginHeight - height) / 2 - flowTop);
+  }
+
+  if (offsetPx !== undefined) return onPage(paragraphY + offsetPx);
+  return paragraphY;
+}
+
+/** The band origin for an HF story, measured from the page top. */
+export function headerFooterBandTop(
+  section: 'header' | 'footer',
+  margins: { header?: number; footer?: number },
+  pageHeight: number,
+  flowHeight: number
+): number {
+  return section === 'header'
+    ? (margins.header ?? 48)
+    : // Footer band TOP anchors at the w:footer distance (content flows down
+      // toward the page edge); it shifts up only when taller than the
+      // distance. Must stay in lockstep with renderPage's footer placement.
+      pageHeight - Math.max(margins.footer ?? 48, flowHeight);
+}
+
 /** Shared by anchored image runs and anchored text boxes in an HF story. */
 function resolveAnchoredVisualTop(
   run: { position?: { vertical?: PositionedAxis }; height: number },
@@ -199,44 +266,11 @@ function resolveAnchoredVisualTop(
   flowHeight: number,
   metrics: HeaderFooterMetrics
 ): number {
-  const flowTop =
-    metrics.section === 'header'
-      ? (metrics.margins.header ?? 48)
-      : // Footer band TOP anchors at the w:footer distance (content flows
-        // down toward the page edge); it shifts up only when taller than
-        // the distance. Must stay in lockstep with renderPage's footer
-        // placement.
-        metrics.pageSize.h - Math.max(metrics.margins.footer ?? 48, flowHeight);
-  const vertical = run.position?.vertical;
-
-  if (!vertical) {
-    return paragraphY;
-  }
-
-  const align = getPositionAlignment(vertical);
-  const offsetPx = vertical.posOffset !== undefined ? emuToPixels(vertical.posOffset) : undefined;
-
-  if (vertical.relativeTo === 'page') {
-    if (offsetPx !== undefined) return offsetPx - flowTop;
-    if (align === 'top') return -flowTop;
-    if (align === 'bottom') return metrics.pageSize.h - run.height - flowTop;
-    if (align === 'center') return (metrics.pageSize.h - run.height) / 2 - flowTop;
-  }
-
-  if (vertical.relativeTo === 'margin') {
-    const marginTop = metrics.margins.top;
-    const marginHeight = metrics.pageSize.h - metrics.margins.top - metrics.margins.bottom;
-    if (offsetPx !== undefined) return marginTop + offsetPx - flowTop;
-    if (align === 'top') return marginTop - flowTop;
-    if (align === 'bottom') return marginTop + marginHeight - run.height - flowTop;
-    if (align === 'center') return marginTop + (marginHeight - run.height) / 2 - flowTop;
-  }
-
-  if (offsetPx !== undefined) {
-    return paragraphY + offsetPx;
-  }
-
-  return paragraphY;
+  return anchoredTopInHeaderFooterBand(run.position?.vertical, paragraphY, run.height, {
+    flowTop: headerFooterBandTop(metrics.section, metrics.margins, metrics.pageSize.h, flowHeight),
+    pageHeight: metrics.pageSize.h,
+    margins: metrics.margins,
+  });
 }
 
 /**

@@ -96,6 +96,7 @@ export function createPaginator(options: PaginatorOptions): {
     };
     getCurrentState: () => PageState;
     getAvailableHeight: () => number;
+    getContentHeight: () => number;
     getContentWidth: () => number;
     fits: (height: number) => boolean;
     ensureFits: (height: number) => PageState;
@@ -108,10 +109,11 @@ export function createPaginator(options: PaginatorOptions): {
     forceColumnBreak: () => PageState;
     getColumnX: (columnIndex: number) => number;
     updateColumns: (newColumns: ColumnLayout) => void;
+    setColumnRegionBottom: (bottom: number) => void;
     updatePageLayout: (newPageSize?: {
         w: number;
         h: number;
-    }, newMargins?: PageMargins, applyImmediately?: boolean) => void;
+    }, newMargins?: PageMargins, applyImmediately?: boolean, newSectionIndex?: number) => void;
 };
 
 // @public
@@ -208,6 +210,9 @@ export function getHeaderRowsHeight(measure: TableMeasure, headerRowCount: numbe
 
 // @public
 export function getMidChainIndices(chains: Map<number, KeepNextChain>): Set<number>;
+
+// @public
+export function handleSectionBreak(_block: SectionBreakBlock, paginator: ReturnType<typeof createPaginator>, nextSectionConfig: SectionLayoutConfig, nextSectionType?: SectionBreakBlock['type'], nextSectionIndex?: number): void;
 
 // @public
 export function hasKeepLines(block: FlowBlock): boolean;
@@ -342,6 +347,9 @@ export interface InlineSdtWidget {
 }
 
 // @public
+export function isExactHeightRow(block: TableBlock, rowIndex: number): boolean;
+
+// @public
 export function isFloatingTextBoxBlock(block: TextBoxFlowAttrs): boolean;
 
 // @public
@@ -451,6 +459,7 @@ export type Page = {
     };
     orientation?: 'portrait' | 'landscape';
     sectionIndex?: number;
+    isSectionFirstPage?: boolean;
     headerFooterRefs?: {
         headerDefault?: string;
         headerFirst?: string;
@@ -509,6 +518,7 @@ export type PaginatorOptions = {
         h: number;
     };
     margins: PageMargins;
+    sectionIndex?: number;
     columns?: ColumnLayout;
     footnoteReservedHeights?: Map<number, number>;
     onNewPage?: (state: PageState) => void;
@@ -864,6 +874,7 @@ export type TextBoxBlock = {
     distBottom?: number;
     distLeft?: number;
     distRight?: number;
+    renderOnly?: boolean;
     pmStart?: number;
     pmEnd?: number;
 };

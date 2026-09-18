@@ -330,6 +330,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
+    notes:
+      'Shading resolves as the two-colour pattern OOXML defines: a solid pattern paints its colour, a percentage pattern blends, and a cell’s own shading (including an explicit “none”) overrides the table style’s conditional row and band fills.',
   },
   {
     id: 'tables.merge',
@@ -439,11 +441,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Drawing shapes & geometry',
     category: 'images',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'A shape outside a group (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged, but is not painted — nothing appears where it sits. Custom geometry authored in the editor is reduced to its bounding rectangle on save.',
+      'A shape outside a group (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged. A shape with a fill or an outline and no text — the colour panels and accent bars templates are built from — is painted as its anchored rectangle, so the text laid over it is legible; custom geometry paints as its bounding rectangle, and connectors and shape text are still not painted. Custom geometry authored in the editor is reduced to its bounding rectangle on save.',
   },
   {
     id: 'images.groups',
@@ -539,7 +541,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Margins editable; mid-body sectPr (section breaks) render and round-trip. Inserting new sections from the UI is not built yet.',
+      'Margins editable; mid-body sectPr (section breaks) render and round-trip, including a break carried on a paragraph inside a content control. Each page resolves its own section’s header, footer and margins, and w:titlePg applies only to the section that declares it. Inserting new sections from the UI is not built yet.',
   },
   {
     id: 'layout.headers-footers',
@@ -583,7 +585,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Text flows into newspaper columns with balancing and separators; column count is not editable from the UI.',
+      'Text flows into newspaper columns with balancing and separators, including a mid-document continuous section that turns columns on and off — it balances across its columns and full-width content resumes below the tallest one. Column count is not editable from the UI.',
   },
   {
     id: 'layout.page-borders',

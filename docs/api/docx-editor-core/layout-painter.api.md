@@ -274,6 +274,7 @@ export interface RenderPageOptions {
     };
     pageClassName?: string;
     resolvedCommentIds?: Set<number>;
+    sectionHeaderFooters?: SectionHeaderFooterContent[];
     showBorders?: boolean;
     showShadow?: boolean;
     theme?: Theme | null;
@@ -311,6 +312,20 @@ export interface ResolvedImageAsset {
     release?: () => void;
     // (undocumented)
     src: string;
+}
+
+// @public
+export interface SectionHeaderFooterContent {
+    // (undocumented)
+    firstFooter?: HeaderFooterContent;
+    firstHeader?: HeaderFooterContent;
+    // (undocumented)
+    footer?: HeaderFooterContent;
+    footerDistance?: number;
+    // (undocumented)
+    header?: HeaderFooterContent;
+    headerDistance?: number;
+    titlePg?: boolean;
 }
 
 // @public

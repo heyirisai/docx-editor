@@ -339,6 +339,7 @@ export type Page = {
     };
     orientation?: 'portrait' | 'landscape';
     sectionIndex?: number;
+    isSectionFirstPage?: boolean;
     headerFooterRefs?: {
         headerDefault?: string;
         headerFirst?: string;
@@ -686,6 +687,7 @@ export type TextBoxBlock = {
     distBottom?: number;
     distLeft?: number;
     distRight?: number;
+    renderOnly?: boolean;
     pmStart?: number;
     pmEnd?: number;
 };
