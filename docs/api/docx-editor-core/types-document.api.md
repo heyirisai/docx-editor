@@ -964,6 +964,7 @@ export interface Shape {
     relativeHeight?: number;
     shapeType: ShapeType;
     size: ImageSize;
+    spPrExtraXml?: string;
     textBody?: ShapeTextBody;
     transform?: ImageTransform;
     // (undocumented)
@@ -1017,6 +1018,7 @@ export interface ShapeTextBody {
     anchor?: 'top' | 'middle' | 'bottom' | 'distributed' | 'justified';
     anchorCenter?: boolean;
     autoFit?: 'none' | 'normal' | 'shape';
+    bodyPrXml?: string;
     content: Paragraph[];
     margins?: {
         top?: number;
@@ -1275,6 +1277,7 @@ export type TabStopAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar' |
 
 // @public
 export interface TextBox {
+    bodyPrXml?: string;
     content: Paragraph[];
     fill?: ShapeFill;
     id?: string;
@@ -1288,6 +1291,7 @@ export interface TextBox {
     position?: ImagePosition;
     relativeHeight?: number;
     size: ImageSize;
+    spPrExtraXml?: string;
     // (undocumented)
     type: 'textBox';
     wrap?: ImageWrap;

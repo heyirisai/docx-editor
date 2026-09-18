@@ -40,10 +40,16 @@ export const PIXELS_PER_INCH = STANDARD_DPI;
 
 /**
  * Automatic paragraph spacing applied for `w:beforeAutospacing` /
- * `w:afterAutospacing` (HTML-origin "auto" spacing). Word renders these as
- * ~14px before/after regardless of any explicit `w:before`/`w:after` value.
+ * `w:afterAutospacing` (HTML-origin "auto" spacing), which overrides any
+ * explicit `w:before`/`w:after`.
+ *
+ * Word's "Auto" is 14 POINTS, not 14 pixels — the value this was originally
+ * written as, which is 25% short. A cover page built from empty spacer
+ * paragraphs shows it plainly: two side-by-side anchored pictures whose
+ * `positionV` offsets differ by exactly one spacer's height stopped lining up,
+ * and the whole band rode up the page by the error times the spacer count.
  */
-export const AUTO_PARAGRAPH_SPACING_PX = 14;
+export const AUTO_PARAGRAPH_SPACING_PX = (14 * STANDARD_DPI) / POINTS_PER_INCH;
 
 // ============================================================================
 // TWIPS CONVERSIONS

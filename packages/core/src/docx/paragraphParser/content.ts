@@ -660,6 +660,13 @@ export function parseParagraphContents(
           (el: XmlElement) =>
             el.type === 'element' && (el.name === 'w:sdtPr' || el.name?.endsWith(':sdtPr'))
         );
+        // The end-mark properties round-trip verbatim just like `w:sdtPr`;
+        // `parseSdtProperties` has always taken them, the inline path just
+        // never passed them, so every inline control lost its `w:sdtEndPr`.
+        const sdtEndPr = (child.elements ?? []).find(
+          (el: XmlElement) =>
+            el.type === 'element' && (el.name === 'w:sdtEndPr' || el.name?.endsWith(':sdtEndPr'))
+        );
         const sdtContentEl = (child.elements ?? []).find(
           (el: XmlElement) =>
             el.type === 'element' &&
@@ -675,7 +682,7 @@ export function parseParagraphContents(
             media,
             trackedContext
           );
-          const properties = parseSdtProperties(sdtPr ?? null);
+          const properties = parseSdtProperties(sdtPr ?? null, sdtEndPr ?? null);
           const inlineSdt: InlineSdt = {
             type: 'inlineSdt',
             properties,

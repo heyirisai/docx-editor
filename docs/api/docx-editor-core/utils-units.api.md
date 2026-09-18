@@ -5,7 +5,7 @@
 ```ts
 
 // @public
-export const AUTO_PARAGRAPH_SPACING_PX = 14;
+export const AUTO_PARAGRAPH_SPACING_PX: number;
 
 // @public
 export function clamp(value: number, min: number, max: number): number;

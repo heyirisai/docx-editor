@@ -30,51 +30,44 @@ export function convertParagraphWithTextBoxes(
   const textBoxes = extractTextBoxesFromParagraph(block);
   const pmParagraph = convertParagraph(block, styleResolver);
   const nodes: PMNode[] = [];
-  const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
   const { anchored, inFlow } = partitionTextBoxesByAnchor(textBoxes);
-  // Dropping the host below would strand its paraId on the next paragraph, so
-  // hand the id to the first box; only it rebuilds the host on export. The
-  // REST must still report the host as their anchor: without it they fall
-  // through to `shouldExportTextBoxInsideFollowingParagraph` and get merged
-  // into the next paragraph, so two boxes that shared one anchor end up on
-  // different ones and shift apart on re-layout.
-  const hostId = isEmptyAfterExtraction ? (block.paraId ?? null) : null;
-  let hostParaIdTaken = false;
-  const takeHostParaId = (): string | null => {
-    if (hostParaIdTaken) return null;
-    hostParaIdTaken = true;
-    return hostId;
-  };
 
-  // Boxes after the first still carried `anchorTarget: 'followingBlock'`, which
-  // on export merges them into the NEXT paragraph — so two boxes that shared
-  // one host paragraph ended up anchored to different ones and drifted apart.
-  // Clearing it keeps them as their own paragraphs beside the first.
-  // `shouldExportTextBoxInsideFollowingParagraph` is
-  // `anchorTarget === 'followingBlock' || isFloatingTextBoxAttrs(attrs)`, so
-  // clearing the anchor alone still leaves a FLOATING box queued into the next
-  // paragraph. Mark it as its own block instead.
-  const detachFromFollowingBlock = (node: PMNode): PMNode =>
-    node.type.create(
-      { ...node.attrs, anchorTarget: null, displayMode: 'block' },
-      node.content,
-      node.marks
-    );
+  // Whether the host paragraph survives turns on the ANCHORING, not on whether
+  // extraction emptied it:
+  //
+  //   - An ANCHORED box is out of flow. The `w:p` holding it still occupies a
+  //     line in Word — that stray empty paragraph under a floating object is
+  //     why you cannot delete one without deleting the other. Dropping it
+  //     pulled every later block up by a line plus the host's spacing, which on
+  //     a cover page built from empty spacer paragraphs walked the artwork up
+  //     off the bottom of the page.
+  //   - An IN-FLOW box IS the paragraph's content, so it replaces an emptied
+  //     host and carries its id.
+  //
+  // Keeping the host also preserves its `w:pPr`: the export path rebuilds a
+  // BARE paragraph from `hostParaId`, losing the style, spacing and alignment.
+  // With the host present the box is queued into the following paragraph — this
+  // one — by `shouldExportTextBoxInsideFollowingParagraph`, which keeps both,
+  // and lets several boxes that shared one host land back on that same host
+  // instead of drifting onto different ones.
+  const hostEmptiedByExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
+  const inFlowBoxReplacesHost = hostEmptiedByExtraction && anchored.length === 0;
 
   for (const tb of anchored) {
-    const hostParaId = takeHostParaId();
-    const node = convertTextBox(tb, styleResolver, theme, hostParaId);
-    // Only the box that took the host id rebuilds the host paragraph; the rest
-    // must not drift onto the following one.
-    nodes.push(hostParaId || !hostId ? node : detachFromFollowingBlock(node));
+    nodes.push(convertTextBox(tb, styleResolver, theme, null));
   }
 
-  if (!isEmptyAfterExtraction) {
+  if (!inFlowBoxReplacesHost) {
     nodes.push(pmParagraph);
   }
 
+  let hostParaIdTaken = false;
   for (const tb of inFlow) {
-    nodes.push(convertTextBox(tb, styleResolver, theme, takeHostParaId()));
+    // Only the first box may adopt the id of a host it replaced; a second one
+    // would otherwise duplicate that paraId across two paragraphs.
+    const hostParaId = inFlowBoxReplacesHost && !hostParaIdTaken ? (block.paraId ?? null) : null;
+    if (hostParaId) hostParaIdTaken = true;
+    nodes.push(convertTextBox(tb, styleResolver, theme, hostParaId));
   }
   return nodes;
 }
@@ -122,6 +115,8 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
               outline: shape.outline,
               content: shape.textBody.content,
               margins: shape.textBody.margins,
+              bodyPrXml: shape.textBody.bodyPrXml,
+              spPrExtraXml: shape.spPrExtraXml,
             });
           }
         }
@@ -166,11 +161,13 @@ function convertTextBox(
     outlineStyle = textBox.outline.style || 'solid';
   }
 
-  // Convert margins from EMU to pixels
-  const marginTop = textBox.margins?.top != null ? emuToPixels(textBox.margins.top) : 4;
-  const marginBottom = textBox.margins?.bottom != null ? emuToPixels(textBox.margins.bottom) : 4;
-  const marginLeft = textBox.margins?.left != null ? emuToPixels(textBox.margins.left) : 7;
-  const marginRight = textBox.margins?.right != null ? emuToPixels(textBox.margins.right) : 7;
+  // Convert margins from EMU to pixels. An inset the source did not declare
+  // stays null so a save does not invent one — the painter and `toDOM` supply
+  // the visual default (DEFAULT_TEXTBOX_MARGINS).
+  const marginTop = textBox.margins?.top != null ? emuToPixels(textBox.margins.top) : null;
+  const marginBottom = textBox.margins?.bottom != null ? emuToPixels(textBox.margins.bottom) : null;
+  const marginLeft = textBox.margins?.left != null ? emuToPixels(textBox.margins.left) : null;
+  const marginRight = textBox.margins?.right != null ? emuToPixels(textBox.margins.right) : null;
 
   // Convert text box content (paragraphs) to PM nodes
   const contentNodes: PMNode[] = [];
@@ -198,6 +195,8 @@ function convertTextBox(
       marginLeft,
       marginRight,
       hostParaId: hostParaId ?? null,
+      bodyPrXml: textBox.bodyPrXml ?? null,
+      spPrExtraXml: textBox.spPrExtraXml ?? null,
       ...textBoxAnchorAttrsFromDocx(textBox),
     },
     contentNodes

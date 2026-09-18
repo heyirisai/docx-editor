@@ -13,12 +13,15 @@ import type {
   ImagePosition,
   ImageWrap,
   Paragraph,
+  Shape,
   ShapeContent,
   ShapeFill,
   ShapeOutline,
+  ShapeTextBody,
 } from '../../../types/document';
 import { serializeParagraph } from '../paragraphSerializer';
 import { escapeXml, intAttr } from '../xmlUtils';
+import { preservedBodyPrXml, preservedSpPrExtra } from '../../preservedShapeXml';
 
 /**
  * Auto-incrementing counter for generating unique image/shape IDs.
@@ -82,6 +85,46 @@ function serializeFill(fill: ShapeFill | undefined): string {
 }
 
 /** Serialize shape outline to DrawingML a:ln */
+/**
+ * `anchor` back to its schema token. The model names the positions; DrawingML
+ * spells them `t`/`ctr`/`b`/`dist`/`just`, and anything else makes Word reject
+ * the shape — the inverse of the map `parseBodyProperties` reads them with.
+ */
+const BODY_PR_ANCHOR: Record<NonNullable<ShapeTextBody['anchor']>, string> = {
+  top: 't',
+  middle: 'ctr',
+  bottom: 'b',
+  distributed: 'dist',
+  justified: 'just',
+};
+
+/**
+ * The `wps:bodyPr` attributes the model parses, as they would be written. Every
+ * other attribute on the element belongs to the source.
+ */
+function modelledBodyPrAttrs(tb: ShapeTextBody): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  if (tb.anchor) attrs.anchor = BODY_PR_ANCHOR[tb.anchor];
+  if (tb.anchorCenter) attrs.anchorCtr = '1';
+  const insets: [string, number | undefined][] = [
+    ['lIns', tb.margins?.left],
+    ['tIns', tb.margins?.top],
+    ['rIns', tb.margins?.right],
+    ['bIns', tb.margins?.bottom],
+  ];
+  for (const [name, value] of insets) {
+    if (value != null) attrs[name] = String(intAttr(value));
+  }
+  return attrs;
+}
+
+/** `wps:spPr` children below the fill: the line, then the effects. */
+function spPrExtras(shape: Shape): string {
+  const preserved = preservedSpPrExtra(shape.spPrExtraXml);
+  const ln = shape.outline ? serializeOutline(shape.outline) : (preserved.ln ?? '');
+  return `${ln}${preserved.effectLst ?? ''}`;
+}
+
 function serializeOutline(outline: ShapeOutline | undefined): string {
   if (!outline) return '';
   const attrs: string[] = [];
@@ -318,7 +361,12 @@ export function serializeShapeContent(content: ShapeContent): string {
     '</a:xfrm>',
     `<a:prstGeom prst="${shape.shapeType === 'textBox' ? 'rect' : shape.shapeType}"><a:avLst/></a:prstGeom>`,
     serializeFill(shape.fill),
-    serializeOutline(shape.outline),
+    // A model outline wins over the source `<a:ln>` — the user may have set one
+    // through the UI. With nothing modelled, replay the source's: an explicit
+    // "no outline" parses to no outline at all, so rebuilding from the model
+    // alone put the DEFAULT outline back on the shape. `<a:effectLst>` is
+    // unrelated to either and is replayed whichever line wins.
+    spPrExtras(shape),
     '</wps:spPr>',
   ].join('');
 
@@ -326,25 +374,28 @@ export function serializeShapeContent(content: ShapeContent): string {
   let textBody = '';
   if (shape.textBody) {
     const tb = shape.textBody;
-    const bpAttrs: string[] = ['rot="0"', 'vert="horz"'];
-    if (tb.anchor) bpAttrs.push(`anchor="${tb.anchor === 'middle' ? 'ctr' : tb.anchor}"`);
-    if (tb.anchorCenter) bpAttrs.push('anchorCtr="1"');
-    if (tb.margins) {
-      if (tb.margins.left != null) bpAttrs.push(`lIns="${intAttr(tb.margins.left)}"`);
-      if (tb.margins.top != null) bpAttrs.push(`tIns="${intAttr(tb.margins.top)}"`);
-      if (tb.margins.right != null) bpAttrs.push(`rIns="${intAttr(tb.margins.right)}"`);
-      if (tb.margins.bottom != null) bpAttrs.push(`bIns="${intAttr(tb.margins.bottom)}"`);
-    }
+    const modelled = modelledBodyPrAttrs(tb);
+
+    // The source element carries a dozen attributes plus an autofit child and
+    // the model holds five of them, so replay it when we have it, with the
+    // modelled attributes written back over it. Nothing in `bodyPr` depends on
+    // the shape's size or its text, so the rest stays correct across an edit.
+    // See ShapeTextBody.bodyPrXml.
+    const bodyPr =
+      preservedBodyPrXml(tb.bodyPrXml, { overrides: modelled }) ??
+      `<wps:bodyPr rot="0" vert="horz"${Object.entries(modelled)
+        .map(([name, value]) => ` ${name}="${value}"`)
+        .join('')}/>`;
 
     if (isTextBox) {
       textBody = [
         '<wps:txbx><w:txbxContent>',
         serializeShapeTextBody(tb.content),
         '</w:txbxContent></wps:txbx>',
-        `<wps:bodyPr ${bpAttrs.join(' ')}/>`,
+        bodyPr,
       ].join('');
     } else {
-      textBody = [`<wps:bodyPr ${bpAttrs.join(' ')}/>`].join('');
+      textBody = bodyPr;
     }
   }
 
