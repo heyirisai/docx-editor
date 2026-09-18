@@ -1,5 +1,16 @@
 # @eigenpal/docx-editor-core
 
+## 1.13.0
+
+### Minor Changes
+
+- 248ce88: Keep locked cover pages and template branding intact through a save. Untouched
+  header/footer parts are left byte-identical in the package, shapes and grouped
+  drawings round-trip as preserved source, and DATE/TIME fields render through
+  their `\@` picture instead of the locale default.
+
+  Fixes IRI-224
+
 ## 1.12.0
 
 ### Minor Changes
