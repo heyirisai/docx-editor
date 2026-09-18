@@ -101,8 +101,13 @@ export function convertPMTextBoxRun(node: PMNode): Run {
 }
 
 export function convertPMTextBox(node: PMNode): Paragraph {
-  return {
+  const hostParaId = (node.attrs as { hostParaId?: string | null }).hostParaId;
+  const paragraph: Paragraph = {
     type: 'paragraph',
     content: [convertPMTextBoxRun(node)],
   };
+  if (hostParaId) {
+    paragraph.paraId = hostParaId;
+  }
+  return paragraph;
 }

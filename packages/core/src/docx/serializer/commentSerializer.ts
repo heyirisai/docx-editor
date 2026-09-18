@@ -11,7 +11,8 @@
  */
 
 import type { Comment, Paragraph, Run } from '../../types/content';
-import { escapeXml, OOXML_NAMESPACES, MC_IGNORABLE } from './xmlUtils';
+import { escapeXml, MC_IGNORABLE } from './xmlUtils';
+import { OOXML_NAMESPACES } from './rootNamespaces';
 import { generateHexId } from '../../utils/hexId';
 
 function serializeRunContent(run: Run): string {

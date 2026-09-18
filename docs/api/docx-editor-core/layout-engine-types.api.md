@@ -79,6 +79,7 @@ export type FieldRun = RunFormatting & {
     kind: 'field';
     fieldType: 'PAGE' | 'NUMPAGES' | 'DATE' | 'TIME' | 'OTHER';
     fallback?: string;
+    fieldFormat?: string;
     pmStart?: number;
     pmEnd?: number;
 };
@@ -162,6 +163,7 @@ export type ImageBlock = {
     cropBottom?: number;
     cropLeft?: number;
     opacity?: number;
+    renderOnly?: boolean;
     anchor?: {
         isAnchored?: boolean;
         offsetH?: number;
@@ -200,6 +202,7 @@ export type ImageRun = {
     transform?: string;
     position?: ImageRunPosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     wrapType?: string;
     displayMode?: 'inline' | 'block' | 'float';
     cssFloat?: 'left' | 'right' | 'none';

@@ -19,7 +19,15 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
-import type { FlowBlock, ImageRun, Measure, PageMargins, TableBlock } from '../layout-engine/types';
+import type {
+  FlowBlock,
+  ImageRun,
+  Measure,
+  PageMargins,
+  ParagraphBlock,
+  TableBlock,
+  TextBoxBlock,
+} from '../layout-engine/types';
 import type { HeaderFooter, StyleDefinitions, Theme } from '../types/document';
 import type { HeaderFooterContent } from '../layout-painter/renderPage';
 import { headerFooterToProseDoc } from '../prosemirror/conversion/toProseDoc';
@@ -94,6 +102,11 @@ function normalizeFlowBlockArray(blocks: FlowBlock[]): FlowBlock[] {
     if (block.kind === 'table') {
       return normalizeTableBlock(block);
     }
+    // A text box in the HF frame is still in the HF frame — its paragraphs
+    // inherit the same style spacing Word ignores there (e.g. the cover date).
+    if (block.kind === 'textBox') {
+      return normalizeTextBoxBlock(block);
+    }
     if (block.kind !== 'paragraph') return block;
 
     const isTrailingEmpty = trailingEmptyAfterTable.has(index);
@@ -125,6 +138,12 @@ function normalizeFlowBlockArray(blocks: FlowBlock[]): FlowBlock[] {
 
     return { ...block, attrs };
   });
+}
+
+function normalizeTextBoxBlock(block: TextBoxBlock): TextBoxBlock {
+  const content = normalizeFlowBlockArray(block.content) as ParagraphBlock[];
+  const changed = content.some((normalized, idx) => normalized !== block.content[idx]);
+  return changed ? { ...block, content } : block;
 }
 
 function normalizeTableBlock(block: TableBlock): TableBlock {
@@ -166,6 +185,16 @@ function getPositionAlignment(axis: PositionedAxis | undefined): string | undefi
 
 export function resolveHeaderFooterVisualTop(
   run: ImageRun,
+  paragraphY: number,
+  flowHeight: number,
+  metrics: HeaderFooterMetrics
+): number {
+  return resolveAnchoredVisualTop(run, paragraphY, flowHeight, metrics);
+}
+
+/** Shared by anchored image runs and anchored text boxes in an HF story. */
+function resolveAnchoredVisualTop(
+  run: { position?: { vertical?: PositionedAxis }; height: number },
   paragraphY: number,
   flowHeight: number,
   metrics: HeaderFooterMetrics
@@ -316,8 +345,18 @@ export function calculateHeaderFooterVisualBounds(
       visualBottom = Math.max(visualBottom, blockBottomY);
       cursorY = blockBottomY;
     } else if (block.kind === 'textBox' && measure.kind === 'textBox') {
-      const blockBottomY = cursorY + measure.height;
-      visualTop = Math.min(visualTop, cursorY);
+      // Honour the box's own positionV — a footer date is commonly anchored
+      // with a negative offset so it paints above the footer band.
+      const boxTop = block.position?.vertical
+        ? resolveAnchoredVisualTop(
+            { position: block.position, height: measure.height },
+            cursorY,
+            flowHeight,
+            metrics
+          )
+        : cursorY;
+      const blockBottomY = boxTop + measure.height;
+      visualTop = Math.min(visualTop, boxTop);
       visualBottom = Math.max(visualBottom, blockBottomY);
       // A floating text box is positioned, not in-flow: it extends the visual
       // bounds (so the band/container stays tall enough to show it) but does
@@ -325,7 +364,7 @@ export function calculateHeaderFooterVisualBounds(
       // and floating tables. Otherwise the header container outgrows its actual
       // content and the hover highlight reads taller than the header (#705/#729).
       if (block.displayMode !== 'float') {
-        cursorY = blockBottomY;
+        cursorY = cursorY + measure.height;
       }
     }
   }

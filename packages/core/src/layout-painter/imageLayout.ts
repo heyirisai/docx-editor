@@ -29,11 +29,15 @@ export const LAYOUT_IMAGE_CLASSES = {
   paragraph: 'layout-paragraph',
 } as const;
 
+// `[data-render-only]` images are painted from preserved group markup that the
+// serializer writes verbatim, so any edit to one would be discarded on save.
+// Excluding them here keeps click, drag, resize and the image toolbar off them
+// in both adapters — every path routes through these two helpers.
 const IMAGE_HIT_SELECTOR = [
-  `.${LAYOUT_IMAGE_CLASSES.pageFloatingImage}`,
-  `.${LAYOUT_IMAGE_CLASSES.cellFloatingImage}`,
-  `.${LAYOUT_IMAGE_CLASSES.blockImage}`,
-  `.${LAYOUT_IMAGE_CLASSES.runImage}`,
+  `.${LAYOUT_IMAGE_CLASSES.pageFloatingImage}:not([data-render-only])`,
+  `.${LAYOUT_IMAGE_CLASSES.cellFloatingImage}:not([data-render-only])`,
+  `.${LAYOUT_IMAGE_CLASSES.blockImage}:not([data-render-only])`,
+  `.${LAYOUT_IMAGE_CLASSES.runImage}:not([data-render-only])`,
 ].join(', ');
 
 // ============================================================================
@@ -76,6 +80,7 @@ export function findImageElement(target: EventTarget | null): HTMLElement | null
   // Direct hit on an inline `<img class="layout-run-image">` — return it as-is
   // since the inline image carries its own `data-pm-start` and behaves as the
   // selection target.
+  if (target.dataset.renderOnly !== undefined) return null;
   if (target.tagName === 'IMG' && target.classList.contains(LAYOUT_IMAGE_CLASSES.runImage)) {
     return target;
   }

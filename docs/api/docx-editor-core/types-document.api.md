@@ -176,6 +176,8 @@ export interface DocumentBody {
     comments?: Comment_2[];
     content: BlockContent[];
     finalSectionProperties?: SectionProperties;
+    rootIgnorable?: string[];
+    rootNamespaces?: Record<string, string>;
     sections?: Section[];
 }
 
@@ -367,6 +369,9 @@ export interface FootnoteProperties {
 export interface HeaderFooter {
     content: BlockContent[];
     hdrFtrType: HeaderFooterType;
+    originalSnapshot?: string;
+    rootIgnorable?: string[];
+    rootNamespaces?: Record<string, string>;
     // (undocumented)
     type: 'header' | 'footer';
     watermark?: Watermark;
@@ -420,6 +425,7 @@ interface Image_2 {
     padding?: ImagePadding;
     position?: ImagePosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     rId: string;
     size: ImageSize;
     src?: string;
@@ -795,6 +801,13 @@ export interface PropertyChangeInfo extends TrackedChangeInfo {
 }
 
 // @public
+export interface RawXmlContent {
+    // (undocumented)
+    type: 'rawXml';
+    xml: string;
+}
+
+// @public
 export interface Relationship {
     id: string;
     target: string;
@@ -818,7 +831,7 @@ export interface Run {
 }
 
 // @public
-export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
+export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent | RawXmlContent;
 
 // @public
 export interface RunPropertyChange {

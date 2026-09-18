@@ -28,6 +28,7 @@ import {
 } from './floatingZones';
 
 import { wrapsAroundText } from '../../docx/wrapTypes';
+import { formatWordDate } from '../../docx/dateFormat';
 
 import {
   measureTextWidth,
@@ -284,7 +285,7 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
         bold: next.bold,
         italic: next.italic,
       };
-      width += measureTextWidth(next.fallback || '1', style);
+      width += measureTextWidth(fieldMeasurementText(next), style);
     } else if (isImageRun(next)) {
       // Floating / anchored images are positioned at the page level and
       // contribute no inline width — counting them (e.g. a footer's decorative
@@ -341,6 +342,22 @@ export function clampFloatingWrapMargins(
     return { leftMargin: 0, rightMargin: 0 };
   }
   return { leftMargin: lm, rightMargin: rm };
+}
+
+/**
+ * The text a field run will actually paint. DATE/TIME are recomputed on open
+ * and rendered through their `\@` picture, so measuring the value cached in
+ * the file sizes the line for the wrong string — which is how a cover date
+ * overflows its text box even after the painter was taught the picture.
+ * Mirrors `renderFieldRun`.
+ */
+function fieldMeasurementText(run: FieldRun): string {
+  if (run.fieldType === 'DATE' || run.fieldType === 'TIME') {
+    const now = new Date();
+    if (run.fieldFormat) return formatWordDate(now, run.fieldFormat);
+    return run.fieldType === 'DATE' ? now.toLocaleDateString() : now.toLocaleTimeString();
+  }
+  return run.fallback || '1';
 }
 
 /**
@@ -866,8 +883,7 @@ export function measureParagraph(
     }
 
     if (isFieldRun(run)) {
-      // Measure field using fallback text (actual value substituted at render time)
-      const fallback = run.fallback || '1';
+      const fallback = fieldMeasurementText(run);
       const style: FontStyle = {
         fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
         fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,

@@ -289,6 +289,7 @@ export interface ImageAttrs {
     opacity?: number;
     position?: ImagePositionAttrs;
     relativeHeight?: number;
+    renderOnly?: boolean | null;
     // (undocumented)
     rId?: string;
     // (undocumented)
@@ -355,7 +356,10 @@ export function mergeCells(state: EditorState, dispatch?: (tr: Transaction) => v
 // @public
 export interface ParagraphAttrs {
     // (undocumented)
+    afterAutospacing?: boolean;
+    // (undocumented)
     alignment?: ParagraphAlignment;
+    beforeAutospacing?: boolean;
     // (undocumented)
     bidi?: boolean;
     // (undocumented)

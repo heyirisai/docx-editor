@@ -29,6 +29,7 @@ import { isWrapNone } from '../../../docx/wrapTypes';
 import { mergeTextFormatting } from '../../../utils/textFormattingMerge';
 import type { StyleResolver } from '../../styles';
 import { textFormattingToMarks } from './marks';
+import { escapeXml } from '../../../docx/serializer/xmlUtils';
 
 /**
  * Convert a SimpleField or ComplexField to a ProseMirror field node.
@@ -190,8 +191,50 @@ function convertRunContent(content: RunContent, marks: ReturnType<typeof schema.
       });
       return [schema.text(content.id.toString(), [...marks, endnoteMark])];
 
-    default:
+    // Markers of a field this paragraph cannot model on its own (the halves of
+    // a paragraph-spanning TOC field). Carried as opaque source so an editor
+    // save — which rebuilds the body from PM — puts them back verbatim instead
+    // of orphaning the matching marker in another paragraph.
+    case 'fieldChar': {
+      const fieldAttrs = [`w:fldCharType="${content.charType}"`];
+      if (content.fldLock) fieldAttrs.push('w:fldLock="true"');
+      if (content.dirty) fieldAttrs.push('w:dirty="true"');
+      return [
+        schema.node('rawXml', { xml: `<w:fldChar ${fieldAttrs.join(' ')}/>` }, undefined, marks),
+      ];
+    }
+
+    case 'instrText':
+      return [
+        schema.node(
+          'rawXml',
+          { xml: `<w:instrText xml:space="preserve">${escapeXml(content.text)}</w:instrText>` },
+          undefined,
+          marks
+        ),
+      ];
+
+    // Not represented in PM: these round-trip only on the parse -> serialize
+    // path. Listed explicitly so the check below catches a new variant.
+    case 'symbol':
+    case 'softHyphen':
+    case 'noBreakHyphen':
+    case 'footnoteRefMark':
+    case 'endnoteRefMark':
+    case 'separator':
+    case 'continuationSeparator':
       return [];
+
+    // Opaque preserved markup — carried through so an edit elsewhere cannot
+    // destroy it, and painted by the derived images in docx/groupPreview.ts.
+    case 'rawXml':
+      return [schema.node('rawXml', { xml: content.xml }, undefined, marks)];
+
+    default: {
+      const _exhaustive: never = content;
+      void _exhaustive;
+      return [];
+    }
   }
 }
 
@@ -400,6 +443,7 @@ function convertImage(image: Image): PMNode {
     layoutInCell: image.layoutInCell,
     allowOverlap: image.allowOverlap,
     relativeHeight: image.relativeHeight,
+    renderOnly: image.renderOnly ?? null,
   });
 }
 

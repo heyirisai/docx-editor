@@ -32,6 +32,8 @@ export interface FloatingImagePaintRecord {
    * (e.g. cover title text boxes painted over a banner image).
    */
   relativeHeight?: number;
+  /** Painted from a preserved group; marked so hit-testing skips it. */
+  renderOnly?: boolean;
 }
 
 export interface FloatingImagesLayerOptions {
@@ -93,6 +95,7 @@ export function renderFloatingImagesLayer(
       // z auto so its children join the page stacking context.
       container.style.zIndex = String(contentZIndex(floatImg.relativeHeight ?? 10));
     }
+    if (floatImg.renderOnly) container.dataset.renderOnly = '1';
     if (floatImg.pmStart !== undefined) container.dataset.pmStart = String(floatImg.pmStart);
     if (floatImg.pmEnd !== undefined) container.dataset.pmEnd = String(floatImg.pmEnd);
 

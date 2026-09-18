@@ -94,6 +94,7 @@ export interface ImageAttrs {
     opacity?: number;
     position?: ImagePositionAttrs;
     relativeHeight?: number;
+    renderOnly?: boolean | null;
     // (undocumented)
     rId?: string;
     // (undocumented)
@@ -125,7 +126,10 @@ export interface ImagePositionAttrs {
 // @public
 export interface ParagraphAttrs {
     // (undocumented)
+    afterAutospacing?: boolean;
+    // (undocumented)
     alignment?: ParagraphAlignment;
+    beforeAutospacing?: boolean;
     // (undocumented)
     bidi?: boolean;
     // (undocumented)

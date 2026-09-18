@@ -210,6 +210,9 @@ export const ImageExtension = createNodeExtension({
       borderColor: { default: null },
       borderStyle: { default: null },
       wrapText: { default: null },
+      // Canvas-only picture from a preserved group; rides through PM so a save
+      // still skips it instead of duplicating the group's own markup.
+      renderOnly: { default: null },
       hlinkHref: { default: null },
       cropTop: { default: null },
       cropRight: { default: null },
@@ -246,6 +249,9 @@ export const ImageExtension = createNodeExtension({
               : undefined,
             borderColor: element.dataset.borderColor || undefined,
             borderStyle: element.dataset.borderStyle || undefined,
+            // Without this a copied group preview pastes as a real picture, and
+            // the save emits it alongside the group's own markup.
+            renderOnly: element.dataset.renderOnly !== undefined ? true : null,
           };
         },
       },
@@ -271,6 +277,7 @@ export const ImageExtension = createNodeExtension({
       if (attrs.borderWidth) domAttrs['data-border-width'] = String(attrs.borderWidth);
       if (attrs.borderColor) domAttrs['data-border-color'] = attrs.borderColor;
       if (attrs.borderStyle) domAttrs['data-border-style'] = attrs.borderStyle;
+      if (attrs.renderOnly) domAttrs['data-render-only'] = '1';
 
       const styles: string[] = [];
 

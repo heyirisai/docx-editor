@@ -24,7 +24,13 @@ import type {
 } from '../types/document';
 import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
-import { parseXml, findChild, type XmlElement } from './xmlParser';
+import {
+  parseXml,
+  findChild,
+  rootNamespaceDeclarations,
+  rootIgnorablePrefixes,
+  type XmlElement,
+} from './xmlParser';
 import { getParagraphText } from './paragraphParser';
 import {
   parseSectionProperties,
@@ -224,6 +230,9 @@ export function parseDocumentBody(
   if (!documentEl) {
     return result;
   }
+
+  result.rootNamespaces = rootNamespaceDeclarations(documentEl);
+  result.rootIgnorable = rootIgnorablePrefixes(documentEl);
 
   // Find body element (w:body)
   const bodyEl = findChild(documentEl, 'w', 'body');

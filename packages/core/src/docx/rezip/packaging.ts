@@ -20,6 +20,7 @@ import {
 import { serializeFootnotes, serializeEndnotes } from '../serializer/noteSerializer';
 import { serializeNumberingXml } from '../serializer/numberingSerializer';
 import { RELATIONSHIP_TYPES } from '../relsParser';
+import { headerFooterSnapshot } from '../headerFooterParser';
 import { findMaxRId, readRelsOrStub, headerFooterFilename } from './parts';
 
 const HEADER_CONTENT_TYPE =
@@ -393,7 +394,14 @@ export function serializeEndnotesToZip(doc: Document, zip: JSZip, compressionLev
  * Collect serialized header/footer XML updates from the document model.
  * Uses the relationship map to resolve rId → filename.
  */
-export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
+export function collectHeaderFooterUpdates(
+  doc: Document,
+  /**
+   * Whether the destination already holds this part; skipping is only safe when
+   * it does (`createDocx` builds a fresh ZIP, where the part must be written).
+   */
+  existsInTarget?: (path: string) => boolean
+): Map<string, string> {
   const updates = new Map<string, string>();
   const rels = doc.package.relationships;
   if (!rels) return updates;
@@ -410,13 +418,41 @@ export function collectHeaderFooterUpdates(doc: Document): Map<string, string> {
     if (!map) continue;
     for (const [rId, headerFooter] of map.entries()) {
       const rel = rels.get(rId);
-      if (rel && rel.type === type && rel.target) {
-        updates.set(headerFooterFilename(rel.target), serializeHeaderFooter(headerFooter));
+      if (!rel || rel.type !== type || !rel.target) continue;
+      // Untouched part: leave the original XML in the ZIP. Re-serializing it
+      // would drop anything the serializer cannot rebuild.
+      const filename = headerFooterFilename(rel.target);
+      if (
+        headerFooter.originalSnapshot !== undefined &&
+        headerFooterSnapshot(headerFooter) === headerFooter.originalSnapshot &&
+        existsInTarget?.(filename)
+      ) {
+        continue;
       }
+      updates.set(filename, serializeHeaderFooter(headerFooter));
     }
   }
 
   return updates;
+}
+
+/**
+ * Adopt a saved ZIP as the document's baseline. `originalSnapshot` describes the
+ * header/footer inside `originalBuffer`, so the two must move together.
+ */
+export function adoptSavedBuffer(doc: Document, buffer: ArrayBuffer): ArrayBuffer {
+  doc.originalBuffer = buffer;
+  commitHeaderFooterSnapshots(doc);
+  return buffer;
+}
+
+export function commitHeaderFooterSnapshots(doc: Document): void {
+  for (const map of [doc.package.headers, doc.package.footers]) {
+    if (!map) continue;
+    for (const headerFooter of map.values()) {
+      headerFooter.originalSnapshot = headerFooterSnapshot(headerFooter);
+    }
+  }
 }
 
 /**
@@ -428,7 +464,10 @@ export function serializeHeadersFootersToZip(
   compressionLevel: number
 ): void {
   const compressionOptions = { level: compressionLevel };
-  for (const [filename, xml] of collectHeaderFooterUpdates(doc)) {
+  for (const [filename, xml] of collectHeaderFooterUpdates(
+    doc,
+    (path) => zip.file(path) !== null
+  )) {
     zip.file(filename, xml, { compression: 'DEFLATE', compressionOptions });
   }
 }

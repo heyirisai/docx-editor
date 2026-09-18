@@ -32,9 +32,41 @@ export function convertParagraphWithTextBoxes(
   const nodes: PMNode[] = [];
   const isEmptyAfterExtraction = textBoxes.length > 0 && pmParagraph.content.size === 0;
   const { anchored, inFlow } = partitionTextBoxesByAnchor(textBoxes);
+  // Dropping the host below would strand its paraId on the next paragraph, so
+  // hand the id to the first box; only it rebuilds the host on export. The
+  // REST must still report the host as their anchor: without it they fall
+  // through to `shouldExportTextBoxInsideFollowingParagraph` and get merged
+  // into the next paragraph, so two boxes that shared one anchor end up on
+  // different ones and shift apart on re-layout.
+  const hostId = isEmptyAfterExtraction ? (block.paraId ?? null) : null;
+  let hostParaIdTaken = false;
+  const takeHostParaId = (): string | null => {
+    if (hostParaIdTaken) return null;
+    hostParaIdTaken = true;
+    return hostId;
+  };
+
+  // Boxes after the first still carried `anchorTarget: 'followingBlock'`, which
+  // on export merges them into the NEXT paragraph — so two boxes that shared
+  // one host paragraph ended up anchored to different ones and drifted apart.
+  // Clearing it keeps them as their own paragraphs beside the first.
+  // `shouldExportTextBoxInsideFollowingParagraph` is
+  // `anchorTarget === 'followingBlock' || isFloatingTextBoxAttrs(attrs)`, so
+  // clearing the anchor alone still leaves a FLOATING box queued into the next
+  // paragraph. Mark it as its own block instead.
+  const detachFromFollowingBlock = (node: PMNode): PMNode =>
+    node.type.create(
+      { ...node.attrs, anchorTarget: null, displayMode: 'block' },
+      node.content,
+      node.marks
+    );
 
   for (const tb of anchored) {
-    nodes.push(convertTextBox(tb, styleResolver, theme));
+    const hostParaId = takeHostParaId();
+    const node = convertTextBox(tb, styleResolver, theme, hostParaId);
+    // Only the box that took the host id rebuilds the host paragraph; the rest
+    // must not drift onto the following one.
+    nodes.push(hostParaId || !hostId ? node : detachFromFollowingBlock(node));
   }
 
   if (!isEmptyAfterExtraction) {
@@ -42,7 +74,7 @@ export function convertParagraphWithTextBoxes(
   }
 
   for (const tb of inFlow) {
-    nodes.push(convertTextBox(tb, styleResolver, theme));
+    nodes.push(convertTextBox(tb, styleResolver, theme, takeHostParaId()));
   }
   return nodes;
 }
@@ -105,7 +137,8 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
 function convertTextBox(
   textBox: TextBox,
   styleResolver: StyleResolver | null,
-  theme?: Theme | null
+  theme?: Theme | null,
+  hostParaId?: string | null
 ): PMNode {
   const widthPx = textBox.size?.width ? emuToPixels(textBox.size.width) : 200;
   const heightPx = textBox.size?.height ? emuToPixels(textBox.size.height) : undefined;
@@ -164,6 +197,7 @@ function convertTextBox(
       marginBottom,
       marginLeft,
       marginRight,
+      hostParaId: hostParaId ?? null,
       ...textBoxAnchorAttrsFromDocx(textBox),
     },
     contentNodes

@@ -140,6 +140,16 @@ export interface ShapeContent {
 }
 
 /**
+ * OOXML the model cannot represent (shapes and grouped drawings, usually inside
+ * `mc:AlternateContent`), kept as source so a save can put it back exactly.
+ */
+export interface RawXmlContent {
+  type: 'rawXml';
+  /** Original XML for this element, emitted verbatim on save. */
+  xml: string;
+}
+
+/**
  * All possible run content types
  */
 export type RunContent =
@@ -155,7 +165,8 @@ export type RunContent =
   | SoftHyphenContent
   | NoBreakHyphenContent
   | DrawingContent
-  | ShapeContent;
+  | ShapeContent
+  | RawXmlContent;
 
 /**
  * A run (`w:r`) — a contiguous span of inline content sharing one set of

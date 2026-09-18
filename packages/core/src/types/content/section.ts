@@ -218,4 +218,8 @@ export interface DocumentBody {
   finalSectionProperties?: SectionProperties;
   /** Comments from comments.xml */
   comments?: Comment[];
+  /** `xmlns:` bindings from the original `w:document` root. */
+  rootNamespaces?: Record<string, string>;
+  /** Prefixes the original `w:document` root listed in `mc:Ignorable`. */
+  rootIgnorable?: string[];
 }

@@ -35,7 +35,7 @@ import type {
 
 import { executeCommand, executeCommands } from './executor';
 import type { AgentCommand } from '../types/agentApi';
-import { repackDocx, createDocx } from '../docx/rezip';
+import { repackDocx, createDocx, adoptSavedBuffer } from '../docx/rezip';
 import { attemptSelectiveSave, type SelectiveSaveOptions } from '../docx/selectiveSave';
 import { detectVariables } from '../utils/variableDetector';
 import { parseDocx } from '../docx/parser';
@@ -682,15 +682,12 @@ export class DocumentAgent {
           options.selective
         );
         if (result) {
-          // Update originalBuffer so subsequent saves patch against the latest state
-          this._document.originalBuffer = result;
-          return result;
+          // Rebaselines originalBuffer and the header/footer snapshots together.
+          return adoptSavedBuffer(this._document, result);
         }
       }
       // Fall back to full repack
-      const repacked = await repackDocx(this._document);
-      this._document.originalBuffer = repacked;
-      return repacked;
+      return adoptSavedBuffer(this._document, await repackDocx(this._document));
     }
     return createDocx(this._document);
   }

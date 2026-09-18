@@ -65,3 +65,133 @@ describe('measureBlocksWithFloats — topAndBottom page-pinned band', () => {
     expect(block0Zones?.[0].bottomY).toBe(50);
   });
 });
+
+// A tall float anchored on one page must not keep reserving space in
+// paragraphs that land on a later page.
+describe('measureBlocksWithFloats — a float does not cross a page break', () => {
+  function blocksWithBreak(): FlowBlock[] {
+    const para = (id: string, pageBreakBefore = false): ParagraphBlock =>
+      ({
+        kind: 'paragraph',
+        id,
+        pmStart: 0,
+        pmEnd: 0,
+        runs: [],
+        paragraphProperties: {},
+        attrs: pageBreakBefore ? { pageBreakBefore: true } : {},
+      }) as unknown as ParagraphBlock;
+
+    // A tall square-wrap text box on the cover, then a page break, then body.
+    const cover: TextBoxBlock = {
+      kind: 'textBox',
+      id: 'coverBox',
+      pmStart: 0,
+      pmEnd: 0,
+      width: 300,
+      height: 5000, // far taller than the flow that follows
+      displayMode: 'float',
+      wrapType: 'square',
+      position: {
+        vertical: { relativeTo: 'paragraph', posOffset: 0 },
+        horizontal: { relativeTo: 'column', posOffset: 0 },
+      },
+      content: [],
+    } as unknown as TextBoxBlock;
+
+    return [para('cover'), cover, para('afterBreak', true), para('body')];
+  }
+
+  test('zones stop at the page break instead of squeezing later pages', () => {
+    const seen: Array<{ id: string; zones?: FloatingImageZone[] }> = [];
+    const measureBlock = (block: FlowBlock, _w: number, zones?: FloatingImageZone[]): Measure => {
+      seen.push({ id: (block as { id: string }).id, zones });
+      if (block.kind === 'textBox') {
+        return { kind: 'textBox', width: 300, height: 5000, innerMeasures: [] } as Measure;
+      }
+      return { kind: 'paragraph', lines: [], totalHeight: 20 } as Measure;
+    };
+
+    measureBlocksWithFloats(blocksWithBreak(), 600, measureBlock, {
+      pageWidth: 700,
+      pageHeight: 900,
+      marginLeft: 50,
+      marginTop: 50,
+      contentWidth: 600,
+      contentHeight: 800,
+    });
+
+    const afterBreak = seen.find((s) => s.id === 'afterBreak');
+    const body = seen.find((s) => s.id === 'body');
+    expect(afterBreak?.zones).toBeUndefined();
+    expect(body?.zones).toBeUndefined();
+  });
+});
+
+// Two floats on opposite sides of a page break must keep their own zones: the
+// grouping pass used to re-anchor both to the first float, so clearing at the
+// break dropped the second page's zone with no anchor left to restore it.
+describe('measureBlocksWithFloats — floats either side of a page break', () => {
+  test('the float after the break still reserves space on its own page', () => {
+    const para = (id: string, pageBreakBefore = false): ParagraphBlock =>
+      ({
+        kind: 'paragraph',
+        id,
+        pmStart: 0,
+        pmEnd: 0,
+        runs: [],
+        paragraphProperties: {},
+        attrs: pageBreakBefore ? { pageBreakBefore: true } : {},
+      }) as unknown as ParagraphBlock;
+
+    const box = (id: string): TextBoxBlock =>
+      ({
+        kind: 'textBox',
+        id,
+        pmStart: 0,
+        pmEnd: 0,
+        width: 200,
+        height: 100,
+        displayMode: 'float',
+        wrapType: 'square',
+        position: {
+          vertical: { relativeTo: 'paragraph', posOffset: 0 },
+          horizontal: { relativeTo: 'column', posOffset: 0 },
+        },
+        content: [],
+      }) as unknown as TextBoxBlock;
+
+    // Anchors are within ANCHOR_PROXIMITY (4) and the Y ranges overlap, so the
+    // two boxes would previously be merged and re-anchored to the first.
+    const blocks: FlowBlock[] = [
+      para('p1'),
+      box('boxPage1'),
+      para('p2'),
+      para('breaker', true),
+      box('boxPage2'),
+      para('afterSecondBox'),
+    ];
+
+    const seen: Array<{ id: string; zones?: FloatingImageZone[] }> = [];
+    const measureBlock = (block: FlowBlock, _w: number, zones?: FloatingImageZone[]): Measure => {
+      seen.push({ id: (block as { id: string }).id, zones });
+      if (block.kind === 'textBox') {
+        return { kind: 'textBox', width: 200, height: 100, innerMeasures: [] } as Measure;
+      }
+      return { kind: 'paragraph', lines: [], totalHeight: 20 } as Measure;
+    };
+
+    measureBlocksWithFloats(blocks, 600, measureBlock, {
+      pageWidth: 700,
+      pageHeight: 900,
+      marginLeft: 50,
+      marginTop: 50,
+      contentWidth: 600,
+      contentHeight: 800,
+    });
+
+    // Page one keeps its wrap...
+    expect(seen.find((s) => s.id === 'p2')?.zones?.length).toBeGreaterThan(0);
+    // ...and page two gets its own, rather than inheriting nothing.
+    expect(seen.find((s) => s.id === 'afterSecondBox')?.zones?.length).toBeGreaterThan(0);
+  });
+});

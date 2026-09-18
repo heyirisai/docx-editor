@@ -57,6 +57,12 @@ export interface TextBoxAttrs {
   distBottom?: number;
   distLeft?: number;
   distRight?: number;
+  /**
+   * `w14:paraId` of the host paragraph this box came from, set only when that
+   * paragraph held nothing else and was dropped on import. Export rebuilds it
+   * so the id stays attached to the content it labelled.
+   */
+  hostParaId?: string | null;
 }
 
 export const TextBoxExtension = createNodeExtension({
@@ -92,6 +98,7 @@ export const TextBoxExtension = createNodeExtension({
       distBottom: { default: null },
       distLeft: { default: null },
       distRight: { default: null },
+      hostParaId: { default: null },
     },
     parseDOM: [
       {
