@@ -47,10 +47,15 @@ import {
   findChildren,
   getAttribute,
   rootNamespaceDeclarations,
+  rootIgnorablePrefixes,
   type XmlElement,
 } from './xmlParser';
 import { parseBlockContent } from './blockContentParser';
-import { containsWatermarkShape, extractWatermark } from './vmlWatermarkParser';
+import {
+  claimedWatermarkShapeId,
+  containsWatermarkShape,
+  extractWatermark,
+} from './vmlWatermarkParser';
 import { comparableJson } from '../utils/comparableJson';
 
 /** Fingerprint of a header/footer's editable model, compared on save to spot an edit. */
@@ -104,16 +109,19 @@ function parseHeaderFooterType(typeAttr: string | null): HeaderFooterType {
 }
 
 /**
- * Remove the first preserved `rawXml` run item holding a watermark shape.
+ * Remove the preserved `rawXml` run item holding the watermark shape the model
+ * claimed. `shapeId` identifies that specific shape; without one (an unnamed
+ * shape) it falls back to the first item holding any watermark.
  * Returns true once it has dropped one.
  */
-function dropFirstPreservedWatermark(blocks: BlockContent[]): boolean {
+function dropPreservedWatermark(blocks: BlockContent[], shapeId: string | null): boolean {
   for (const block of blocks) {
     if (block.type !== 'paragraph') continue;
     for (const item of block.content) {
       if (item.type !== 'run') continue;
       const index = item.content.findIndex(
-        (c: RunContent) => c.type === 'rawXml' && containsWatermarkShape(parseXmlDocument(c.xml))
+        (c: RunContent) =>
+          c.type === 'rawXml' && containsWatermarkShape(parseXmlDocument(c.xml), shapeId)
       );
       if (index >= 0) {
         item.content.splice(index, 1);
@@ -253,14 +261,16 @@ export function parseHeader(
     result.watermark = watermark;
     // The same shape is also reachable through the run parser's preserved
     // source, and this serializer emits both — so drop the one copy that the
-    // watermark model now owns. Scoped here, and to a single item, because
-    // `extractWatermark` returns the FIRST match and only headers call it:
-    // standing down inside the run parser instead would silently delete
-    // WordArt from footers and the body, which model no watermark at all.
-    dropFirstPreservedWatermark(result.content);
+    // watermark model now owns, matched by the shape's own name rather than by
+    // "the first item that looks like a watermark". Scoped here because only
+    // headers call `extractWatermark`: standing down inside the run parser
+    // instead would silently delete WordArt from footers and the body, which
+    // model no watermark at all.
+    dropPreservedWatermark(result.content, claimedWatermarkShapeId(rootElement));
   }
 
   result.rootNamespaces = rootNamespaceDeclarations(rootElement);
+  result.rootIgnorable = rootIgnorablePrefixes(rootElement);
   result.originalSnapshot = headerFooterSnapshot(result);
   return result;
 }
@@ -317,6 +327,7 @@ export function parseFooter(
   });
 
   result.rootNamespaces = rootNamespaceDeclarations(rootElement);
+  result.rootIgnorable = rootIgnorablePrefixes(rootElement);
   result.originalSnapshot = headerFooterSnapshot(result);
   return result;
 }

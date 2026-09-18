@@ -31,6 +31,23 @@ const part = (root: 'hdr' | 'ftr', shape: string) =>
 
 const PLAIN_SHAPE = '<v:shape id="Rectangle 4" style="width:10pt"/>';
 
+const SECOND_WATERMARK = `<v:shape id="PowerPlusWaterMarkObject2" type="#_x0000_t136" style="rotation:315">
+  <v:textpath string="CONFIDENTIAL" style="font-family:Calibri"/>
+</v:shape>`;
+
+/** Every preserved `rawXml` string in the part. */
+function rawXmlStrings(hf: HeaderFooter): string[] {
+  const out: string[] = [];
+  for (const block of hf.content) {
+    if (block.type !== 'paragraph') continue;
+    for (const item of (block as Paragraph).content) {
+      if (item.type !== 'run') continue;
+      for (const c of item.content) if (c.type === 'rawXml') out.push(c.xml);
+    }
+  }
+  return out;
+}
+
 function rawXmlCount(hf: HeaderFooter): number {
   let n = 0;
   for (const block of hf.content) {
@@ -46,6 +63,32 @@ describe('a watermark inside mc:AlternateContent', () => {
   test('the shape predicate recognises it', () => {
     expect(containsWatermarkShape(parseXmlDocument(WATERMARK_SHAPE) as XmlElement)).toBe(true);
     expect(containsWatermarkShape(parseXmlDocument(PLAIN_SHAPE) as XmlElement)).toBe(false);
+  });
+
+  test('the predicate can be narrowed to one named shape', () => {
+    const el = parseXmlDocument(WATERMARK_SHAPE) as XmlElement;
+    expect(containsWatermarkShape(el, 'PowerPlusWaterMarkObject1')).toBe(true);
+    expect(containsWatermarkShape(el, 'PowerPlusWaterMarkObject2')).toBe(false);
+  });
+
+  test('with two watermarks, the copy dropped is the one the model took', () => {
+    // DRAFT sits in a plain `w:pict`, which the run parser ignores outright —
+    // so it has NO preserved copy to drop. CONFIDENTIAL is authored as
+    // `mc:AlternateContent` and IS preserved. `extractWatermark` models DRAFT,
+    // so dropping "the first rawXml holding any watermark" deleted
+    // CONFIDENTIAL outright. Ownership by shape name leaves it alone.
+    const hdr = parseHeader(
+      `<?xml version="1.0" encoding="UTF-8"?><w:hdr ${NS}>` +
+        `<w:p><w:r><w:pict>${WATERMARK_SHAPE}</w:pict></w:r></w:p>` +
+        `<w:p><w:r><mc:AlternateContent>` +
+        `<mc:Choice Requires="wps"><w:drawing/></mc:Choice>` +
+        `<mc:Fallback><w:pict>${SECOND_WATERMARK}</w:pict></mc:Fallback>` +
+        `</mc:AlternateContent></w:r></w:p></w:hdr>`
+    );
+    expect((hdr.watermark as { text: string }).text).toBe('DRAFT');
+    const preserved = rawXmlStrings(hdr);
+    expect(preserved).toHaveLength(1);
+    expect(preserved[0]).toContain('CONFIDENTIAL');
   });
 
   test('a header models it once and does not also preserve it', () => {

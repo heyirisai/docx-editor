@@ -20,6 +20,7 @@
  */
 
 import { xml2js, js2xml, type Element as XmlElement } from 'xml-js';
+import { MAX_ELEMENT_DEPTH, scanXmlFragment } from './xmlFragmentScanner';
 
 // Re-export Element type for consumers
 export type { Element as XmlElement } from 'xml-js';
@@ -139,13 +140,32 @@ export function rootNamespaceDeclarations(element: XmlElement): Record<string, s
 }
 
 /**
- * Prefix -> URI for every namespace Word writes, so a captured fragment can be
- * re-declared wherever it lands. It must stay a superset of the root sets the
- * serializers emit: `footnotes.xml`/`endnotes.xml`/`comments.xml` use a fixed
- * block with no per-document capture, so a prefix missing here (`a16:creationId`
- * appears in nearly every Word drawing) exports unbound and voids the part.
+ * The prefixes the root listed in `mc:Ignorable` — the other half of the
+ * markup-compatibility contract. Declaring a namespace only says what a prefix
+ * means; `mc:Ignorable` is what lets a consumer skip an element in it. A
+ * captured prefix that never makes the list leaves preserved markup a consumer
+ * has to reject rather than ignore.
  */
-const OOXML_NAMESPACES: Record<string, string> = {
+export function rootIgnorablePrefixes(element: XmlElement): string[] {
+  for (const [key, value] of Object.entries(element.attributes ?? {})) {
+    if (getLocalName(key) !== 'Ignorable') continue;
+    return String(value).split(/\s+/).filter(Boolean);
+  }
+  return [];
+}
+
+/**
+ * Prefix -> URI for every namespace Word writes. THE table: every root the
+ * serializers emit is a derived view of this one (see
+ * `serializer/rootNamespaces.ts`), and `namespace-tables.test.ts` asserts the
+ * superset relation rather than leaving it to a comment.
+ *
+ * A captured fragment is re-declared wherever it lands, and
+ * `footnotes.xml`/`endnotes.xml`/`comments.xml` use a fixed block with no
+ * per-document capture — so a prefix missing here (`a16:creationId` appears in
+ * nearly every Word drawing) exports unbound and voids the part.
+ */
+export const OOXML_NAMESPACE_URIS: Record<string, string> = {
   a: 'http://schemas.openxmlformats.org/drawingml/2006/main',
   a14: 'http://schemas.microsoft.com/office/drawing/2010/main',
   a16: 'http://schemas.microsoft.com/office/drawing/2014/main',
@@ -196,22 +216,26 @@ function prefixOf(name: string): string | null {
   return i > 0 ? name.slice(0, i) : null;
 }
 
-/** Recursion bound for walks over file- or clipboard-derived markup. */
-const MAX_ELEMENT_DEPTH = 64;
-
 /**
  * Collect prefixes used without a binding in scope. `inScope` holds only what
  * ancestors WITHIN the fragment declared, never what the original root did.
+ * `state.truncated` reports that the depth bound cut the walk short — the
+ * caller has an INCOMPLETE prefix set and must not treat it as the whole
+ * picture.
  */
 function collectUnbound(
   el: XmlElement,
   inScope: Set<string>,
   unbound: Set<string>,
+  state: { truncated: boolean },
   depth = 0
 ): void {
   // Both callers walk attacker-controlled XML (a preserved part on parse, a
   // pasted fragment at the trust boundary), so the walk must be bounded.
-  if (depth >= MAX_ELEMENT_DEPTH) return;
+  if (depth >= MAX_ELEMENT_DEPTH) {
+    state.truncated = true;
+    return;
+  }
   let scope = inScope;
   for (const key of Object.keys(el.attributes ?? {})) {
     if (!key.startsWith('xmlns:')) continue;
@@ -229,7 +253,7 @@ function collectUnbound(
     if (p && p !== 'xml' && !scope.has(p)) unbound.add(p);
   }
 
-  for (const child of el.elements ?? []) collectUnbound(child, scope, unbound, depth + 1);
+  for (const child of el.elements ?? []) collectUnbound(child, scope, unbound, state, depth + 1);
 }
 
 /**
@@ -267,16 +291,17 @@ const RUN_CONTENT_ELEMENTS = new Set([
   'w:tab',
 ]);
 
+const WELL_FORMED_CACHE_MAX = 512;
+const wellFormedCache = new Map<string, boolean>();
+
 /**
  * Whether `xml` is a single well-formed element using only known prefixes.
  * Preserved markup is written into the saved package verbatim, so anything
  * failing this is dropped rather than left to corrupt the part — Word refuses
  * to open a document.xml with unbalanced tags or an unbound prefix.
  *
- * `xml-js` is not a validating parser (it silently closes `<w:t>unclosed`), so
- * this uses `DOMParser` wherever one exists — including the paste path, which
- * is the only way an untrusted value can reach a node — and falls back to the
- * shape check in a bare Node process.
+ * {@link scanXmlFragment} IS the guarantee and runs in every runtime;
+ * `DOMParser` runs on top of it wherever the host has one.
  *
  * `requireBoundPrefixes` additionally rejects a prefix that neither the table
  * nor the fragment itself binds, and `runContentOnly` rejects a root element
@@ -291,49 +316,47 @@ export function isWellFormedXmlElement(
   if (typeof xml !== 'string' || xml.trim().length === 0) return false;
   if (/]]>/.test(xml)) return false;
 
-  const Parser = (globalThis as { DOMParser?: typeof DOMParser }).DOMParser;
-  if (Parser) {
-    // Declare every prefix the fragment references — the known ones properly,
-    // anything else with a placeholder. This checks STRUCTURE only: whether an
-    // exotic prefix resolves is the destination root's business (it may be in
-    // the captured `rootNamespaces`), and failing it here would silently drop
-    // markup that would have exported just fine.
-    const bindings = new Map(Object.entries(OOXML_NAMESPACES));
-    try {
-      const unbound = new Set<string>();
-      for (const el of parseXml(xml).elements ?? []) {
-        if (el.type === 'element') collectUnbound(el, new Set(), unbound);
-      }
-      for (const prefix of unbound) {
-        if (bindings.has(prefix)) continue;
-        if (options?.requireBoundPrefixes) return false;
-        bindings.set(prefix, `urn:ep-unbound:${prefix}`);
-      }
-    } catch {
-      return false;
-    }
-    const declarations = [...bindings].map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`).join(' ');
-    try {
-      const doc = new Parser().parseFromString(
-        `<epRoot ${declarations}>${xml}</epRoot>`,
-        'application/xml'
-      );
-      if (doc.getElementsByTagName('parsererror').length > 0) return false;
-      const roots = doc.documentElement?.children;
-      if ((roots?.length ?? 0) !== 1) return false;
-      if (options?.runContentOnly && !RUN_CONTENT_ELEMENTS.has(roots![0].tagName)) return false;
-      return true;
-    } catch {
-      return false;
-    }
+  // A save re-validates every preserved node, and a TOC alone produces hundreds
+  // of repeats of the same short string. Fixed-length flag prefix so the key
+  // stays unambiguous whatever the markup contains.
+  const key = `${options?.requireBoundPrefixes ? '1' : '0'}${options?.runContentOnly ? '1' : '0'}${xml}`;
+  const cached = wellFormedCache.get(key);
+  if (cached !== undefined) return cached;
+
+  const verdict = checkWellFormed(xml, options);
+  if (wellFormedCache.size >= WELL_FORMED_CACHE_MAX) wellFormedCache.clear();
+  wellFormedCache.set(key, verdict);
+  return verdict;
+}
+
+function checkWellFormed(
+  xml: string,
+  options?: { requireBoundPrefixes?: boolean; runContentOnly?: boolean }
+): boolean {
+  const scan = scanXmlFragment(xml);
+  if (!scan.ok) return false;
+  if (options?.runContentOnly && !RUN_CONTENT_ELEMENTS.has(scan.rootName ?? '')) return false;
+
+  // Whether an exotic prefix resolves is the destination root's business (it
+  // may be in the captured `rootNamespaces`), so only the paste boundary — the
+  // one path with no such root behind it — insists on a known binding.
+  const bindings = new Map(Object.entries(OOXML_NAMESPACE_URIS));
+  for (const prefix of scan.unbound) {
+    if (bindings.has(prefix)) continue;
+    if (options?.requireBoundPrefixes) return false;
+    bindings.set(prefix, `urn:ep-unbound:${prefix}`);
   }
 
+  const Parser = (globalThis as { DOMParser?: typeof DOMParser }).DOMParser;
+  if (!Parser) return true;
+  const declarations = [...bindings].map(([prefix, uri]) => `xmlns:${prefix}="${uri}"`).join(' ');
   try {
-    const parsed = parseXml(xml);
-    const elements = (parsed.elements ?? []).filter((el) => el.type === 'element');
-    if (elements.length !== 1) return false;
-    if (options?.runContentOnly && !RUN_CONTENT_ELEMENTS.has(elements[0].name ?? '')) return false;
-    return true;
+    const doc = new Parser().parseFromString(
+      `<epRoot ${declarations}>${xml}</epRoot>`,
+      'application/xml'
+    );
+    if (doc.getElementsByTagName('parsererror').length > 0) return false;
+    return (doc.documentElement?.children?.length ?? 0) === 1;
   } catch {
     return false;
   }
@@ -345,16 +368,23 @@ export function isWellFormedXmlElement(
  */
 export function elementToSelfContainedXml(element: XmlElement): string {
   const unbound = new Set<string>();
-  collectUnbound(element, new Set(), unbound);
+  const state = { truncated: false };
+  collectUnbound(element, new Set(), unbound, state);
 
-  const missing = [...unbound].filter((p) => p in OOXML_NAMESPACES);
+  // Past the depth bound the prefix set is incomplete, so declaring only what
+  // was found would leave a deeper one unbound and void the part. Declare the
+  // whole table instead; markup that deep using a prefix outside it is rejected
+  // by `isWellFormedXmlElement` before it can reach the package.
+  const missing = state.truncated
+    ? Object.keys(OOXML_NAMESPACE_URIS)
+    : [...unbound].filter((p) => p in OOXML_NAMESPACE_URIS);
   if (missing.length === 0) return elementToXml(element);
 
   const withDecls: XmlElement = {
     ...element,
     attributes: {
       ...(element.attributes ?? {}),
-      ...Object.fromEntries(missing.map((p) => [`xmlns:${p}`, OOXML_NAMESPACES[p]])),
+      ...Object.fromEntries(missing.map((p) => [`xmlns:${p}`, OOXML_NAMESPACE_URIS[p]])),
     },
   };
   return elementToXml(withDecls);

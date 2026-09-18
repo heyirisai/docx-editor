@@ -14,13 +14,17 @@
 /** Front page overlays (page borders) — paint above any document content. */
 export const PAGE_OVERLAY_Z = 2147483647;
 
-/** Clamp an OOXML relativeHeight into the document-content band. */
-export function contentZIndex(relativeHeight: number): number {
-  return Math.min(relativeHeight, PAGE_OVERLAY_Z - 1);
-}
-
 /** Base of the header/footer band, above every body relativeHeight. */
-const HF_FRONT_Z_BASE = 1_000_000_000;
+export const HF_FRONT_Z_BASE = 1_000_000_000;
+
+/**
+ * Clamp an OOXML relativeHeight into the document-content band. The ceiling is
+ * the HF band, not the overlay band: `relativeHeight` is unsigned 32-bit, so a
+ * body float authored above 1e9 would otherwise land on top of the header.
+ */
+export function contentZIndex(relativeHeight: number): number {
+  return Math.min(relativeHeight, HF_FRONT_Z_BASE - 1);
+}
 
 /**
  * Header/footer anchored objects live in their own OOXML story, so their

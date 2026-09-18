@@ -104,6 +104,7 @@ export interface DocumentBody {
     comments?: Comment_2[];
     content: BlockContent[];
     finalSectionProperties?: SectionProperties;
+    rootIgnorable?: string[];
     rootNamespaces?: Record<string, string>;
     sections?: Section[];
 }
@@ -193,6 +194,7 @@ export interface HeaderFooter {
     content: BlockContent[];
     hdrFtrType: HeaderFooterType;
     originalSnapshot?: string;
+    rootIgnorable?: string[];
     rootNamespaces?: Record<string, string>;
     // (undocumented)
     type: 'header' | 'footer';

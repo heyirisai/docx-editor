@@ -52,8 +52,11 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
     sections: baseDocument?.package.document.sections,
     comments: baseDocument?.package.document.comments,
     // Preserved fragments can use a prefix only the source root declared, so
-    // this has to survive the save that rebuilds the body from PM.
+    // both halves of the markup-compatibility contract have to survive the save
+    // that rebuilds the body from PM — the declaration AND the `mc:Ignorable`
+    // entry that makes an element in it skippable rather than an error.
     rootNamespaces: baseDocument?.package.document.rootNamespaces,
+    rootIgnorable: baseDocument?.package.document.rootIgnorable,
   };
 
   // If we have a base document, preserve its package structure

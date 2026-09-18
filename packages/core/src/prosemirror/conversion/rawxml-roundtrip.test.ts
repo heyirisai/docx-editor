@@ -9,6 +9,7 @@ import { DOMParser as PMDOMParser, DOMSerializer } from 'prosemirror-model';
 import { schema } from '../schema';
 import { toProseDoc } from './toProseDoc';
 import { fromProseDoc } from './fromProseDoc';
+import { serializeDocument } from '../../docx/serializer/documentSerializer';
 import type { Document, Paragraph, Run } from '../../types/document';
 
 beforeAll(() => GlobalRegistrator.register());
@@ -118,6 +119,18 @@ describe('rawXml through ProseMirror', () => {
       zz: 'urn:example:zz',
       a16: 'urn:example:a16',
     });
+  });
+
+  test('the source root mc:Ignorable survives the save too', () => {
+    // Declaring a prefix only says what it means; `mc:Ignorable` is what lets a
+    // consumer skip an element in it. Carrying one half without the other
+    // leaves preserved markup a consumer has to reject rather than ignore.
+    const before = docWith([{ type: 'rawXml', xml: GROUP_XML }]);
+    before.package.document.rootNamespaces = { a16: 'urn:example:a16' };
+    before.package.document.rootIgnorable = ['w14', 'a16'];
+    const after = fromProseDoc(toProseDoc(before), before);
+    expect(after.package.document.rootIgnorable).toEqual(['w14', 'a16']);
+    expect(serializeDocument(after)).toMatch(/mc:Ignorable="[^"]*\ba16\b/);
   });
 
   test('renderOnly survives the clipboard DOM round-trip', () => {

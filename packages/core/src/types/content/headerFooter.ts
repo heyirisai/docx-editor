@@ -48,6 +48,8 @@ export interface HeaderFooter {
   originalSnapshot?: string;
   /** `xmlns:` bindings from the part's original root, re-declared on save. */
   rootNamespaces?: Record<string, string>;
+  /** Prefixes the part's original root listed in `mc:Ignorable`. */
+  rootIgnorable?: string[];
 }
 
 /**

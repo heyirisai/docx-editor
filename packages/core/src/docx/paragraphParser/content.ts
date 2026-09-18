@@ -442,29 +442,28 @@ function parseSimpleField(
 // ============================================================================
 
 /**
- * Positions, in `w:fldChar` order within the paragraph, of the markers with no
- * partner — a paragraph-spanning field (the TOC wrapper) leaves its `begin`
- * here, and the paragraph holding the other end leaves that `end`. Only those
- * markers are passed through; fields nested inside them still get modelled.
+ * The `w:fldChar` markers with no partner — a paragraph-spanning field (the TOC
+ * wrapper) leaves its `begin` here, and the paragraph holding the other end
+ * leaves that `end`. Only those markers are passed through; fields nested
+ * inside them still get modelled.
+ *
+ * Keyed on the parsed item itself, not on a position shared with the walker:
+ * two independent traversals agreeing by index — one over raw `w:fldChar`
+ * elements, one over `parseRun` output — is a coupling that silently swallows
+ * the rest of the paragraph the day they drift apart.
  */
-function unpairedFieldCharPositions(children: XmlElement[]): Set<number> {
-  const unpaired = new Set<number>();
-  const openBegins: number[] = [];
-  let position = 0;
-  for (const child of children) {
-    if (getLocalName(child.name) !== 'r') continue;
-    for (const runChild of getChildElements(child)) {
-      if (getLocalName(runChild.name) !== 'fldChar') continue;
-      const kind = getAttribute(runChild, 'w', 'fldCharType');
-      // `parseFieldChar` treats ANY value that is not separate/end — including
-      // a missing attribute — as a begin. Mirror that, or the walker opens a
-      // field this scan never marked unpaired and swallows the paragraph.
-      if (kind !== 'separate' && kind !== 'end') openBegins.push(position);
-      else if (kind === 'end') {
-        if (openBegins.length === 0) unpaired.add(position);
+function unpairedFieldCharItems(runs: Iterable<Run>): Set<RunContent> {
+  const unpaired = new Set<RunContent>();
+  const openBegins: RunContent[] = [];
+  for (const run of runs) {
+    for (const item of run.content) {
+      if (item.type !== 'fieldChar') continue;
+      if (item.charType === 'end') {
+        if (openBegins.length === 0) unpaired.add(item);
         else openBegins.pop();
+      } else if (item.charType !== 'separate') {
+        openBegins.push(item);
       }
-      position++;
     }
   }
   for (const begin of openBegins) unpaired.add(begin);
@@ -499,21 +498,29 @@ export function parseParagraphContents(
   let complexFieldDirty = false;
   let complexFieldFormatting: Run['formatting'] | undefined;
 
+  // Parse every run once up front: the unpaired-marker scan below and the
+  // walker have to see the exact same items, and `parseRun` is the only thing
+  // that decides what a `w:fldChar` becomes.
+  const parsedRuns = new Map<XmlElement, Run>();
+  for (const child of children) {
+    if (getLocalName(child.name) !== 'r') continue;
+    const runElement =
+      trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
+    parsedRuns.set(child, parseRun(runElement, styles, theme, rels, media));
+  }
+
   // A field straddling a paragraph boundary cannot be modelled by this
   // per-paragraph walker, so its own markers ride through as run content (the
   // serializer re-emits them). Fields fully contained in this paragraph — the
   // PAGEREF in a TOC entry — are still modelled normally.
-  const unpairedFieldChars = unpairedFieldCharPositions(children);
-  let fieldCharPosition = 0;
+  const unpairedFieldChars = unpairedFieldCharItems(parsedRuns.values());
 
   for (const child of children) {
     const localName = getLocalName(child.name);
 
     switch (localName) {
       case 'r': {
-        const runElement =
-          trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
-        const run = parseRun(runElement, styles, theme, rels, media);
+        const run = parsedRuns.get(child)!;
 
         // Split at run-CONTENT granularity: Word packs entry text and a whole
         // field into one w:r, so treating the run as a unit loses its text.
@@ -547,10 +554,7 @@ export function parseParagraphContents(
           }
 
           if (item.type === 'fieldChar') {
-            const unpaired =
-              item.charType !== 'separate' && unpairedFieldChars.has(fieldCharPosition);
-            fieldCharPosition++;
-            if (unpaired) {
+            if (unpairedFieldChars.has(item)) {
               // Half of a paragraph-spanning field: pass it through untouched.
               buffer.push(item);
               continue;
@@ -585,6 +589,14 @@ export function parseParagraphContents(
 
           if (item.type === 'fieldChar' && item.charType === 'end') {
             flushBuffer();
+            // Never below zero: an `end` with nothing open would route every
+            // later run into `complexFieldCodeRuns`, which is only flushed by a
+            // matching `end` that will now never come — the rest of the
+            // paragraph would vanish. Pass the stray marker through instead.
+            if (complexFieldDepth === 0) {
+              buffer.push(item);
+              continue;
+            }
             complexFieldDepth--;
             if (complexFieldDepth > 0) {
               buffer.push(item);
@@ -811,6 +823,12 @@ export function parseParagraphContents(
         // Unknown element - skip
         break;
     }
+  }
+
+  // A `begin` the scan paired but whose `end` never arrived leaves runs stranded
+  // in the field buffers. Emit them rather than drop the tail of the paragraph.
+  if (complexFieldDepth > 0) {
+    contents.push(...complexFieldCodeRuns, ...complexFieldResultRuns);
   }
 
   return contents;
