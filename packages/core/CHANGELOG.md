@@ -1,5 +1,12 @@
 # @eigenpal/docx-editor-core
 
+## 1.13.1
+
+### Patch Changes
+
+- a172cce: Stop a save rewriting anchored text boxes. The paragraph hosting one is out of flow in Word and still occupies a line, so dropping it pulled everything below up and walked cover artwork off the bottom of the page. The shape's `wps:bodyPr` (including `spAutoFit`), an explicit "no outline" `a:ln`, and an inline content control's `w:sdtEndPr` now survive the round-trip instead of being rebuilt from a narrower model.
+- f886770: Fix automatic paragraph spacing (`w:beforeAutospacing`/`w:afterAutospacing`) being applied as 14 pixels instead of Word's 14 points, which made every such paragraph 25% short. On a cover page built from empty spacer paragraphs the error compounded and walked the artwork up the page.
+
 ## 1.13.0
 
 ### Minor Changes
