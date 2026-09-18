@@ -40,6 +40,7 @@ import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
 import {
   getChildElements,
+  elementToSelfContainedXml,
   getAttribute,
   parseNumericAttribute,
   findByFullName,
@@ -301,6 +302,19 @@ export function parseTextBox(drawingEl: XmlElement): TextBox | null {
   if (fill) textBox.fill = fill;
   if (outline) textBox.outline = outline;
   if (bodyProps.margins) textBox.margins = bodyProps.margins;
+  // `wps:bodyPr` carries a dozen attributes and an autofit child that the
+  // model has no field for; rebuilding it from margins alone dropped
+  // `<a:spAutoFit/>` and the overflow/wrap settings. Same for the `<a:ln>`
+  // that says "no outline" — it parses to no `outline`, so the default one
+  // came back in its place. See ShapeTextBody.bodyPrXml.
+  if (bodyPr) textBox.bodyPrXml = elementToSelfContainedXml(bodyPr);
+  if (spPr) {
+    const extras = getChildElements(spPr)
+      .filter((el) => el.name === 'a:ln' || el.name === 'a:effectLst')
+      .map((el) => elementToSelfContainedXml(el))
+      .join('');
+    if (extras) textBox.spPrExtraXml = extras;
+  }
 
   // Parse position for anchored text boxes
   if (isAnchor) {

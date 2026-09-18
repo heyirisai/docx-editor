@@ -205,7 +205,9 @@ function enrichParagraphTextBoxes(
       textBody: {
         content: textBox.content,
         margins: textBox.margins,
+        bodyPrXml: textBox.bodyPrXml,
       },
+      spPrExtraXml: textBox.spPrExtraXml,
     };
     if (textBox.id) shape.id = textBox.id;
 

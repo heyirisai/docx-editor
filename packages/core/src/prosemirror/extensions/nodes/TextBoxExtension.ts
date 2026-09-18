@@ -47,6 +47,9 @@ export interface TextBoxAttrs {
   anchorTarget?: 'followingBlock';
   /** `wp:anchor relativeHeight` — z-order among overlapping anchored objects */
   relativeHeight?: number;
+  /** Source `wps:bodyPr` and unmodelled `wps:spPr` children, replayed on save. */
+  bodyPrXml?: string;
+  spPrExtraXml?: string;
   /** Anchor position copied from wp:positionH/wp:positionV */
   position?: {
     horizontal?: { relativeTo?: string; posOffset?: number; align?: string };
@@ -94,6 +97,8 @@ export const TextBoxExtension = createNodeExtension({
       anchorTarget: { default: null },
       position: { default: null },
       relativeHeight: { default: null },
+      bodyPrXml: { default: null },
+      spPrExtraXml: { default: null },
       distTop: { default: null },
       distBottom: { default: null },
       distLeft: { default: null },
@@ -121,6 +126,8 @@ export const TextBoxExtension = createNodeExtension({
             displayMode: (el.dataset.displayMode as TextBoxAttrs['displayMode']) || undefined,
             cssFloat: (el.dataset.cssFloat as TextBoxAttrs['cssFloat']) || undefined,
             wrapType: el.dataset.wrapType || undefined,
+            bodyPrXml: el.dataset.bodyPrXml || undefined,
+            spPrExtraXml: el.dataset.spPrExtraXml || undefined,
             wrapText: (el.dataset.wrapText as TextBoxAttrs['wrapText']) || undefined,
             anchorTarget: (el.dataset.anchorTarget as TextBoxAttrs['anchorTarget']) || undefined,
             position: el.dataset.position ? JSON.parse(el.dataset.position) : undefined,
@@ -154,6 +161,8 @@ export const TextBoxExtension = createNodeExtension({
       if (attrs.displayMode) domAttrs['data-display-mode'] = attrs.displayMode;
       if (attrs.cssFloat) domAttrs['data-css-float'] = attrs.cssFloat;
       if (attrs.wrapType) domAttrs['data-wrap-type'] = attrs.wrapType;
+      if (attrs.bodyPrXml) domAttrs['data-body-pr-xml'] = attrs.bodyPrXml;
+      if (attrs.spPrExtraXml) domAttrs['data-sp-pr-extra-xml'] = attrs.spPrExtraXml;
       if (attrs.wrapText) domAttrs['data-wrap-text'] = attrs.wrapText;
       if (attrs.anchorTarget) domAttrs['data-anchor-target'] = attrs.anchorTarget;
       if (attrs.position) domAttrs['data-position'] = JSON.stringify(attrs.position);

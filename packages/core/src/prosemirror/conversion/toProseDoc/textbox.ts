@@ -115,6 +115,8 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
               outline: shape.outline,
               content: shape.textBody.content,
               margins: shape.textBody.margins,
+              bodyPrXml: shape.textBody.bodyPrXml,
+              spPrExtraXml: shape.spPrExtraXml,
             });
           }
         }
@@ -191,6 +193,8 @@ function convertTextBox(
       marginLeft,
       marginRight,
       hostParaId: hostParaId ?? null,
+      bodyPrXml: textBox.bodyPrXml ?? null,
+      spPrExtraXml: textBox.spPrExtraXml ?? null,
       ...textBoxAnchorAttrsFromDocx(textBox),
     },
     contentNodes

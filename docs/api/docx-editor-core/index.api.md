@@ -1752,6 +1752,7 @@ export interface Shape {
     relativeHeight?: number;
     shapeType: ShapeType;
     size: ImageSize;
+    spPrExtraXml?: string;
     textBody?: ShapeTextBody;
     transform?: ImageTransform;
     // (undocumented)
@@ -1902,6 +1903,7 @@ export interface TableSelectionSnapshot {
 
 // @public
 export interface TextBox {
+    bodyPrXml?: string;
     content: Paragraph[];
     fill?: ShapeFill;
     id?: string;
@@ -1915,6 +1917,7 @@ export interface TextBox {
     position?: ImagePosition;
     relativeHeight?: number;
     size: ImageSize;
+    spPrExtraXml?: string;
     // (undocumented)
     type: 'textBox';
     wrap?: ImageWrap;

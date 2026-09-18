@@ -41,6 +41,7 @@ import {
   parseNumericAttribute,
   findByFullName,
   findChildrenByLocalName,
+  elementToSelfContainedXml,
   type XmlElement,
 } from './xmlParser';
 import {
@@ -564,6 +565,16 @@ export function parseShape(node: XmlElement): Shape {
   if (transform) shape.transform = transform;
 
   // Parse text body if present
+  // `<a:ln>` / `<a:effectLst>` have no field on Shape, and an explicit
+  // "no outline" parses to no `outline` at all — so keep the source.
+  if (spPr) {
+    const extras = getChildElements(spPr)
+      .filter((el) => el.name === 'a:ln' || el.name === 'a:effectLst')
+      .map((el) => elementToSelfContainedXml(el))
+      .join('');
+    if (extras) shape.spPrExtraXml = extras;
+  }
+
   if (txbxContent || bodyPr) {
     const bodyProps = parseBodyProperties(bodyPr ?? null);
     const content = parseTextBoxContent(txbxContent);
@@ -573,6 +584,8 @@ export function parseShape(node: XmlElement): Shape {
         ...bodyProps,
         content,
       };
+      // See ShapeTextBody.bodyPrXml — the modelled fields are a subset.
+      if (bodyPr) shape.textBody.bodyPrXml = elementToSelfContainedXml(bodyPr);
     }
   }
 

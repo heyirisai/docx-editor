@@ -52,7 +52,9 @@ export function convertPMTextBoxRun(node: PMNode): Run {
         left: attrs.marginLeft != null ? pixelsToEmu(attrs.marginLeft) : undefined,
         right: attrs.marginRight != null ? pixelsToEmu(attrs.marginRight) : undefined,
       },
+      bodyPrXml: attrs.bodyPrXml ?? undefined,
     },
+    spPrExtraXml: attrs.spPrExtraXml ?? undefined,
   };
 
   const position = textBoxPositionFromAttrs(attrs);

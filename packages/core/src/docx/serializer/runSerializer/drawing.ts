@@ -19,6 +19,19 @@ import type {
 } from '../../../types/document';
 import { serializeParagraph } from '../paragraphSerializer';
 import { escapeXml, intAttr } from '../xmlUtils';
+import { isWellFormedXmlElement } from '../../xmlParser';
+
+/**
+ * Preserved source markup on its way back into the package — re-checked rather
+ * than trusted, like every other verbatim fragment: a malformed value here
+ * makes Word reject the whole part.
+ */
+function preservedXml(xml: string | undefined): string {
+  if (!xml) return '';
+  // `spPrExtraXml` can hold two siblings (`<a:ln>` and `<a:effectLst>`), so
+  // wrap before validating — the check wants exactly one root element.
+  return isWellFormedXmlElement(`<epPreserved>${xml}</epPreserved>`) ? xml : '';
+}
 
 /**
  * Auto-incrementing counter for generating unique image/shape IDs.
@@ -318,7 +331,11 @@ export function serializeShapeContent(content: ShapeContent): string {
     '</a:xfrm>',
     `<a:prstGeom prst="${shape.shapeType === 'textBox' ? 'rect' : shape.shapeType}"><a:avLst/></a:prstGeom>`,
     serializeFill(shape.fill),
-    serializeOutline(shape.outline),
+    // A model outline wins — the user may have set one through the UI. With
+    // nothing modelled, replay the source `<a:ln>`/`<a:effectLst>`: an explicit
+    // "no outline" parses to no outline at all, so rebuilding from the model
+    // alone put the DEFAULT outline back on the shape.
+    shape.outline ? serializeOutline(shape.outline) : preservedXml(shape.spPrExtraXml),
     '</wps:spPr>',
   ].join('');
 
@@ -336,15 +353,21 @@ export function serializeShapeContent(content: ShapeContent): string {
       if (tb.margins.bottom != null) bpAttrs.push(`bIns="${intAttr(tb.margins.bottom)}"`);
     }
 
+    // The source element carries a dozen attributes plus an autofit child and
+    // the model holds five of them, so replay it when we have it. Nothing in
+    // `bodyPr` depends on the shape's size or its text, so it stays correct
+    // across an edit. See ShapeTextBody.bodyPrXml.
+    const bodyPr = preservedXml(tb.bodyPrXml) || `<wps:bodyPr ${bpAttrs.join(' ')}/>`;
+
     if (isTextBox) {
       textBody = [
         '<wps:txbx><w:txbxContent>',
         serializeShapeTextBody(tb.content),
         '</w:txbxContent></wps:txbx>',
-        `<wps:bodyPr ${bpAttrs.join(' ')}/>`,
+        bodyPr,
       ].join('');
     } else {
-      textBody = [`<wps:bodyPr ${bpAttrs.join(' ')}/>`].join('');
+      textBody = bodyPr;
     }
   }
 
