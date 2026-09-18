@@ -101,6 +101,71 @@ describe('text box shape fidelity', () => {
     expect(xml).not.toContain('undefined');
   });
 
+  test('a model outline replaces the source line without taking the effects', () => {
+    const shape = shapeFrom(
+      parseTextBox(
+        drawing(
+          '<a:ln w="6350"><a:noFill/></a:ln><a:effectLst><a:outerShdw blurRad="50800"/></a:effectLst>'
+        )
+      )
+    );
+    shape.outline = { width: 12700, color: { rgb: 'FF0000' }, style: 'solid' };
+    const xml = saved(shape);
+
+    expect(xml).toContain('FF0000');
+    expect(xml.match(/<a:ln[\s>]/g)?.length).toBe(1);
+    // `a:effectLst` has nothing to do with the line — the shadow used to go
+    // with it the moment anything set an outline.
+    expect(xml).toContain('<a:outerShdw');
+  });
+
+  test('a margin edit wins over the source insets, and the rest of bodyPr stays', () => {
+    const shape = shapeFrom(parseTextBox(drawing()));
+    shape.textBody!.margins = { left: 91440, top: 45720, right: 91440, bottom: 45720 };
+    const xml = saved(shape);
+
+    // The source said lIns="0"; the model now says otherwise and is written.
+    expect(xml).toContain('lIns="91440"');
+    expect(xml).toContain('tIns="45720"');
+    expect(xml).not.toContain('lIns="0"');
+    // ...without losing the attributes and children the model has no field for.
+    expect(xml).toContain('compatLnSpc="1"');
+    expect(xml).toContain('<a:spAutoFit/>');
+  });
+
+  test('markup that is not a bodyPr is refused, however well-formed', () => {
+    const shape = shapeFrom(parseTextBox(drawing()));
+    shape.textBody!.bodyPrXml =
+      '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>';
+    shape.spPrExtraXml =
+      '<a:ln xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"/><w:drawing xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>';
+    const xml = saved(shape);
+
+    // One rogue sibling drops the fragment whole — the valid `a:ln` with it.
+    const spPr = xml.slice(xml.indexOf('<wps:spPr>'), xml.indexOf('</wps:spPr>'));
+    expect(spPr).not.toContain('<a:ln');
+    expect(spPr).not.toContain('<w:drawing');
+    // ...and the shape is still a shape, on the rebuilt bodyPr.
+    expect(xml).not.toContain('<w:p ');
+    expect(xml).toContain('<wps:bodyPr');
+  });
+
+  test.each([
+    ['top', 't'],
+    ['middle', 'ctr'],
+    ['bottom', 'b'],
+    ['distributed', 'dist'],
+    ['justified', 'just'],
+  ])('the %s anchor is written as the schema token %s', (modelValue, token) => {
+    const shape = shapeFrom(parseTextBox(drawing()));
+    shape.textBody!.anchor = modelValue as NonNullable<
+      import('../../types/document').ShapeTextBody['anchor']
+    >;
+    // The model names the positions; DrawingML spells them. Writing the model
+    // name into the attribute makes Word reject the shape.
+    expect(saved(shape)).toContain(`anchor="${token}"`);
+  });
+
   test('malformed preserved markup is dropped rather than written', () => {
     const shape = shapeFrom(parseTextBox(drawing()));
     shape.textBody!.bodyPrXml = '<wps:bodyPr unclosed';

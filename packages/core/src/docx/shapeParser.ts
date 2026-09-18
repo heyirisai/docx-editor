@@ -575,18 +575,16 @@ export function parseShape(node: XmlElement): Shape {
     if (extras) shape.spPrExtraXml = extras;
   }
 
+  // A `bodyPr` whose attributes are all unmodelled (wrapping, overflow, an
+  // autofit child) parses to no fields at all, so gating on the modelled ones
+  // dropped the element from an empty shape entirely.
   if (txbxContent || bodyPr) {
-    const bodyProps = parseBodyProperties(bodyPr ?? null);
-    const content = parseTextBoxContent(txbxContent);
-
-    if (content.length > 0 || Object.keys(bodyProps).length > 0) {
-      shape.textBody = {
-        ...bodyProps,
-        content,
-      };
-      // See ShapeTextBody.bodyPrXml — the modelled fields are a subset.
-      if (bodyPr) shape.textBody.bodyPrXml = elementToSelfContainedXml(bodyPr);
-    }
+    shape.textBody = {
+      ...parseBodyProperties(bodyPr ?? null),
+      content: parseTextBoxContent(txbxContent),
+    };
+    // See ShapeTextBody.bodyPrXml — the modelled fields are a subset.
+    if (bodyPr) shape.textBody.bodyPrXml = elementToSelfContainedXml(bodyPr);
   }
 
   return shape;

@@ -161,11 +161,13 @@ function convertTextBox(
     outlineStyle = textBox.outline.style || 'solid';
   }
 
-  // Convert margins from EMU to pixels
-  const marginTop = textBox.margins?.top != null ? emuToPixels(textBox.margins.top) : 4;
-  const marginBottom = textBox.margins?.bottom != null ? emuToPixels(textBox.margins.bottom) : 4;
-  const marginLeft = textBox.margins?.left != null ? emuToPixels(textBox.margins.left) : 7;
-  const marginRight = textBox.margins?.right != null ? emuToPixels(textBox.margins.right) : 7;
+  // Convert margins from EMU to pixels. An inset the source did not declare
+  // stays null so a save does not invent one — the painter and `toDOM` supply
+  // the visual default (DEFAULT_TEXTBOX_MARGINS).
+  const marginTop = textBox.margins?.top != null ? emuToPixels(textBox.margins.top) : null;
+  const marginBottom = textBox.margins?.bottom != null ? emuToPixels(textBox.margins.bottom) : null;
+  const marginLeft = textBox.margins?.left != null ? emuToPixels(textBox.margins.left) : null;
+  const marginRight = textBox.margins?.right != null ? emuToPixels(textBox.margins.right) : null;
 
   // Convert text box content (paragraphs) to PM nodes
   const contentNodes: PMNode[] = [];

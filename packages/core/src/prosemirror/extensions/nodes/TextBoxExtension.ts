@@ -6,6 +6,7 @@
  * Supports inline and floating positioning.
  */
 
+import { preservedBodyPrXml, preservedSpPrExtraXml } from '../../../docx/preservedShapeXml';
 import { createNodeExtension } from '../create';
 
 export interface TextBoxAttrs {
@@ -25,14 +26,14 @@ export interface TextBoxAttrs {
   outlineColor?: string;
   /** Outline style */
   outlineStyle?: string;
-  /** Internal margin top in pixels */
-  marginTop?: number;
-  /** Internal margin bottom in pixels */
-  marginBottom?: number;
-  /** Internal margin left in pixels */
-  marginLeft?: number;
-  /** Internal margin right in pixels */
-  marginRight?: number;
+  /** Internal margin top in pixels; null when the source declared no inset */
+  marginTop?: number | null;
+  /** Internal margin bottom in pixels; null when the source declared no inset */
+  marginBottom?: number | null;
+  /** Internal margin left in pixels; null when the source declared no inset */
+  marginLeft?: number | null;
+  /** Internal margin right in pixels; null when the source declared no inset */
+  marginRight?: number | null;
   /** Vertical text alignment */
   verticalAlign?: string;
   /** Display mode */
@@ -85,10 +86,12 @@ export const TextBoxExtension = createNodeExtension({
       outlineWidth: { default: null },
       outlineColor: { default: null },
       outlineStyle: { default: null },
-      marginTop: { default: 4 },
-      marginBottom: { default: 4 },
-      marginLeft: { default: 7 },
-      marginRight: { default: 7 },
+      // Null, not the CSS default: `wps:bodyPr` has its own inset defaults, so
+      // writing 4/7 back on a box whose source declared none would change it.
+      marginTop: { default: null },
+      marginBottom: { default: null },
+      marginLeft: { default: null },
+      marginRight: { default: null },
       verticalAlign: { default: null },
       displayMode: { default: 'inline' },
       cssFloat: { default: null },
@@ -126,8 +129,14 @@ export const TextBoxExtension = createNodeExtension({
             displayMode: (el.dataset.displayMode as TextBoxAttrs['displayMode']) || undefined,
             cssFloat: (el.dataset.cssFloat as TextBoxAttrs['cssFloat']) || undefined,
             wrapType: el.dataset.wrapType || undefined,
-            bodyPrXml: el.dataset.bodyPrXml || undefined,
-            spPrExtraXml: el.dataset.spPrExtraXml || undefined,
+            // Pasted markup reaches the serializer verbatim, so the element
+            // it claims to be is checked here, at the trust boundary.
+            bodyPrXml: preservedBodyPrXml(el.dataset.bodyPrXml, {
+              requireBoundPrefixes: true,
+            }),
+            spPrExtraXml: preservedSpPrExtraXml(el.dataset.spPrExtraXml, {
+              requireBoundPrefixes: true,
+            }),
             wrapText: (el.dataset.wrapText as TextBoxAttrs['wrapText']) || undefined,
             anchorTarget: (el.dataset.anchorTarget as TextBoxAttrs['anchorTarget']) || undefined,
             position: el.dataset.position ? JSON.parse(el.dataset.position) : undefined,
