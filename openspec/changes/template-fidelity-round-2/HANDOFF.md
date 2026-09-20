@@ -358,14 +358,14 @@ templates carry comments, so the rest of `conform/word/*.pdf` is sound.
   landing on the wrong page, `behindDoc="0"` bands covering headings — follows
   from that drift, not from a layout bug. (Verified: Word hides text under a
   `behindDoc="0"` shape exactly as we do.)
-- **SentinelOne's cover text box does not render** ("Project: / Client: /
-  Delivered On:"). The parser returns ZERO text boxes for that file even though
-  `isTextBoxDrawing` returns true for the drawing when called directly, so the
-  `w:drawing` never reaches `processDrawing` in `enrichParagraphTextBoxes`. The
-  file is a Google Docs export: the shape sits in `mc:AlternateContent` with
-  `mc:Choice Requires="wpg"` (despite containing no `wpg:wgp`) followed by an
-  `mc:Fallback` that also holds a `w:drawing`. Suspect the paragraph walk takes
-  the Fallback's drawing over the Choice's. Not yet fixed.
+- ~~**SentinelOne's cover text box does not render**~~ — FIXED, and the
+  diagnosis above was wrong. The parser does return the text box; it reaches
+  the DOM with the right text and geometry. It was being COVERED by the header's
+  full-bleed cover picture (8.1in x 10.9in, opaque white on the right), which
+  paints over the body because `.layout-page-header` is a later sibling of
+  `.layout-page-content`. See "Round 5" below. Reading `elementsFromPoint` was
+  what settled it: the span was the top hit-test target, because the thing
+  covering it is `pointer-events: none`.
 - **The Iris template's "Driving Success Together" heading** wraps into the
   33px channel beside the PROOF POINT box; Word puts it below. A faithful
   reproduction of that anchor geometry in Word wraps the same way we do, so
@@ -428,6 +428,54 @@ Two notes on the runner itself, both learned the hard way:
   asserting layout invariants without an oracle (no overlapping line boxes, no
   content outside the page box, page count stable across two layouts). Tier 3 =
   the Word/LibreOffice oracle already scripted in `scripts/conformance/`.
+
+---
+
+## Round 5 — the header/footer z-band, measured
+
+Two cover pages were missing their text: SentinelOne's "Project / Client /
+Delivered On" block and Hilb's "EMPLOYEE BENEFITS ... RFP FOR:". Both were in
+the DOM, correctly positioned, black on white, and invisible.
+
+The old rule was "an in-front header/footer float beats all body content",
+introduced from ONE measurement (a COMET divider page where Word's full-bleed
+header picture hides the footer rule and page number). That generalised from
+header-vs-footer to header-vs-body, and header-vs-body is the opposite.
+
+**The probe** (`scratchpad/zprobe/`, built with Python `zipfile` on a real
+template's `styles.xml`): a header picture, `behindDoc="0"`,
+`relativeHeight="9000000"`, over a plain body paragraph, a body text box with
+`relativeHeight="100"`, and footer text. Word's PDF export:
+
+| Object                               | vs the header picture |
+| ------------------------------------ | --------------------- |
+| body paragraph text                  | **above** it          |
+| body text box (`relativeHeight` 100) | **above** it          |
+| footer text                          | **below** it          |
+
+So `relativeHeight` orders objects only WITHIN a story, and the header/footer
+story as a whole paints below the body story. `behindDoc` orders an object
+against its own story's text. The bands in `layout-engine/zOrder.ts` now encode
+exactly that, bottom to top:
+
+    HF_BEHIND_Z (-1)  <  HF flow content (auto)  <  HF front floats
+                      <  BODY_CONTENT_Z (1e9)   <  PAGE_OVERLAY_Z
+
+`.layout-page-content` carries `BODY_CONTENT_Z`, which also makes it a stacking
+context — body floats use raw OOXML `relativeHeight` as a z-index and can no
+longer reach the header/footer band by being authored high. `HF_BEHIND_Z` is
+safe because `applyPageStyles` puts both `isolation: isolate` and the page
+background on `.layout-page`; move either and behind-doc objects fall behind
+the page.
+
+Verified after the change: SentinelOne and Hilb cover text visible and matching
+Word, COMET's divider page still hides its footer behind the artwork.
+
+### Note for whoever touches this next
+
+The lesson is the one the old comment already half-recorded: a z-order rule
+derived from one pair of stories does not transfer to another pair. Probe both
+directions before generalising.
 
 ---
 

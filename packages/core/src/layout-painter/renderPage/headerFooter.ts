@@ -32,7 +32,7 @@ import {
 } from '../renderImage';
 import { renderTextBoxFragment } from '../renderTextBox';
 import { emuToPixels } from '../../utils/units';
-import { headerFooterFrontZIndex } from '../../layout-engine/zOrder';
+import { headerFooterFrontZIndex, HF_BEHIND_Z } from '../../layout-engine/zOrder';
 import type { RenderContext, RenderPageOptions } from '../renderPage';
 import { setImageAssetSource } from '../imageAssets';
 
@@ -429,7 +429,7 @@ export function renderHeaderFooterContent(
           block.displayMode !== 'float'
             ? undefined
             : block.wrapType === 'behind'
-              ? -1
+              ? HF_BEHIND_Z
               : headerFooterFrontZIndex(block.relativeHeight ?? 1),
       };
       const fragEl = renderTextBoxFragment(
@@ -588,11 +588,17 @@ export function renderHeaderFooterContent(
     // the band keeps HF floats stacked against each other as authored.
     if (floatImg.run.wrapType !== 'behind') {
       el.style.zIndex = String(headerFooterFrontZIndex(floatImg.run.relativeHeight ?? 1));
+    } else {
+      // Behind the BODY's text too, not just the header's — the anchored HF
+      // text box above takes the same band. DOM order alone left a full-bleed
+      // cover picture (SentinelOne's, 8.1in x 10.9in and opaque white on the
+      // right) painting over the body text box that names the project.
+      el.style.zIndex = String(HF_BEHIND_Z);
     }
 
-    // `behindDoc` floats paint under the flow text, and floats are appended
-    // after it, so DOM order is what puts them behind (z-index cannot). Chain
-    // them off the last one so they keep document order among themselves.
+    // Behind-doc floats are inserted before the flow content and chained off
+    // the last one, so they keep document order among themselves (they all
+    // share one z-index, so DOM order is what separates them).
     if (floatImg.run.wrapType === 'behind') {
       containerEl.insertBefore(
         el,

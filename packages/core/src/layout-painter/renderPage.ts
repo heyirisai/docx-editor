@@ -66,6 +66,7 @@ import {
   type PageGeometry,
 } from './anchoredObjectPosition';
 import { renderFloatingImagesLayer } from './floatingImageLayer';
+import { BODY_CONTENT_Z } from '../layout-engine/zOrder';
 import {
   renderHeaderFooterContent,
   type HeaderFooterContent,
@@ -301,6 +302,13 @@ function applyContentAreaStyles(element: HTMLElement, page: Page): void {
   element.style.right = `${margins.right}px`;
   element.style.bottom = `${margins.bottom}px`;
   element.style.overflow = 'visible';
+  // The body story paints above the WHOLE header/footer story — measured in
+  // Word, a header picture with `behindDoc="0"` and a `relativeHeight` five
+  // orders of magnitude above the body's still paints under body text. See the
+  // band table in `layout-engine/zOrder.ts`. This also makes the content area
+  // its own stacking context, which keeps body floats (raw OOXML
+  // `relativeHeight` as z-index) from reaching the header/footer band.
+  element.style.zIndex = String(BODY_CONTENT_Z);
 }
 
 /**
