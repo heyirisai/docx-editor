@@ -10,12 +10,7 @@ import type {
   ParagraphMeasure,
   MeasuredLine,
   MeasuredLineSegment,
-  Run,
   TextRun,
-  TabRun,
-  ImageRun,
-  LineBreakRun,
-  FieldRun,
   ParagraphSpacing,
 } from '../../layout-engine/types';
 import {
@@ -28,7 +23,6 @@ import {
 } from './floatingZones';
 
 import { wrapsAroundText } from '../../docx/wrapTypes';
-import { formatWordDate } from '../../docx/dateFormat';
 
 import {
   measureTextWidth,
@@ -47,6 +41,18 @@ import {
   positionalTabStop,
 } from '../../prosemirror/utils/tabCalculator';
 import { getListMarkerInlineWidth } from './listMarkerWidth';
+import {
+  isTextRun,
+  isTabRun,
+  isImageRun,
+  isLineBreakRun,
+  isFieldRun,
+  isEmptyTextRun,
+  measureInlineWidthAfterTab,
+  findWordBreaks,
+  runToFontStyle,
+  fieldMeasurementText,
+} from './paragraphRunHelpers';
 
 // Default values - match OOXML spec defaults
 const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
@@ -120,26 +126,19 @@ interface LineState {
   /** Maximum inline image height in pixels (already in px, not points) */
   maxImageHeightPx: number;
   availableWidth: number;
+  /**
+   * The line's width with NO float narrowing — `bodyContentWidth`, or the
+   * first line's indented/marker-adjusted width. `availableWidth` is this
+   * minus whatever floats take at the line's Y, so the two differing is
+   * exactly "a float is narrowing this line".
+   */
+  baseWidth: number;
   /** Left offset from floating images (pixels from content left edge) */
   leftOffset: number;
   /** Right offset from floating images (pixels from content right edge) */
   rightOffset: number;
   /** Optional split segment zones from centered floating exclusions */
   segmentZones?: FloatingLineSegmentZone[];
-}
-
-/**
- * Extract FontStyle from a text run for measurement
- */
-function runToFontStyle(run: TextRun | TabRun): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
-    fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
-    bold: run.bold,
-    italic: run.italic,
-    letterSpacing: run.letterSpacing,
-    allCaps: run.allCaps,
-  };
 }
 
 /**
@@ -226,100 +225,6 @@ function calculateEmptyParagraphMetrics(
 }
 
 /**
- * Check if a run is a text run
- */
-function isTextRun(run: Run): run is TextRun {
-  return run.kind === 'text';
-}
-
-/**
- * Check if a run is a tab run
- */
-function isTabRun(run: Run): run is TabRun {
-  return run.kind === 'tab';
-}
-
-/**
- * Check if a run is an image run
- */
-function isImageRun(run: Run): run is ImageRun {
-  return run.kind === 'image';
-}
-
-/**
- * Check if a run is a line break run
- */
-function isLineBreakRun(run: Run): run is LineBreakRun {
-  return run.kind === 'lineBreak';
-}
-
-/**
- * Check if a run is a field run
- */
-function isFieldRun(run: Run): run is FieldRun {
-  return run.kind === 'field';
-}
-
-/**
- * Check if text run is empty (only whitespace or no text)
- */
-function isEmptyTextRun(run: TextRun): boolean {
-  return !run.text || run.text.replace(/\u00a0/g, ' ').trim().length === 0;
-}
-
-/**
- * Sum the inline pixel widths of runs after a tab, up to (but not including)
- * the next tab or line break. Measured per-run so widths reserved match what
- * the painter draws even when trailing runs use different fonts/sizes.
- */
-function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
-  let width = 0;
-  for (let i = tabIndex + 1; i < runs.length; i++) {
-    const next = runs[i];
-    if (isTabRun(next) || isLineBreakRun(next)) break;
-    if (isTextRun(next)) {
-      width += measureTextWidth(next.text || '', runToFontStyle(next));
-    } else if (isFieldRun(next)) {
-      const style: FontStyle = {
-        fontFamily: next.fontFamily ?? DEFAULT_FONT_FAMILY,
-        fontSize: next.fontSize ?? DEFAULT_FONT_SIZE,
-        bold: next.bold,
-        italic: next.italic,
-      };
-      width += measureTextWidth(fieldMeasurementText(next), style);
-    } else if (isImageRun(next)) {
-      // Floating / anchored images are positioned at the page level and
-      // contribute no inline width — counting them (e.g. a footer's decorative
-      // full-width wave images that trail the text) would massively inflate the
-      // reserved width. Mirrors the painter's measureFollowingContentWidth.
-      const isFloating = next.displayMode === 'float' || wrapsAroundText(next.wrapType);
-      if (!(next.position && isFloating)) {
-        width += next.width || 0;
-      }
-    }
-  }
-  return width;
-}
-
-/**
- * Find word break points in text
- * Returns array of indices where words end (after space/punctuation)
- */
-function findWordBreaks(text: string): number[] {
-  const breaks: number[] = [];
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    // Break after space or certain punctuation
-    if (char === ' ' || char === '-' || char === '\t') {
-      breaks.push(i + 1);
-    }
-  }
-
-  return breaks;
-}
-
-/**
  * When a float's wrap margins consume the entire content width (or more),
  * there is no horizontal strip beside it for body text. Word renders the
  * following lines at full content width instead of squeezing them into a
@@ -349,22 +254,6 @@ export function clampFloatingWrapMargins(
     return { leftMargin: 0, rightMargin: 0, fullWidthBlock: true };
   }
   return { leftMargin: lm, rightMargin: rm };
-}
-
-/**
- * The text a field run will actually paint. DATE/TIME are recomputed on open
- * and rendered through their `\@` picture, so measuring the value cached in
- * the file sizes the line for the wrong string — which is how a cover date
- * overflows its text box even after the painter was taught the picture.
- * Mirrors `renderFieldRun`.
- */
-function fieldMeasurementText(run: FieldRun): string {
-  if (run.fieldType === 'DATE' || run.fieldType === 'TIME') {
-    const now = new Date();
-    if (run.fieldFormat) return formatWordDate(now, run.fieldFormat);
-    return run.fieldType === 'DATE' ? now.toLocaleDateString() : now.toLocaleTimeString();
-  }
-  return run.fallback || '1';
 }
 
 /**
@@ -423,12 +312,15 @@ export function measureParagraph(
    * past them. Returns the px to skip; both `cumulativeHeight` and
    * `pendingFloatSkip` are bumped by that amount.
    */
-  const skipObstructingFloats = (lineHeight: number, lineMaxWidth: number): void => {
+  const skipObstructingFloats = (
+    lineHeight: number,
+    lineMaxWidth: number,
+    minWidth: number = MIN_WRAP_SEGMENT_WIDTH
+  ): void => {
     if (!floatingZones || floatingZones.length === 0) return;
     const absoluteY = paragraphYOffset + cumulativeHeight;
     const skip =
-      findClearLineY(absoluteY, lineHeight, floatingZones, lineMaxWidth, MIN_WRAP_SEGMENT_WIDTH) -
-      absoluteY;
+      findClearLineY(absoluteY, lineHeight, floatingZones, lineMaxWidth, minWidth) - absoluteY;
     if (skip > 0) {
       cumulativeHeight += skip;
       pendingFloatSkip += skip;
@@ -541,6 +433,7 @@ export function measureParagraph(
     maxFontMetrics: null,
     maxImageHeightPx: 0,
     availableWidth: firstLineWidth,
+    baseWidth: baseFirstLineWidth,
     leftOffset: firstLineFloatingMargins.leftMargin,
     rightOffset: firstLineFloatingMargins.rightMargin,
     segmentZones: firstLineFloatingMargins.segments,
@@ -707,10 +600,49 @@ export function measureParagraph(
       maxFontMetrics: null,
       maxImageHeightPx: 0,
       availableWidth: adjustedWidth,
+      baseWidth: bodyContentWidth,
       leftOffset: floatingMargins.leftMargin,
       rightOffset: floatingMargins.rightMargin,
       segmentZones: floatingMargins.segments,
     };
+  };
+
+  /**
+   * Push the CURRENT line down past the floats that are narrowing it, until it
+   * is wide enough for `neededWidth` (never past its own unobstructed width).
+   *
+   * Word never breaks a word to squeeze it into a float channel. Measured with
+   * a probe: a square-wrapped box leaving a 0.34in (~33px) channel pushes the
+   * whole following heading BELOW the box, while a 0.775in (~74px) channel —
+   * wide enough for the heading's first word — is used, with the rest of the
+   * line below. Without this, the Iris template's "Driving Success Together"
+   * was hard-broken into the 33px channel beside its PROOF POINT box and
+   * painted one or two characters per line, down the right edge of the page.
+   *
+   * The caller re-tests the width afterwards, so failing to find room is safe:
+   * the normal hard-break path still runs.
+   */
+  const dropLineBelowNarrowingFloats = (neededWidth: number): void => {
+    if (!floatingZones || floatingZones.length === 0) return;
+    const estimatedLineHeight = ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    skipObstructingFloats(
+      estimatedLineHeight,
+      currentLine.baseWidth,
+      Math.min(neededWidth, currentLine.baseWidth)
+    );
+    const margins = getFloatingMargins(
+      cumulativeHeight,
+      estimatedLineHeight,
+      floatingZones,
+      paragraphYOffset
+    );
+    currentLine.availableWidth = Math.max(
+      1,
+      getFloatingAvailableWidth(margins, currentLine.baseWidth)
+    );
+    currentLine.leftOffset = margins.leftMargin;
+    currentLine.rightOffset = margins.rightMargin;
+    currentLine.segmentZones = margins.segments;
   };
 
   /**
@@ -962,6 +894,25 @@ export function measureParagraph(
         // Extract word (includes trailing space if present)
         const word = text.slice(charIndex, nextBreak);
         const wordWidth = measureTextWidth(word, style);
+
+        // The word does not fit the line as it currently stands. Before
+        // hard-breaking it, check whether a FLOAT is the only reason: if the
+        // word would fit the line's unobstructed width, Word moves the line
+        // below the float rather than breaking the word (see
+        // `dropLineBelowNarrowingFloats`).
+        if (
+          wordWidth > currentLine.availableWidth + WIDTH_TOLERANCE &&
+          currentLine.availableWidth < currentLine.baseWidth - WIDTH_TOLERANCE &&
+          wordWidth <= currentLine.baseWidth + WIDTH_TOLERANCE
+        ) {
+          // Anything already on this line keeps the narrow slot it was laid
+          // out in; the word starts a fresh line, which is the one that drops.
+          if (currentLine.width > 0) {
+            startNewLine(runIndex, charIndex);
+            updateMaxFont(style);
+          }
+          dropLineBelowNarrowingFloats(wordWidth);
+        }
 
         // If the word itself is longer than a line, hard-break by characters.
         // Use substring measurement (not char-by-char accumulation) to preserve
