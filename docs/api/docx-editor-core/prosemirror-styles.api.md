@@ -12,6 +12,7 @@ export const DEFAULT_NEW_TABLE_LOOK: TableLook;
 
 // @public
 export interface ResolvedParagraphStyle {
+    ownRunFormatting?: TextFormatting;
     paragraphFormatting?: ParagraphFormatting;
     runFormatting?: TextFormatting;
 }

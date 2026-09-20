@@ -76,6 +76,8 @@ export interface CellMargins {
 // @public
 export interface ColorValue {
     auto?: boolean;
+    lumMod?: number;
+    lumOff?: number;
     rgb?: string;
     themeColor?: ThemeColorSlot;
     themeShade?: string;
@@ -409,6 +411,7 @@ interface Image_2 {
     allowOverlap?: boolean;
     alt?: string;
     assetId?: string;
+    cornerAdj?: number;
     crop?: ImageCrop;
     decorative?: boolean;
     effects?: {
@@ -417,6 +420,7 @@ interface Image_2 {
         saturation?: number;
     };
     filename?: string;
+    geometry?: 'ellipse' | 'roundRect';
     hlinkHref?: string;
     id?: string;
     layoutInCell?: boolean;
@@ -957,9 +961,12 @@ export interface ShadingProperties {
 
 // @public
 export interface Shape {
+    cornerAdj?: number;
     customGeometry?: string;
     fill?: ShapeFill;
+    geometry?: 'ellipse' | 'roundRect';
     id?: string;
+    lineShape?: 'down' | 'up';
     name?: string;
     outline?: ShapeOutline;
     position?: ImagePosition;
@@ -974,6 +981,9 @@ export interface Shape {
     type: 'shape';
     wrap?: ImageWrap;
 }
+
+// @public
+export type ShapeBlockContent = Paragraph | Table;
 
 // @public
 export interface ShapeContent {
@@ -1022,7 +1032,7 @@ export interface ShapeTextBody {
     anchorCenter?: boolean;
     autoFit?: 'none' | 'normal' | 'shape';
     bodyPrXml?: string;
-    content: Paragraph[];
+    content: ShapeBlockContent[];
     margins?: {
         top?: number;
         bottom?: number;
@@ -1110,6 +1120,7 @@ export interface SymbolContent {
 
 // @public
 export interface TabContent {
+    ptab?: PositionalTab;
     // (undocumented)
     type: 'tab';
 }
@@ -1145,7 +1156,7 @@ export interface TableBorders {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;
@@ -1281,9 +1292,12 @@ export type TabStopAlignment = 'left' | 'center' | 'right' | 'decimal' | 'bar' |
 // @public
 export interface TextBox {
     bodyPrXml?: string;
-    content: Paragraph[];
+    content: ShapeBlockContent[];
+    cornerAdj?: number;
     fill?: ShapeFill;
+    geometry?: 'ellipse' | 'roundRect';
     id?: string;
+    lineShape?: 'down' | 'up';
     margins?: {
         top?: number;
         bottom?: number;

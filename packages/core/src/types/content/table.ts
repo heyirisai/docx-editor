@@ -3,7 +3,7 @@
  */
 
 import type { TableFormatting, TableRowFormatting, TableCellFormatting } from '../formatting';
-import type { Paragraph } from './paragraph';
+import type { BlockContent } from './section';
 import type {
   TablePropertyChange,
   TableRowPropertyChange,
@@ -12,10 +12,10 @@ import type {
 } from './trackedChange';
 
 /**
- * Table cell (`w:tc`). Holds nested block content (paragraphs and nested
- * tables), cell-level formatting (borders, shading, vertical merge),
- * tracked property changes, and tracked structural changes for cell
- * insert/delete/merge operations.
+ * Table cell (`w:tc`). Holds nested block content (paragraphs, nested
+ * tables and content controls), cell-level formatting (borders, shading,
+ * vertical merge), tracked property changes, and tracked structural changes
+ * for cell insert/delete/merge operations.
  */
 export interface TableCell {
   type: 'tableCell';
@@ -25,8 +25,12 @@ export interface TableCell {
   propertyChanges?: TableCellPropertyChange[];
   /** Tracked structural changes (cell insert/delete/merge) */
   structuralChange?: TableStructuralChangeInfo;
-  /** Cell content (paragraphs, tables, etc.) */
-  content: (Paragraph | Table)[];
+  /**
+   * Cell content. `CT_Tc` takes the same `EG_BlockLevelElts` the body does,
+   * so a cell can hold paragraphs, nested tables and block-level content
+   * controls (`w:sdt`).
+   */
+  content: BlockContent[];
 }
 
 /**

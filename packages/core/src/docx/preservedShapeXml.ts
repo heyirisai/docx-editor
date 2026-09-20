@@ -52,6 +52,32 @@ const LINE_CHILDREN = new Set([
   'a:extLst',
 ]);
 
+/**
+ * `EG_FillProperties` — the fill choice inside `wps:spPr`, mapped to the
+ * children each one allows.
+ *
+ * The model only expresses "none" and a flat solid colour, so rebuilding the
+ * fill from it alone destroyed everything else: a `a:gradFill` cover banner
+ * came back with no fill at all after one save, and the NEXT save then wrote
+ * `<a:noFill/>` over it. Keeping the source element is what makes gradients,
+ * pattern and picture fills survive a round trip.
+ */
+const FILL_CHILDREN: Record<string, Set<string>> = {
+  'a:noFill': new Set(),
+  'a:grpFill': new Set(),
+  'a:solidFill': new Set([
+    'a:scrgbClr',
+    'a:srgbClr',
+    'a:hslClr',
+    'a:sysClr',
+    'a:schemeClr',
+    'a:prstClr',
+  ]),
+  'a:gradFill': new Set(['a:gsLst', 'a:lin', 'a:path', 'a:tileRect']),
+  'a:pattFill': new Set(['a:fgClr', 'a:bgClr']),
+  'a:blipFill': new Set(['a:blip', 'a:srcRect', 'a:tile', 'a:stretch']),
+};
+
 /** `a:effectLst` children — CT_EffectList. */
 const EFFECT_CHILDREN = new Set([
   'a:blur',
@@ -63,6 +89,12 @@ const EFFECT_CHILDREN = new Set([
   'a:reflection',
   'a:softEdge',
 ]);
+
+/**
+ * The `wps:spPr` children captured from a source part and replayed on save.
+ * Keep this in step with {@link preservedSpPrExtra}, which validates them.
+ */
+export const SPPR_PRESERVED = new Set([...Object.keys(FILL_CHILDREN), 'a:ln', 'a:effectLst']);
 
 export interface PreservedXmlOptions {
   /** Attributes to write over the source element's own. */
@@ -156,13 +188,16 @@ export function preservedBodyPrXml(
 export function preservedSpPrExtra(
   xml: string | null | undefined,
   options: PreservedXmlOptions = {}
-): { ln?: string; effectLst?: string } {
+): { fill?: string; ln?: string; effectLst?: string } {
   const els = topLevelElements(xml, options);
   if (!els) return {};
 
-  const out: { ln?: string; effectLst?: string } = {};
+  const out: { fill?: string; ln?: string; effectLst?: string } = {};
   for (const el of els) {
-    if (el.name === 'a:ln' && !out.ln && childrenAllowed(el, LINE_CHILDREN)) {
+    const fillChildren = FILL_CHILDREN[el.name ?? ''];
+    if (fillChildren && !out.fill && childrenAllowed(el, fillChildren)) {
+      out.fill = elementToXml(el);
+    } else if (el.name === 'a:ln' && !out.ln && childrenAllowed(el, LINE_CHILDREN)) {
       out.ln = elementToXml(el);
     } else if (
       el.name === 'a:effectLst' &&
@@ -177,12 +212,15 @@ export function preservedSpPrExtra(
   return out;
 }
 
-/** {@link preservedSpPrExtra} back as one string, in schema order. */
+/**
+ * {@link preservedSpPrExtra} back as one string, in schema order —
+ * `EG_FillProperties`, then `a:ln`, then the effects (CT_ShapeProperties).
+ */
 export function preservedSpPrExtraXml(
   xml: string | null | undefined,
   options: PreservedXmlOptions = {}
 ): string | undefined {
-  const { ln, effectLst } = preservedSpPrExtra(xml, options);
-  const joined = `${ln ?? ''}${effectLst ?? ''}`;
+  const { fill, ln, effectLst } = preservedSpPrExtra(xml, options);
+  const joined = `${fill ?? ''}${ln ?? ''}${effectLst ?? ''}`;
   return joined.length > 0 ? joined : undefined;
 }

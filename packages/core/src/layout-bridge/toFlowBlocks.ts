@@ -384,16 +384,24 @@ function convertTableCell(
   tableCellMargins?: { top?: number; bottom?: number; left?: number; right?: number }
 ): TableCell {
   const blocks: FlowBlock[] = [];
-  let offset = startPos + 1; // +1 for opening tag
 
-  node.forEach((child) => {
-    if (child.type.name === 'paragraph') {
-      blocks.push(convertParagraph(child, offset, options));
-    } else if (child.type.name === 'table') {
-      blocks.push(convertTable(child, offset, options));
-    }
-    offset += child.nodeSize;
-  });
+  // A block content control inside a cell is a transparent container for
+  // layout — its children lay out as ordinary cell blocks, exactly as the
+  // body path flattens `blockSdt` in `processNode`.
+  const collect = (parent: PMNode, parentOffset: number): void => {
+    let at = parentOffset;
+    parent.forEach((child) => {
+      if (child.type.name === 'paragraph') {
+        blocks.push(convertParagraph(child, at, options));
+      } else if (child.type.name === 'table') {
+        blocks.push(convertTable(child, at, options));
+      } else if (child.type.name === 'blockSdt') {
+        collect(child, at + 1);
+      }
+      at += child.nodeSize;
+    });
+  };
+  collect(node, startPos + 1); // +1 to enter the cell node
 
   const attrs = node.attrs;
   const widthValue = attrs.width as number | undefined;

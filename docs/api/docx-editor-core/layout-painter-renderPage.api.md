@@ -91,6 +91,7 @@ export interface FloatingImagePaintRecord {
     alt?: string;
     // (undocumented)
     assetId?: string;
+    cornerAdj?: number;
     // (undocumented)
     cropBottom?: number;
     // (undocumented)
@@ -98,6 +99,7 @@ export interface FloatingImagePaintRecord {
     // (undocumented)
     cropRight?: number;
     cropTop?: number;
+    geometry?: 'ellipse' | 'roundRect';
     // (undocumented)
     height: number;
     opacity?: number;
@@ -128,7 +130,7 @@ export interface FloatingImagesLayerOptions {
     // (undocumented)
     layerClass: string;
     layerMode: 'front' | 'behind';
-    sizing: 'inset0' | 'fullSize';
+    sizing: 'inset0' | 'origin';
 }
 
 // @public

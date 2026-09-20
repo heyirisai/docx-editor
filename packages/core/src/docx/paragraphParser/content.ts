@@ -81,6 +81,20 @@ function extractMathText(el: XmlElement): string {
 // ============================================================================
 
 /**
+ * True when `run` is the carrier for a `w:commentReference` whose range this
+ * paragraph already closed — the one the serializer re-emits from the
+ * `commentRangeEnd` marker, so keeping it too would duplicate it.
+ */
+function closesSeenCommentRange(run: XmlElement, endedCommentIds: Set<number>): boolean {
+  for (const child of getChildElements(run)) {
+    if (getLocalName(child.name ?? '') !== 'commentReference') continue;
+    const id = Number.parseInt(getAttribute(child, 'w', 'id') ?? '', 10);
+    if (Number.isFinite(id) && endedCommentIds.has(id)) return true;
+  }
+  return false;
+}
+
+/**
  * Get the local name of an element (without namespace prefix)
  */
 function getLocalName(name: string | undefined): string {
@@ -514,6 +528,8 @@ export function parseParagraphContents(
   // serializer re-emits them). Fields fully contained in this paragraph — the
   // PAGEREF in a TOC entry — are still modelled normally.
   const unpairedFieldChars = unpairedFieldCharItems(parsedRuns.values());
+  /** Comment ids whose `w:commentRangeEnd` we have already emitted here. */
+  const endedCommentIds = new Set<number>();
 
   for (const child of children) {
     const localName = getLocalName(child.name);
@@ -521,6 +537,19 @@ export function parseParagraphContents(
     switch (localName) {
       case 'r': {
         const run = parsedRuns.get(child)!;
+
+        // The run that carries `<w:commentReference>` holds nothing else, and
+        // the serializer emits one itself right after the matching
+        // `commentRangeEnd` (§17.13.4.5 puts it there). Keeping the source's
+        // carrier as an ordinary empty run meant every save wrote BOTH — so a
+        // commented document grew one junk empty run per comment per save.
+        //
+        // Only drop it when this paragraph really did close that comment's
+        // range: a reference with no `commentRangeEnd` is the document's ONLY
+        // anchor for the comment, and dropping that would unanchor it.
+        if (run.content.length === 0 && closesSeenCommentRange(child, endedCommentIds)) {
+          break;
+        }
 
         // Split at run-CONTENT granularity: Word packs entry text and a whole
         // field into one w:r, so treating the run as a unit loses its text.
@@ -807,6 +836,7 @@ export function parseParagraphContents(
       case 'commentRangeEnd': {
         const commentId = parseInt(getAttribute(child, 'w', 'id') ?? '0', 10);
         contents.push({ type: 'commentRangeEnd', id: commentId });
+        endedCommentIds.add(commentId);
         break;
       }
 

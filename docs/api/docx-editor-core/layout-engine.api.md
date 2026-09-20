@@ -99,8 +99,8 @@ export function createPaginator(options: PaginatorOptions): {
     getContentHeight: () => number;
     getContentWidth: () => number;
     fits: (height: number) => boolean;
-    ensureFits: (height: number) => PageState;
-    addFragment: (fragment: Fragment, height: number, spaceBefore?: number, spaceAfter?: number) => {
+    ensureFits: (height: number, hasVisibleContent?: boolean) => PageState;
+    addFragment: (fragment: Fragment, height: number, spaceBefore?: number, spaceAfter?: number, hasVisibleContent?: boolean) => {
         state: PageState;
         x: number;
         y: number;
@@ -113,7 +113,8 @@ export function createPaginator(options: PaginatorOptions): {
     updatePageLayout: (newPageSize?: {
         w: number;
         h: number;
-    }, newMargins?: PageMargins, applyImmediately?: boolean, newSectionIndex?: number) => void;
+    }, newMargins?: PageMargins, applyImmediately?: boolean, newSectionIndex?: number, newFirstPageMargins?: PageMargins) => void;
+    restampSectionFirstPage: (state: PageState, isFirst: boolean) => void;
 };
 
 // @public
@@ -260,6 +261,8 @@ export type ImageBlock = {
     cropBottom?: number;
     cropLeft?: number;
     opacity?: number;
+    geometry?: 'ellipse' | 'roundRect';
+    cornerAdj?: number;
     renderOnly?: boolean;
     anchor?: {
         isAnchored?: boolean;
@@ -312,6 +315,8 @@ export type ImageRun = {
     cropBottom?: number;
     cropLeft?: number;
     opacity?: number;
+    geometry?: 'ellipse' | 'roundRect';
+    cornerAdj?: number;
     isInsertion?: boolean;
     isDeletion?: boolean;
     changeAuthor?: string;
@@ -394,6 +399,8 @@ export type LayoutOptions = {
         h: number;
     };
     finalMargins?: PageMargins;
+    firstPageMargins?: PageMargins;
+    finalFirstPageMargins?: PageMargins;
     columns?: ColumnLayout;
     pageGap?: number;
     defaultLineHeight?: number;
@@ -518,6 +525,7 @@ export type PaginatorOptions = {
         h: number;
     };
     margins: PageMargins;
+    firstPageMargins?: PageMargins;
     sectionIndex?: number;
     columns?: ColumnLayout;
     footnoteReservedHeights?: Map<number, number>;
@@ -695,6 +703,7 @@ export type SectionBreakBlock = {
     };
     orientation?: 'portrait' | 'landscape';
     margins?: PageMargins;
+    firstPageMargins?: PageMargins;
     columns?: ColumnLayout;
 };
 
@@ -710,6 +719,7 @@ export type SectionLayoutConfig = {
         h: number;
     };
     margins: PageMargins;
+    firstPageMargins?: PageMargins;
     columns?: ColumnLayout;
 };
 
@@ -833,6 +843,7 @@ export type TableRowMeasure = {
 // @public
 export type TabRun = RunFormatting & {
     kind: 'tab';
+    ptab?: PositionalTab;
     width?: number;
     pmStart?: number;
     pmEnd?: number;
@@ -862,7 +873,7 @@ export type TextBoxBlock = {
         left: number;
         right: number;
     };
-    content: ParagraphBlock[];
+    content: Array<ParagraphBlock | TableBlock>;
     displayMode?: 'inline' | 'float' | 'block';
     cssFloat?: 'left' | 'right' | 'none';
     wrapType?: string;
@@ -875,6 +886,9 @@ export type TextBoxBlock = {
     distLeft?: number;
     distRight?: number;
     renderOnly?: boolean;
+    lineShape?: 'down' | 'up';
+    geometry?: 'ellipse' | 'roundRect';
+    cornerAdj?: number;
     pmStart?: number;
     pmEnd?: number;
 };
@@ -895,7 +909,7 @@ export type TextBoxMeasure = {
     kind: 'textBox';
     width: number;
     height: number;
-    innerMeasures: ParagraphMeasure[];
+    innerMeasures: Array<ParagraphMeasure | TableMeasure>;
 };
 
 // @public

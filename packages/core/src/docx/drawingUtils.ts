@@ -11,6 +11,7 @@ import type {
   ShapeFill,
   ShapeOutline,
   ColorValue,
+  ThemeColorSlot,
 } from '../types/document';
 import {
   getChildElements,
@@ -47,6 +48,56 @@ const SCHEME_TO_THEME_COLOR: Record<string, ColorValue['themeColor']> = {
   hlink: 'hlink',
   folHlink: 'folHlink',
 };
+
+/**
+ * The inverse of {@link SCHEME_TO_THEME_COLOR}: a model slot back to a legal
+ * DrawingML `ST_SchemeColorVal` (§20.1.10.54).
+ *
+ * The two vocabularies are NOT the same. WordprocessingML's `ST_ThemeColor`
+ * says `text1`/`background1`; DrawingML's `a:schemeClr/@val` says `tx1`/`bg1`
+ * and has no `text1` at all. Writing the model name straight into
+ * `a:schemeClr` produced markup Word rejects, and our own parser then read the
+ * unknown value, fell back to `dk1`, and silently repainted the shape on the
+ * next save — ideagen's black cover panel drifted `tx1` → `text1` → `dk1`.
+ */
+const THEME_COLOR_TO_SCHEME: Record<ThemeColorSlot, string> = {
+  accent1: 'accent1',
+  accent2: 'accent2',
+  accent3: 'accent3',
+  accent4: 'accent4',
+  accent5: 'accent5',
+  accent6: 'accent6',
+  dk1: 'dk1',
+  lt1: 'lt1',
+  dk2: 'dk2',
+  lt2: 'lt2',
+  text1: 'tx1',
+  text2: 'tx2',
+  background1: 'bg1',
+  background2: 'bg2',
+  hlink: 'hlink',
+  folHlink: 'folHlink',
+};
+
+/**
+ * A model theme slot as DrawingML spells it. Unknown input keeps its own
+ * spelling rather than inventing a colour.
+ */
+export function themeColorToSchemeClr(slot: ThemeColorSlot): string {
+  return THEME_COLOR_TO_SCHEME[slot] ?? slot;
+}
+
+/**
+ * Undo {@link applyColorModifiers}' hex conversion: a `themeTint`/`themeShade`
+ * is stored as WordprocessingML does it (0–255, hex), but `a:tint`/`a:shade`
+ * take percent in 1000ths (§20.1.2.3.34). Writing the hex digits back as the
+ * DrawingML value turned a 60% tint into 0.00096%.
+ */
+export function hexModifierToDrawingPercent(hex: string): number | undefined {
+  const n = Number.parseInt(hex, 16);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.round((Math.min(255, Math.max(0, n)) / 255) * 100000);
+}
 
 /**
  * Common preset color names to RGB hex values.

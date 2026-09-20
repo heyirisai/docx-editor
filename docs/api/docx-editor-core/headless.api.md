@@ -752,6 +752,7 @@ interface Image_2 {
     allowOverlap?: boolean;
     alt?: string;
     assetId?: string;
+    cornerAdj?: number;
     crop?: ImageCrop;
     decorative?: boolean;
     effects?: {
@@ -760,6 +761,7 @@ interface Image_2 {
         saturation?: number;
     };
     filename?: string;
+    geometry?: 'ellipse' | 'roundRect';
     hlinkHref?: string;
     id?: string;
     layoutInCell?: boolean;
@@ -1615,7 +1617,7 @@ export interface Table {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: BlockContent[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;

@@ -31,10 +31,11 @@ import type {
   CellMargins,
   FloatingTableProperties,
   ShadingProperties,
-  Paragraph,
+  BlockContent,
 } from '../../types/document';
 
 import { serializeParagraph } from './paragraphSerializer';
+import { serializeBlockSdt } from './sdtSerializer';
 import { serializeConditionalFormatStyle } from './conditionalFormatSerializer';
 import { escapeXml, intAttr } from './xmlUtils';
 import { serializeBorder } from './borderSerializer';
@@ -658,15 +659,11 @@ function serializeTableCellPropertyChange(change: TableCellPropertyChange): stri
 /**
  * Serialize cell content (paragraphs, nested tables)
  */
-function serializeCellContent(content: (Paragraph | Table)[]): string {
+function serializeCellContent(content: BlockContent[]): string {
   const parts: string[] = [];
 
   for (const item of content) {
-    if (item.type === 'paragraph') {
-      parts.push(serializeParagraph(item));
-    } else if (item.type === 'table') {
-      parts.push(serializeTable(item));
-    }
+    parts.push(serializeCellBlock(item));
   }
 
   // Ensure at least one empty paragraph (Word requires this)
@@ -675,6 +672,16 @@ function serializeCellContent(content: (Paragraph | Table)[]): string {
   }
 
   return parts.join('');
+}
+
+/**
+ * One block inside a cell. Split out so `serializeBlockSdt` can recurse
+ * through it — a cell content control nests the same block set.
+ */
+function serializeCellBlock(item: BlockContent): string {
+  if (item.type === 'paragraph') return serializeParagraph(item);
+  if (item.type === 'table') return serializeTable(item);
+  return serializeBlockSdt(item, serializeCellBlock);
 }
 
 // ============================================================================

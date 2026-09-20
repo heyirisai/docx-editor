@@ -51,6 +51,7 @@ export { CaretPosition_2 as CaretPosition }
 export function clampFloatingWrapMargins(leftMargin: number, rightMargin: number, contentWidth: number): {
     leftMargin: number;
     rightMargin: number;
+    fullWidthBlock?: boolean;
 };
 
 // @public
@@ -231,7 +232,10 @@ export interface ExtendMarginsForHeaderFooterInput {
 // @public (undocumented)
 export interface ExtendMarginsForHeaderFooterResult {
     // (undocumented)
+    finalFirstPageMargins?: PageMargins;
+    // (undocumented)
     finalMargins: PageMargins;
+    firstPageMargins?: PageMargins;
     // (undocumented)
     margins: PageMargins;
 }
@@ -520,13 +524,16 @@ export function measureParagraphs(blocks: ParagraphBlock[], maxWidth: number): P
 export function measureRun(text: string, style: FontStyle): RunMeasurement;
 
 // @public
-export function measureTableBlock(tableBlock: TableBlock, contentWidth: number, measureBlock: (block: FlowBlock, contentWidth: number) => Measure): TableMeasure;
+export function measureTableBlock(tableBlock: TableBlock, contentWidth: number, measureBlock: (block: FlowBlock, contentWidth: number) => Measure, measureCellBlocks?: (blocks: FlowBlock[], contentWidth: number) => Measure[]): TableMeasure;
 
 // @public
 export function measureTableCellBlockVisualHeight(block: FlowBlock, blockMeasure: Measure): number;
 
 // @public
 export function measureText(text: string, style: FontStyle): TextMeasurement;
+
+// @public
+export function measureTextBoxBlock(block: TextBoxBlock, measureBlock: (inner: TextBoxBlock['content'][number], width: number) => Measure): TextBoxMeasure;
 
 // @public
 export function measureTextWidth(text: string, style: FontStyle): number;

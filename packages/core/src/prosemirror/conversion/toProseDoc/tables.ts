@@ -20,6 +20,7 @@ import type {
   TableLook,
   TextFormatting,
   Theme,
+  BlockContent,
 } from '../../../types/document';
 import type { TableAttrs, TableRowAttrs, TableCellAttrs } from '../../schema/nodes';
 import { resolveColorToHex, resolveShadingBackgroundHex } from '../../../utils/colorResolver';
@@ -28,6 +29,7 @@ import type { StyleResolver } from '../../styles';
 import { resolveTextFormatting } from './marks';
 import { convertParagraph } from './paragraph';
 import { registerTableConverter } from '../tableConverterRegistry';
+import { sdtPropsToAttrs } from '../sdtAttrs';
 
 /**
  * Resolve table style conditional formatting
@@ -789,16 +791,32 @@ function convertTableCell(
     attrs.tcPrChange = cell.propertyChanges;
   }
 
-  // Convert cell content (paragraphs and nested tables)
-  const contentNodes: PMNode[] = [];
-  for (const content of cell.content) {
-    if (content.type === 'paragraph') {
-      contentNodes.push(convertParagraph(content, styleResolver, undefined, conditionalStyle?.rPr));
-    } else if (content.type === 'table') {
-      // Nested tables - recursively convert
-      contentNodes.push(convertTable(content, styleResolver));
+  // Convert cell content (paragraphs, nested tables and content controls)
+  const convertCellBlocks = (blocks: BlockContent[]): PMNode[] => {
+    const nodes: PMNode[] = [];
+    for (const content of blocks) {
+      if (content.type === 'paragraph') {
+        nodes.push(convertParagraph(content, styleResolver, undefined, conditionalStyle?.rPr));
+      } else if (content.type === 'table') {
+        // Nested tables - recursively convert
+        nodes.push(convertTable(content, styleResolver));
+      } else {
+        // A block `w:sdt` inside the cell. `blockSdt` requires at least one
+        // child, so an empty control gets the same empty paragraph the cell
+        // itself would.
+        const inner = convertCellBlocks(content.content);
+        nodes.push(
+          schema.node(
+            'blockSdt',
+            sdtPropsToAttrs(content.properties),
+            inner.length > 0 ? inner : [schema.node('paragraph', {}, [])]
+          )
+        );
+      }
     }
-  }
+    return nodes;
+  };
+  const contentNodes: PMNode[] = convertCellBlocks(cell.content);
 
   // Ensure cell has at least one paragraph
   if (contentNodes.length === 0) {

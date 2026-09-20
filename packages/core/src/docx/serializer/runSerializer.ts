@@ -172,16 +172,21 @@ export function serializeTextFormatting(formatting: TextFormatting | undefined):
       fontAttrs.push(`w:cs="${escapeXml(formatting.fontFamily.cs)}"`);
     }
     if (formatting.fontFamily.asciiTheme) {
-      fontAttrs.push(`w:asciiTheme="${formatting.fontFamily.asciiTheme}"`);
+      fontAttrs.push(`w:asciiTheme="${escapeXml(formatting.fontFamily.asciiTheme)}"`);
     }
     if (formatting.fontFamily.hAnsiTheme) {
-      fontAttrs.push(`w:hAnsiTheme="${formatting.fontFamily.hAnsiTheme}"`);
+      fontAttrs.push(`w:hAnsiTheme="${escapeXml(formatting.fontFamily.hAnsiTheme)}"`);
     }
     if (formatting.fontFamily.eastAsiaTheme) {
-      fontAttrs.push(`w:eastAsiaTheme="${formatting.fontFamily.eastAsiaTheme}"`);
+      fontAttrs.push(`w:eastAsiaTheme="${escapeXml(formatting.fontFamily.eastAsiaTheme)}"`);
     }
     if (formatting.fontFamily.csTheme) {
-      fontAttrs.push(`w:csTheme="${formatting.fontFamily.csTheme}"`);
+      // `cstheme`, not `csTheme`: CT_Fonts spells this one all-lowercase while
+      // its three siblings are camelCase (wml.xsd, ECMA-376 §17.3.2.26). We
+      // emitted `w:csTheme`, which is a different — invalid — attribute, so
+      // Word dropped it and our own parser (which reads the spec spelling)
+      // lost the complex-script theme font on every second save.
+      fontAttrs.push(`w:cstheme="${escapeXml(formatting.fontFamily.csTheme)}"`);
     }
     if (fontAttrs.length > 0) {
       parts.push(`<w:rFonts ${fontAttrs.join(' ')}/>`);

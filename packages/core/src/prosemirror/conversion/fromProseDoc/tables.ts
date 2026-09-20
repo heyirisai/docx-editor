@@ -18,10 +18,11 @@ import type {
   TableRowFormatting,
   TableCellFormatting,
   TableBorders,
-  Paragraph,
+  BlockContent,
 } from '../../../types/document';
 import type { TableAttrs, TableRowAttrs, TableCellAttrs } from '../../schema/nodes';
 import { convertPMParagraph } from './paragraph';
+import { sdtAttrsToProps } from '../sdtAttrs';
 
 function inferTableBorders(rows: TableRow[]): TableBorders | undefined {
   for (const row of rows) {
@@ -492,16 +493,26 @@ function tableRowAttrsToFormatting(attrs: TableRowAttrs): TableRowFormatting | u
  */
 function convertPMTableCell(node: PMNode): TableCell {
   const attrs = node.attrs as TableCellAttrs;
-  const content: (Paragraph | Table)[] = [];
 
-  // Extract cell content (paragraphs and nested tables)
-  node.forEach((contentNode) => {
-    if (contentNode.type.name === 'paragraph') {
-      content.push(convertPMParagraph(contentNode));
-    } else if (contentNode.type.name === 'table') {
-      content.push(convertPMTable(contentNode));
-    }
-  });
+  // Extract cell content (paragraphs, nested tables and content controls)
+  const collect = (parent: PMNode): BlockContent[] => {
+    const out: BlockContent[] = [];
+    parent.forEach((contentNode) => {
+      if (contentNode.type.name === 'paragraph') {
+        out.push(convertPMParagraph(contentNode));
+      } else if (contentNode.type.name === 'table') {
+        out.push(convertPMTable(contentNode));
+      } else if (contentNode.type.name === 'blockSdt') {
+        out.push({
+          type: 'blockSdt',
+          properties: sdtAttrsToProps(contentNode.attrs as Record<string, unknown>),
+          content: collect(contentNode),
+        });
+      }
+    });
+    return out;
+  };
+  const content = collect(node);
 
   const cell: TableCell = {
     type: 'tableCell',

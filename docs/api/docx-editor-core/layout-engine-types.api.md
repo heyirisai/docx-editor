@@ -163,6 +163,8 @@ export type ImageBlock = {
     cropBottom?: number;
     cropLeft?: number;
     opacity?: number;
+    geometry?: 'ellipse' | 'roundRect';
+    cornerAdj?: number;
     renderOnly?: boolean;
     anchor?: {
         isAnchored?: boolean;
@@ -215,6 +217,8 @@ export type ImageRun = {
     cropBottom?: number;
     cropLeft?: number;
     opacity?: number;
+    geometry?: 'ellipse' | 'roundRect';
+    cornerAdj?: number;
     isInsertion?: boolean;
     isDeletion?: boolean;
     changeAuthor?: string;
@@ -274,6 +278,8 @@ export type LayoutOptions = {
         h: number;
     };
     finalMargins?: PageMargins;
+    firstPageMargins?: PageMargins;
+    finalFirstPageMargins?: PageMargins;
     columns?: ColumnLayout;
     pageGap?: number;
     defaultLineHeight?: number;
@@ -543,6 +549,7 @@ export type SectionBreakBlock = {
     };
     orientation?: 'portrait' | 'landscape';
     margins?: PageMargins;
+    firstPageMargins?: PageMargins;
     columns?: ColumnLayout;
 };
 
@@ -646,6 +653,7 @@ export type TableRowMeasure = {
 // @public
 export type TabRun = RunFormatting & {
     kind: 'tab';
+    ptab?: PositionalTab;
     width?: number;
     pmStart?: number;
     pmEnd?: number;
@@ -675,7 +683,7 @@ export type TextBoxBlock = {
         left: number;
         right: number;
     };
-    content: ParagraphBlock[];
+    content: Array<ParagraphBlock | TableBlock>;
     displayMode?: 'inline' | 'float' | 'block';
     cssFloat?: 'left' | 'right' | 'none';
     wrapType?: string;
@@ -688,6 +696,9 @@ export type TextBoxBlock = {
     distLeft?: number;
     distRight?: number;
     renderOnly?: boolean;
+    lineShape?: 'down' | 'up';
+    geometry?: 'ellipse' | 'roundRect';
+    cornerAdj?: number;
     pmStart?: number;
     pmEnd?: number;
 };
@@ -705,7 +716,7 @@ export type TextBoxMeasure = {
     kind: 'textBox';
     width: number;
     height: number;
-    innerMeasures: ParagraphMeasure[];
+    innerMeasures: Array<ParagraphMeasure | TableMeasure>;
 };
 
 // @public

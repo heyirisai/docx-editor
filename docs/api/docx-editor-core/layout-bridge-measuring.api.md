@@ -11,6 +11,7 @@ export function buildFontString(style: FontStyle): string;
 export function clampFloatingWrapMargins(leftMargin: number, rightMargin: number, contentWidth: number): {
     leftMargin: number;
     rightMargin: number;
+    fullWidthBlock?: boolean;
 };
 
 // @public

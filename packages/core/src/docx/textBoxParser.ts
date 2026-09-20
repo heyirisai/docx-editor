@@ -67,6 +67,7 @@ import {
   resolveColorValueToHex,
 } from './drawingUtils';
 import { emuToPixels } from '../utils/units';
+import { SPPR_PRESERVED } from './preservedShapeXml';
 
 // Re-export emuToPixels for backwards compatibility
 export { emuToPixels } from '../utils/units';
@@ -373,7 +374,7 @@ function parseWspDrawing(drawingEl: XmlElement, requireTextBox: boolean): TextBo
   if (bodyPr) textBox.bodyPrXml = elementToSelfContainedXml(bodyPr);
   if (spPr) {
     const extras = getChildElements(spPr)
-      .filter((el) => el.name === 'a:ln' || el.name === 'a:effectLst')
+      .filter((el) => SPPR_PRESERVED.has(el.name ?? ''))
       .map((el) => elementToSelfContainedXml(el))
       .join('');
     if (extras) textBox.spPrExtraXml = extras;

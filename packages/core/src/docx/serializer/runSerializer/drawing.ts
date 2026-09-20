@@ -23,6 +23,7 @@ import { serializeParagraph } from '../paragraphSerializer';
 import { serializeTable } from '../tableSerializer';
 import { escapeXml, intAttr } from '../xmlUtils';
 import { preservedBodyPrXml, preservedSpPrExtra } from '../../preservedShapeXml';
+import { themeColorToSchemeClr, hexModifierToDrawingPercent } from '../../drawingUtils';
 
 /**
  * Auto-incrementing counter for generating unique image/shape IDs.
@@ -54,11 +55,15 @@ function serializeDrawingColor(color: ColorValue | undefined): string {
     return `<a:srgbClr val="${color.rgb.replace('#', '')}"/>`;
   }
   if (color.themeColor) {
-    let clr = `<a:schemeClr val="${color.themeColor}"`;
-    if (color.themeTint) {
-      clr += `><a:tint val="${color.themeTint}"/></a:schemeClr>`;
-    } else if (color.themeShade) {
-      clr += `><a:shade val="${color.themeShade}"/></a:schemeClr>`;
+    // DrawingML's own vocabulary, not WordprocessingML's — see
+    // `themeColorToSchemeClr`.
+    let clr = `<a:schemeClr val="${themeColorToSchemeClr(color.themeColor)}"`;
+    const tint = color.themeTint ? hexModifierToDrawingPercent(color.themeTint) : undefined;
+    const shade = color.themeShade ? hexModifierToDrawingPercent(color.themeShade) : undefined;
+    if (tint !== undefined) {
+      clr += `><a:tint val="${tint}"/></a:schemeClr>`;
+    } else if (shade !== undefined) {
+      clr += `><a:shade val="${shade}"/></a:schemeClr>`;
     } else {
       clr += `/>`;
     }
@@ -67,9 +72,18 @@ function serializeDrawingColor(color: ColorValue | undefined): string {
   return '';
 }
 
-/** Serialize shape fill to DrawingML */
-function serializeFill(fill: ShapeFill | undefined): string {
-  if (!fill || fill.type === 'none') return '<a:noFill/>';
+/**
+ * Serialize shape fill to DrawingML, or `undefined` when the model cannot
+ * express this fill faithfully — the caller then replays the source element.
+ *
+ * `parseFill` flattens every gradient to a bare `{ type: 'gradient' }` with no
+ * stops, so rebuilding from the model wrote nothing at all and the gradient
+ * was gone after one save. Returning `undefined` instead of `''` is what lets
+ * the preserved `a:gradFill` through.
+ */
+function serializeFill(fill: ShapeFill | undefined): string | undefined {
+  if (!fill) return undefined;
+  if (fill.type === 'none') return '<a:noFill/>';
   if (fill.type === 'solid' && fill.color) {
     return `<a:solidFill>${serializeDrawingColor(fill.color)}</a:solidFill>`;
   }
@@ -82,7 +96,7 @@ function serializeFill(fill: ShapeFill | undefined): string {
       g.type === 'linear' ? `<a:lin ang="${(g.angle || 0) * 60000}" scaled="1"/>` : '';
     return `<a:gradFill><a:gsLst>${stops}</a:gsLst>${direction}</a:gradFill>`;
   }
-  return '';
+  return undefined;
 }
 
 /** Serialize shape outline to DrawingML a:ln */
@@ -153,10 +167,16 @@ function presetGeometry(shape: Shape): string {
   );
 }
 
+/**
+ * The `wps:spPr` children after the geometry, in schema order: the fill, the
+ * line, then the effects. Each falls back independently to the source markup
+ * so setting one does not erase the other two.
+ */
 function spPrExtras(shape: Shape): string {
   const preserved = preservedSpPrExtra(shape.spPrExtraXml);
+  const fill = serializeFill(shape.fill) ?? preserved.fill ?? '';
   const ln = shape.outline ? serializeOutline(shape.outline) : (preserved.ln ?? '');
-  return `${ln}${preserved.effectLst ?? ''}`;
+  return `${fill}${ln}${preserved.effectLst ?? ''}`;
 }
 
 function serializeOutline(outline: ShapeOutline | undefined): string {
@@ -398,8 +418,7 @@ export function serializeShapeContent(content: ShapeContent): string {
     `<a:ext cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     '</a:xfrm>',
     presetGeometry(shape),
-    serializeFill(shape.fill),
-    // A model outline wins over the source `<a:ln>` — the user may have set one
+    // A model fill/outline wins over the source's — the user may have set one
     // through the UI. With nothing modelled, replay the source's: an explicit
     // "no outline" parses to no outline at all, so rebuilding from the model
     // alone put the DEFAULT outline back on the shape. `<a:effectLst>` is

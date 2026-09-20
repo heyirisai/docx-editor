@@ -68,6 +68,7 @@ export interface ImageAttrs {
     borderStyle?: string;
     borderWidth?: number;
     collaborationId?: string;
+    cornerAdj?: number | null;
     // (undocumented)
     cropBottom?: number;
     // (undocumented)
@@ -88,6 +89,7 @@ export interface ImageAttrs {
     // (undocumented)
     effectExtentRight?: number;
     effectExtentTop?: number;
+    geometry?: 'ellipse' | 'roundRect' | null;
     height?: number;
     hlinkHref?: string;
     layoutInCell?: boolean;

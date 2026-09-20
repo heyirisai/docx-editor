@@ -38,7 +38,8 @@ import type {
   TableCellPropertyChange,
   TableStructuralChangeInfo,
   ConditionalFormatStyle,
-  Paragraph,
+  BlockContent,
+  BlockSdt,
   Theme,
   RelationshipMap,
   MediaFile,
@@ -46,6 +47,7 @@ import type {
 import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
 import { parseParagraph } from './paragraphParser';
+import { parseSdtProperties } from './sdtProperties';
 import {
   findChild,
   findChildren,
@@ -555,8 +557,8 @@ function parseCellContent(
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
   options?: { inHeaderFooter?: boolean }
-): (Paragraph | Table)[] {
-  const content: (Paragraph | Table)[] = [];
+): BlockContent[] {
+  const content: BlockContent[] = [];
 
   // Get all child elements
   const elements = tcElement.elements || [];
@@ -574,8 +576,13 @@ function parseCellContent(
       // Parse nested table (recursive)
       const table = parseTable(child, styles, theme, numbering, rels, media, options);
       content.push(table);
+    } else if (localName === 'sdt') {
+      // A content control is legal block content inside a cell
+      // (`EG_ContentBlockContent` in CT_Tc). Skipping it dropped EVERY
+      // paragraph inside — a locked "get in touch" CTA box authored as a
+      // cell-level `w:sdt` vanished from both the render and the saved file.
+      content.push(parseCellSdt(child, styles, theme, numbering, rels, media, options));
     }
-    // Other content types in cells are rare but could be added
   }
 
   // Ensure at least one empty paragraph (Word requires this)
@@ -587,6 +594,43 @@ function parseCellContent(
   }
 
   return content;
+}
+
+/**
+ * Parse a block-level `w:sdt` found inside a table cell into a {@link BlockSdt}.
+ *
+ * This mirrors `blockContentParser.parseBlockSdt`, but is implemented here
+ * rather than imported: `blockContentParser` already imports `parseTable` from
+ * this module, so importing back would close a runtime cycle. The cell path
+ * calls `parseParagraph` directly for its other paragraphs too, so the
+ * children of a cell SDT get exactly the same treatment as their siblings.
+ */
+function parseCellSdt(
+  sdtElement: XmlElement,
+  styles: StyleMap | null,
+  theme: Theme | null,
+  numbering: NumberingMap | null,
+  rels: RelationshipMap | null,
+  media: Map<string, MediaFile> | null,
+  options?: { inHeaderFooter?: boolean }
+): BlockSdt {
+  const sdtPr = findChild(sdtElement, 'w', 'sdtPr');
+  const sdtEndPr = findChild(sdtElement, 'w', 'sdtEndPr');
+  const sdtContent = findChild(sdtElement, 'w', 'sdtContent');
+  const properties = parseSdtProperties(sdtPr, sdtEndPr);
+  const content: BlockContent[] = [];
+  for (const child of sdtContent?.elements ?? []) {
+    if (!child.name) continue;
+    const localName = child.name.split(':').pop();
+    if (localName === 'p') {
+      content.push(parseParagraph(child, styles, theme, numbering, rels, media, options));
+    } else if (localName === 'tbl') {
+      content.push(parseTable(child, styles, theme, numbering, rels, media, options));
+    } else if (localName === 'sdt') {
+      content.push(parseCellSdt(child, styles, theme, numbering, rels, media, options));
+    }
+  }
+  return { type: 'blockSdt', properties, content };
 }
 
 // ============================================================================
