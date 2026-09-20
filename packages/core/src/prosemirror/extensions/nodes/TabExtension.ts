@@ -11,6 +11,11 @@ export const TabExtension = createNodeExtension({
     inline: true,
     group: 'inline',
     selectable: false,
+    // `<w:ptab>` (§17.3.3.19) is a tab with its own boundary and alignment
+    // rather than one that walks the paragraph's tab stops.
+    attrs: {
+      ptab: { default: null },
+    },
     parseDOM: [
       {
         tag: 'span.docx-tab',

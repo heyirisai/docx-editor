@@ -90,13 +90,29 @@ next to Word.
 These rows in the "Images & drawings" matrix are not Full yet. Original bytes
 round-trip on save, so editing the document does not lose them.
 
-- **Text boxes**: render and round-trip; inner text is editable. Move and
-  resize handles for the box are not built yet.
+- **Text boxes**: render and round-trip; inner text is editable. A box holds
+  block-level content, so a table inside one lays out and paints like any
+  other table. Move and resize handles for the box are not built yet.
 - **Drawing shapes**: round-trip. A shape with a fill or an outline and no
   text paints as its anchored rectangle — the colour panels and accent bars
-  templates are built from — so text laid over one stays legible. Connectors
-  and text inside a shape are not painted yet, and custom geometry both paints
-  and saves as its bounding rectangle.
+  templates are built from — so text laid over one stays legible. A
+  stroke-only connector (`prst="line"`, straight/bent/curved connectors)
+  paints as a line across its extent, which is how a footer rule is authored.
+  Rounded presets are drawn round: an `ellipse` (and `flowChartConnector`)
+  paints as an ellipse, and a `roundRect` takes its corner radius from
+  `a:avLst`, so a pill button survives a save as a pill.
+  Text inside a shape that is not a text box is still not painted, and custom
+  geometry both paints and saves as its bounding rectangle.
+- **Pictures**: an object anchored inside a table cell takes its position from
+  that cell (`layoutInCell`) but is not confined to it — as in Word, a logo
+  that reaches past the cell or the table paints in full. An `srcRect` crop and
+  the picture's own `a:prstGeom` both
+  render and round-trip, in a table cell as well as in the body, a header or a
+  footer — a headshot stored as an `ellipse` paints as the circle Word draws,
+  not as its bounding box. Cropping from the UI is not built.
+- **Grouped drawings** (`wpg:wgp`): round-trip verbatim. Pictures, shapes and
+  text boxes inside a group all paint, nested groups compose, and body text
+  wraps around the group. Nothing inside a group is editable.
 - **WMF / EMF**: round-trip without loss; not rendered yet.
 
 ## Round-trip behavior

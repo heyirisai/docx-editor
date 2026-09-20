@@ -452,8 +452,14 @@ function serializeTextContent(content: TextContent): string {
 /**
  * Serialize tab content (w:tab)
  */
-function serializeTabContent(_content: TabContent): string {
-  return '<w:tab/>';
+function serializeTabContent(content: TabContent): string {
+  const ptab = content.ptab;
+  if (!ptab) return '<w:tab/>';
+  // §17.3.3.19 requires all three attributes on `w:ptab`.
+  return (
+    `<w:ptab w:relativeTo="${ptab.relativeTo}" w:alignment="${ptab.alignment}"` +
+    ` w:leader="${ptab.leader ?? 'none'}"/>`
+  );
 }
 
 /**

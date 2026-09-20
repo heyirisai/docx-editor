@@ -45,6 +45,7 @@ import type {
   MediaFile,
 } from '../types/document';
 import type { StyleMap } from './styleParser';
+import type { PositionalTab } from '../types/content/run';
 import {
   findChild,
   findChildren,
@@ -448,6 +449,31 @@ function parseTabContent(): TabContent {
   return { type: 'tab' };
 }
 
+const PTAB_RELATIVE_TO = new Set(['margin', 'indent', 'leftMargin']);
+const PTAB_ALIGNMENT = new Set(['left', 'center', 'right']);
+const PTAB_LEADER = new Set(['none', 'dot', 'hyphen', 'underscore', 'middleDot', 'heavy']);
+
+/**
+ * Parse an absolute-position tab (`w:ptab`, §17.3.3.19). All three attributes
+ * are required by the schema, but the file is attacker-controlled, so an
+ * unknown value falls back to the Word default rather than reaching layout.
+ */
+function parsePTabContent(element: XmlElement): TabContent {
+  const relativeTo = getAttribute(element, 'w', 'relativeTo') ?? '';
+  const alignment = getAttribute(element, 'w', 'alignment') ?? '';
+  const leader = getAttribute(element, 'w', 'leader') ?? '';
+  return {
+    type: 'tab',
+    ptab: {
+      relativeTo: (PTAB_RELATIVE_TO.has(relativeTo)
+        ? relativeTo
+        : 'margin') as PositionalTab['relativeTo'],
+      alignment: (PTAB_ALIGNMENT.has(alignment) ? alignment : 'left') as PositionalTab['alignment'],
+      ...(PTAB_LEADER.has(leader) ? { leader: leader as PositionalTab['leader'] } : {}),
+    },
+  };
+}
+
 /**
  * Parse break element (w:br)
  */
@@ -597,6 +623,11 @@ function parseRunContents(
       case 'tab':
         // Tab character
         contents.push(parseTabContent());
+        break;
+
+      case 'ptab':
+        // Absolute-position tab — carries its own boundary + alignment.
+        contents.push(parsePTabContent(child));
         break;
 
       case 'br':

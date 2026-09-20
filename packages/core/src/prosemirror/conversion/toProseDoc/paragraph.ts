@@ -53,17 +53,34 @@ export function convertParagraph(
 
   // Get style-based text formatting (font size, bold, color, etc.)
   let styleRunFormatting: TextFormatting | undefined;
+  let ownStyleRunFormatting: TextFormatting | undefined;
   if (styleResolver) {
     const resolved = styleResolver.resolveParagraphStyle(paragraph.formatting?.styleId);
     styleRunFormatting = resolved.runFormatting;
+    ownStyleRunFormatting = resolved.ownRunFormatting;
   }
 
   // NOTE: paragraph.formatting?.runProperties is the paragraph mark formatting (pPr/rPr).
   // Per ECMA-376, this only applies to the paragraph mark glyph (¶), NOT to text runs.
   // Style-level rPr (from styleResolver) already provides default run formatting.
 
-  // Merge in extra formatting (e.g., table style conditional rPr)
-  const mergedStyleRunFormatting = mergeTextFormatting(styleRunFormatting, extraRunFormatting);
+  // Table-style run properties sit between the DOCUMENT DEFAULTS and the
+  // paragraph style (§17.7.2: doc defaults -> table style -> numbering ->
+  // paragraph style -> character style -> direct). Applying them on top of
+  // the paragraph style let a table style's `firstRow` conditional repaint
+  // body text that the paragraph style had coloured — a one-row bio table
+  // flagged `w:cnfStyle firstRow` turned its own text white on white, while
+  // Word renders it in the colour `Normal` sets. Applying them UNDER the
+  // whole resolved style is wrong too: `runFormatting` already folds the doc
+  // defaults in, so a table style could never win over a document default.
+  const mergedStyleRunFormatting = extraRunFormatting
+    ? mergeTextFormatting(
+        // `runFormatting` IS the doc defaults when the style chain declares
+        // nothing, so this keeps them at the bottom without re-deriving them.
+        mergeTextFormatting(styleRunFormatting, extraRunFormatting),
+        ownStyleRunFormatting
+      )
+    : styleRunFormatting;
 
   for (const content of paragraph.content) {
     if (content.type === 'commentRangeStart') {
@@ -545,32 +562,29 @@ function paragraphContentTokens(paragraph: Paragraph): ParagraphContentToken[] {
 }
 
 export function paragraphStartsWithPageBreak(paragraph: Paragraph): boolean {
-  return paragraphContentTokens(paragraph)[0] === 'pageBreak';
+  const tokens = paragraphContentTokens(paragraph);
+  // A paragraph that is NOTHING BUT page breaks is not a paragraph that
+  // starts on a new page — Word lays its (empty) line out on the page it is
+  // already on and only the FOLLOWING content moves over. Folding the break
+  // into `pageBreakBefore` moved that line to the top of the next page, which
+  // both showed a blank line and satisfied the next paragraph's own
+  // `pageBreakBefore` the wrong way round, costing an extra blank sheet.
+  // Measured: `AAA / <w:p><w:br page/></w:p> / CCC` is two pages in Word with
+  // `CCC` flush against the top margin.
+  return tokens[0] === 'pageBreak' && tokens.includes('visible');
 }
 
 /**
- * Returns true when `<w:br w:type="page"/>` appears after the leading
- * position in a paragraph.
+ * How many `<w:br w:type="page"/>` in this paragraph still need a standalone
+ * PM `pageBreak` node after it — i.e. every one except a leading break that
+ * {@link paragraphStartsWithPageBreak} already folded into `pageBreakBefore`.
  *
- * A leading hard page break can be represented as `pageBreakBefore` on the
- * same paragraph, preserving the DOCX paragraph count through the PM round
- * trip. Later hard breaks still need a standalone PM `pageBreak` block so
+ * Representing a leading break as `pageBreakBefore` preserves the DOCX
+ * paragraph count through the PM round trip; the rest need their own block so
  * layout keeps forcing a page boundary.
  */
-export function paragraphHasNonLeadingPageBreak(paragraph: Paragraph): boolean {
-  let consumedLeadingPageBreak = false;
-  let sawVisibleContent = false;
-
-  for (const token of paragraphContentTokens(paragraph)) {
-    if (token === 'pageBreak') {
-      if (sawVisibleContent || consumedLeadingPageBreak) {
-        return true;
-      }
-      consumedLeadingPageBreak = true;
-    } else {
-      sawVisibleContent = true;
-    }
-  }
-
-  return false;
+export function unrepresentedPageBreakCount(paragraph: Paragraph): number {
+  const tokens = paragraphContentTokens(paragraph);
+  const total = tokens.reduce((n, token) => (token === 'pageBreak' ? n + 1 : n), 0);
+  return Math.max(0, total - (paragraphStartsWithPageBreak(paragraph) ? 1 : 0));
 }

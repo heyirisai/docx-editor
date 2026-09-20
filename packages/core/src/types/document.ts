@@ -88,6 +88,7 @@ export type {
   ShapeFill,
   ShapeOutline,
   ShapeTextBody,
+  ShapeBlockContent,
   Shape,
   TextBox,
   TableCell,

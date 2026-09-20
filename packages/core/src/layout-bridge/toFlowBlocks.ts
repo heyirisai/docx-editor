@@ -647,6 +647,8 @@ function convertImage(
     cropBottom: (attrs.cropBottom as number | null) ?? undefined,
     cropLeft: (attrs.cropLeft as number | null) ?? undefined,
     opacity: (attrs.opacity as number | null) ?? undefined,
+    geometry: (attrs.geometry as ImageBlock['geometry'] | null) ?? undefined,
+    cornerAdj: (attrs.cornerAdj as number | null) ?? undefined,
     renderOnly: (attrs.renderOnly as boolean | null) ?? undefined,
     anchor: shouldAnchor
       ? {
@@ -672,13 +674,15 @@ function convertTextBoxNode(
   opts: InternalToFlowBlocksOptions
 ): TextBoxBlock {
   const attrs = node.attrs;
-  const contentBlocks: ParagraphBlock[] = [];
+  const contentBlocks: Array<ParagraphBlock | TableBlock> = [];
 
-  // Convert child paragraphs inside the text box
+  // Convert the text box's block children. `w:txbxContent` is
+  // EG_BlockLevelElts, so a table inside a box is content, not a gap.
   node.forEach((child, offset) => {
     if (child.type.name === 'paragraph') {
-      const block = convertParagraph(child, startPos + 1 + offset, opts);
-      contentBlocks.push(block);
+      contentBlocks.push(convertParagraph(child, startPos + 1 + offset, opts));
+    } else if (child.type.name === 'table') {
+      contentBlocks.push(convertTable(child, startPos + 1 + offset, opts));
     }
   });
 
@@ -691,6 +695,9 @@ function convertTextBoxNode(
     outlineWidth: attrs.outlineWidth as number | undefined,
     outlineColor: attrs.outlineColor as string | undefined,
     outlineStyle: attrs.outlineStyle as string | undefined,
+    lineShape: (attrs.lineShape as 'down' | 'up' | null) ?? undefined,
+    geometry: (attrs.geometry as 'ellipse' | 'roundRect' | null) ?? undefined,
+    cornerAdj: (attrs.cornerAdj as number | null) ?? undefined,
     renderOnly: (attrs.renderOnly as boolean | null) ?? undefined,
     margins: {
       top: (attrs.marginTop as number) ?? DEFAULT_TEXTBOX_MARGINS.top,

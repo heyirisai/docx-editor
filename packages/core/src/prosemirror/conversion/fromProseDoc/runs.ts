@@ -11,6 +11,7 @@
  */
 
 import type { Node as PMNode, Mark } from 'prosemirror-model';
+import type { PositionalTab } from '../../../types/content/run';
 import { pixelsToEmu } from '../../../docx/imageParser';
 import type {
   Run,
@@ -64,7 +65,7 @@ export function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
   if (node.isText && node.text) {
     hyperlink.children.push(createRunFromText(node.text, nonLinkMarks));
   } else if (node.type.name === 'tab') {
-    hyperlink.children.push(createTabRun());
+    hyperlink.children.push(createTabRun(node.attrs.ptab as PositionalTab | null));
   } else if (node.type.name === 'hardBreak') {
     hyperlink.children.push(createBreakRun());
   } else if (node.type.name === 'rawXml') {
@@ -124,9 +125,10 @@ export function createBreakRun(): Run {
 /**
  * Create a Run containing a tab
  */
-export function createTabRun(): Run {
+export function createTabRun(ptab?: PositionalTab | null): Run {
   const tabContent: TabContent = {
     type: 'tab',
+    ...(ptab ? { ptab } : {}),
   };
 
   return {
@@ -337,6 +339,14 @@ export function createImageRun(node: PMNode): Run {
   // Round-trip a:alphaModFix opacity
   if (attrs.opacity !== undefined && attrs.opacity !== null && attrs.opacity < 1) {
     image.opacity = attrs.opacity;
+  }
+
+  // Round-trip the picture's a:prstGeom preset
+  if (attrs.geometry === 'ellipse' || attrs.geometry === 'roundRect') {
+    image.geometry = attrs.geometry;
+    if (attrs.cornerAdj !== undefined && attrs.cornerAdj !== null) {
+      image.cornerAdj = attrs.cornerAdj;
+    }
   }
 
   // Round-trip wp:anchor layoutInCell / allowOverlap (tri-state)

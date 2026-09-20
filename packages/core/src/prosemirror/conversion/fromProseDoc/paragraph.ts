@@ -11,6 +11,7 @@
  */
 
 import type { Node as PMNode } from 'prosemirror-model';
+import type { PositionalTab } from '../../../types/content/run';
 import type {
   Paragraph,
   Run,
@@ -764,7 +765,7 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         currentRun = null;
         currentMarksKey = null;
       }
-      content.push(createTabRun());
+      content.push(createTabRun(node.attrs.ptab as PositionalTab | null));
     } else if (node.type.name === 'field') {
       // Field ends current run and emits a field content item
       if (currentRun) {

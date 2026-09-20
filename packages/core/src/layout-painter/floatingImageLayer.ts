@@ -25,6 +25,10 @@ export interface FloatingImagePaintRecord {
   cropLeft?: number;
   /** a:alphaModFix -> CSS opacity. */
   opacity?: number;
+  /** Rounded `a:prstGeom` preset on the picture (see `ImageRun.geometry`). */
+  geometry?: 'ellipse' | 'roundRect';
+  /** `roundRect` corner adjust as a fraction of the shorter side. */
+  cornerAdj?: number;
   /**
    * OOXML `wp:anchor relativeHeight` — z-order among overlapping anchored
    * objects (higher on top). Used directly as the item's CSS z-index in
@@ -41,9 +45,13 @@ export interface FloatingImagesLayerOptions {
   itemClass: string;
   /**
    * `inset0` sizes the layer with `top/right/bottom/left = 0` (used at page level).
-   * `fullSize` uses `width/height = 100%` and adds `overflow: hidden` (used inside table cells).
+   * `origin` gives it no box at all — a bare coordinate origin its absolutely
+   * positioned children are placed against (used for table cells, where the
+   * layer hangs off the ROW at the cell's content origin). It deliberately does
+   * NOT clip: Word does not confine an anchored object to the cell it is
+   * anchored in, so an over-wide logo must paint past the cell's edges.
    */
-  sizing: 'inset0' | 'fullSize';
+  sizing: 'inset0' | 'origin';
   /** `behind` skips z-index so DOM order keeps the layer below body fragments. */
   layerMode: 'front' | 'behind';
   imageAssetLoader?: LazyImageAssetLoader;
@@ -67,9 +75,8 @@ export function renderFloatingImagesLayer(
     layer.style.right = '0';
     layer.style.bottom = '0';
   } else {
-    layer.style.width = '100%';
-    layer.style.height = '100%';
-    layer.style.overflow = 'hidden';
+    layer.style.width = '0';
+    layer.style.height = '0';
   }
   layer.style.pointerEvents = 'none';
 

@@ -38,6 +38,17 @@ export interface ImageVisualAttrs {
   cropBottom?: number;
   cropLeft?: number;
   opacity?: number;
+  /**
+   * Rounded `a:prstGeom` preset on `pic:spPr`. Word paints the preset, not the
+   * picture's frame, so a headshot stored as `ellipse` is a circle and one
+   * stored as `roundRect` has rounded corners.
+   */
+  geometry?: 'ellipse' | 'roundRect';
+  /** `roundRect` corner adjust as a fraction of the shorter side. */
+  cornerAdj?: number;
+  /** Display box, needed to resolve a `roundRect` adjust to pixels. */
+  width?: number;
+  height?: number;
 }
 
 /**
@@ -52,7 +63,12 @@ export interface ImageVisualAttrs {
  */
 export function hasImageVisualAttrs(v: ImageVisualAttrs): boolean {
   return Boolean(
-    v.cropTop || v.cropRight || v.cropBottom || v.cropLeft || (v.opacity != null && v.opacity < 1)
+    v.cropTop ||
+    v.cropRight ||
+    v.cropBottom ||
+    v.cropLeft ||
+    (v.opacity != null && v.opacity < 1) ||
+    v.geometry
   );
 }
 
@@ -74,6 +90,29 @@ export function applyImageVisualAttrs(img: HTMLImageElement, v: ImageVisualAttrs
     img.style.opacity = String(Math.max(0, v.opacity));
   }
   applyImageCrop(img, v);
+  const radius = imageCornerRadiusCss(v);
+  if (radius) img.style.borderRadius = radius;
+}
+
+/** Word's default `roundRect` corner adjust when `a:avLst` omits one. */
+const DEFAULT_ROUND_RECT_ADJ = 0.16667;
+
+/**
+ * `border-radius` for a picture's `a:prstGeom` preset, or undefined for the
+ * default square `rect`. `ellipse` is the ellipse INSCRIBED in the frame,
+ * which is exactly what `50%` draws; `roundRect`'s adjust is a fraction of the
+ * shorter side (§20.1.9.11), so it needs the display box to resolve.
+ *
+ * `border-radius` clips a replaced element's content, so this works on the
+ * `<img>` itself and composes with the `object-fit` crop above.
+ */
+export function imageCornerRadiusCss(v: ImageVisualAttrs): string | undefined {
+  if (v.geometry === 'ellipse') return '50%';
+  if (v.geometry !== 'roundRect') return undefined;
+  const shortSide = Math.max(0, Math.min(v.width ?? 0, v.height ?? 0));
+  if (shortSide === 0) return undefined;
+  const adj = v.cornerAdj ?? DEFAULT_ROUND_RECT_ADJ;
+  return `${Math.round(shortSide * adj * 100) / 100}px`;
 }
 
 /**

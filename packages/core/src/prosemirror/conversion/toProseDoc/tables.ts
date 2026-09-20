@@ -210,10 +210,20 @@ export function convertTable(
   // style) and incorrect for docs whose default table style differs from
   // TableGrid. Walking through the parsed default flag matches spec and
   // works for any document language ("Normal Table", "TableNormal", etc.).
+  //
+  // The cascade runs PER SIDE, not per `w:tblBorders` element. A table that
+  // writes only `top/left/bottom/right = none` still inherits `insideH` /
+  // `insideV` from its style — COMET's bio tables are Table Grid with the
+  // outer box switched off, and Word draws the style's black rule between
+  // the photo column and the text. Taking the whole element from the first
+  // level that had one dropped that rule.
   const tableStyle = tableStyleId ? styleResolver?.getStyle(tableStyleId) : undefined;
   const defaultTableStyle = styleResolver?.getDefaultTableStyle();
-  const resolvedTableBorders =
-    table.formatting?.borders ?? tableStyle?.tblPr?.borders ?? defaultTableStyle?.tblPr?.borders;
+  const resolvedTableBorders = mergeTableBorders(
+    defaultTableStyle?.tblPr?.borders,
+    tableStyle?.tblPr?.borders,
+    table.formatting?.borders
+  );
 
   // Resolve default cell margins via the same cascade as borders. Tables
   // that don't carry a tblStyle reference still inherit cellMargins from the
@@ -253,6 +263,12 @@ export function convertTable(
   }
 
   const conditionalStyles = {
+    // The table style's OWN `w:tcPr` (§17.7.6.8) is the cell default for
+    // every cell in the table, below any `w:tblStylePr` conditional. It is
+    // where a style parks `<w:vAlign w:val="center"/>`, and skipping it left
+    // every cell of a vertically-centred table style top-aligned — very
+    // visible in a tall vertically-merged label column.
+    tableDefaults: tableStyle?.tcPr ? { tcPr: tableStyle.tcPr } : undefined,
     wholeTable: resolveTableStyleConditional(styleResolver, tableStyleId, 'wholeTable'),
     firstRow: resolveTableStyleConditional(styleResolver, tableStyleId, 'firstRow'),
     lastRow: resolveTableStyleConditional(styleResolver, tableStyleId, 'lastRow'),
@@ -330,6 +346,7 @@ function convertTableRow(
   columnWidths?: number[],
   totalWidth?: number,
   conditionalStyles?: {
+    tableDefaults?: { tcPr?: TableCellFormatting; rPr?: TextFormatting };
     wholeTable?: { tcPr?: TableCellFormatting; rPr?: TextFormatting };
     firstRow?: { tcPr?: TableCellFormatting; rPr?: TextFormatting };
     lastRow?: { tcPr?: TableCellFormatting; rPr?: TextFormatting };
@@ -464,8 +481,12 @@ function convertTableRow(
       effectiveRowBandStyle = conditionalStyles?.band2Horz;
     }
 
-    // Build conditional style precedence (wholeTable -> banding -> row/col -> corners)
-    let cellConditionalStyle = conditionalStyles?.wholeTable;
+    // Build conditional style precedence
+    // (style tcPr -> wholeTable -> banding -> row/col -> corners)
+    let cellConditionalStyle = mergeConditionalStyles(
+      conditionalStyles?.tableDefaults,
+      conditionalStyles?.wholeTable
+    );
     cellConditionalStyle = mergeConditionalStyles(cellConditionalStyle, effectiveRowBandStyle);
     cellConditionalStyle = mergeConditionalStyles(cellConditionalStyle, vertBandStyle);
     if (cellIsFirstRow && (tableLook?.firstRow || rowCnf?.firstRow || cellCnf?.firstRow)) {
@@ -593,6 +614,24 @@ function convertTableRow(
 const CELL_BORDER_SIDES = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'] as const;
 
 /**
+ * Overlay table-border levels side by side, weakest first. Returns
+ * `undefined` when no level declared any side.
+ */
+function mergeTableBorders(...levels: Array<TableBorders | undefined>): TableBorders | undefined {
+  let out: TableBorders | undefined;
+  for (const level of levels) {
+    if (!level) continue;
+    for (const side of CELL_BORDER_SIDES) {
+      const border = level[side];
+      if (!border) continue;
+      out ??= {};
+      out[side] = border;
+    }
+  }
+  return out;
+}
+
+/**
  * Bake themed border colors to RGB up front: the cell schema's `toDOM` has no
  * theme access, so a `themeColor` border would otherwise hit the default Office
  * palette there. Mirrors how cell shading resolves into `backgroundColor`.
@@ -689,7 +728,7 @@ function convertTableCell(
     rowspan: rowspan,
     width: width,
     widthType: widthType,
-    verticalAlign: formatting?.verticalAlign,
+    verticalAlign: formatting?.verticalAlign ?? conditionalStyle?.tcPr?.verticalAlign,
     backgroundColor: backgroundColor,
     textDirection: formatting?.textDirection,
     noWrap: formatting?.noWrap,

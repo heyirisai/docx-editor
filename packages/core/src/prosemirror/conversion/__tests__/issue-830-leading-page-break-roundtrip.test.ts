@@ -66,11 +66,19 @@ describe('issue #830 leading hard page break round-trip', () => {
       content: [{ type: 'run', content: [{ type: 'break', breakType: 'page' }] }],
     };
 
+    // A paragraph that is NOTHING but a page break is not `pageBreakBefore`:
+    // Word keeps its (empty) line on the page it is already on, so the break
+    // becomes a standalone block and the paragraph stays empty. See
+    // `paragraphStartsWithPageBreak`.
     const pmDoc = toProseDoc(docOf(leadingBreakParagraph));
-    expect(childTypes(pmDoc)).toEqual(['paragraph']);
-    expect(pmDoc.child(0).attrs.pageBreakBefore).toBe(true);
+    expect(childTypes(pmDoc)).toEqual(['paragraph', 'pageBreak']);
+    expect(pmDoc.child(0).attrs.pageBreakBefore).toBeFalsy();
 
+    // Still ONE paragraph on the way out (issue #830): the break block folds
+    // back into the paragraph it came from, reproducing the source markup
+    // rather than a `<w:pageBreakBefore/>` substitute.
     const roundTripped = fromProseDoc(pmDoc, docOf(leadingBreakParagraph));
+    expect(roundTripped.package.document.content).toHaveLength(1);
     const outputParagraph = roundTripped.package.document.content[0];
     expect(outputParagraph?.type).toBe('paragraph');
     if (outputParagraph?.type !== 'paragraph') {
@@ -78,7 +86,45 @@ describe('issue #830 leading hard page break round-trip', () => {
     }
 
     const xml = serializeParagraph(outputParagraph);
-    expect(xml).toContain('<w:pageBreakBefore/>');
+    expect(xml).toContain('<w:br w:type="page"/>');
+  });
+
+  test('a mid-paragraph hard break round-trips back into its own paragraph', () => {
+    const midParagraph: Paragraph = {
+      type: 'paragraph',
+      content: [
+        { type: 'run', content: [{ type: 'text', text: 'Before break' }] },
+        { type: 'run', content: [{ type: 'break', breakType: 'page' }] },
+      ],
+    };
+    const input = docOf(midParagraph);
+
+    const pmDoc = toProseDoc(input);
+    expect(childTypes(pmDoc)).toEqual(['paragraph', 'pageBreak']);
+
+    const roundTripped = fromProseDoc(pmDoc, input);
+    expect(roundTripped.package.document.content).toHaveLength(1);
+    const out = roundTripped.package.document.content[0];
+    if (out?.type !== 'paragraph') throw new Error('Expected a paragraph');
+    const xml = serializeParagraph(out);
+    expect(xml).toContain('<w:t>Before break</w:t>');
+    expect(xml).toContain('<w:br w:type="page"/>');
+  });
+
+  test('two hard breaks in one paragraph skip two pages', () => {
+    const doubleBreak: Paragraph = {
+      type: 'paragraph',
+      content: [
+        { type: 'run', content: [{ type: 'text', text: 'Before' }] },
+        { type: 'run', content: [{ type: 'break', breakType: 'page' }] },
+        { type: 'run', content: [{ type: 'break', breakType: 'page' }] },
+      ],
+    };
+    expect(childTypes(toProseDoc(docOf(doubleBreak)))).toEqual([
+      'paragraph',
+      'pageBreak',
+      'pageBreak',
+    ]);
   });
 
   test('keeps non-leading hard page breaks as explicit PM page break blocks', () => {

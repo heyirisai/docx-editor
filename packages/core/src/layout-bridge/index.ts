@@ -153,6 +153,7 @@ export {
 
 // Per-table measurement (recursive over cell content via callback).
 export { measureTableBlock, measureTableCellBlockVisualHeight } from './measureTable';
+export { measureTextBoxBlock } from './measureTextBox';
 
 // Section properties → page geometry + header/footer resolution.
 export {

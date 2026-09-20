@@ -130,8 +130,20 @@ function extractBlocks(pmDoc: PMNode): BlockContent[] {
       }
     } else if (node.type.name === 'pageBreak') {
       flushPendingTextBoxes();
-      // Convert page break node to a paragraph with a page break run
-      blocks.push(createPageBreakParagraph());
+      // A `pageBreak` block always CAME from a `<w:br w:type="page"/>` at the
+      // end of the paragraph before it (that is how `toProseDoc` splits one),
+      // so put it back there instead of minting a second paragraph — a file
+      // that round-tripped once used to gain a paragraph per hard break.
+      const previous = blocks[blocks.length - 1];
+      if (previous?.type === 'paragraph') {
+        previous.content = [
+          ...previous.content,
+          { type: 'run', content: [{ type: 'break', breakType: 'page' } as BreakContent] },
+        ];
+      } else {
+        // Nothing to attach it to (document start, or after a table).
+        blocks.push(createPageBreakParagraph());
+      }
     }
   });
 

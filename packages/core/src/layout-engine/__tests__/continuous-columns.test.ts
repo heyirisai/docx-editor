@@ -57,7 +57,9 @@ function para(id: string, height: number): { block: ParagraphBlock; measure: Par
 /**
  * lead | [continuous break] 6 x 60px in 2 columns | [continuous break] tail.
  * The break block carries the properties of the section it CLOSES, so the
- * two-column config sits on the SECOND break.
+ * two-column config sits on the SECOND break. The break TYPE, by contrast,
+ * belongs to the section being entered (§17.6.22), so the trailing section's
+ * `continuous` is `bodyBreakType` on the layout options.
  */
 function twoColumnDocument(): { blocks: FlowBlock[]; measures: Measure[] } {
   const blocks: FlowBlock[] = [];
@@ -84,7 +86,11 @@ function twoColumnDocument(): { blocks: FlowBlock[]; measures: Measure[] } {
 describe('continuous multi-column sections', () => {
   test('balances across columns, then resumes below the tallest', () => {
     const { blocks, measures } = twoColumnDocument();
-    const layout = layoutDocument(blocks, measures, { pageSize: PAGE, margins: MARGINS });
+    const layout = layoutDocument(blocks, measures, {
+      pageSize: PAGE,
+      margins: MARGINS,
+      bodyBreakType: 'continuous',
+    });
 
     expect(layout.pages.length).toBe(1);
     const at = (id: string) => layout.pages[0].fragments.find((f) => f.blockId === id)!;
@@ -121,7 +127,11 @@ describe('continuous multi-column sections', () => {
     blocks.push(b.block);
     measures.push(b.measure);
 
-    const layout = layoutDocument(blocks, measures, { pageSize: PAGE, margins: MARGINS });
+    const layout = layoutDocument(blocks, measures, {
+      pageSize: PAGE,
+      margins: MARGINS,
+      bodyBreakType: 'continuous',
+    });
     for (const fragment of layout.pages[0].fragments) {
       expect(fragment.x).toBe(96);
       expect((fragment as { width: number }).width).toBe(CONTENT_WIDTH);

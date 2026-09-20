@@ -126,8 +126,12 @@ export type TextBoxMeasure = {
   kind: 'textBox';
   width: number;
   height: number;
-  /** Pre-measured inner paragraph measures (avoids re-measuring during render) */
-  innerMeasures: ParagraphMeasure[];
+  /**
+   * Pre-measured inner block measures, 1:1 with `TextBoxBlock.content`
+   * (avoids re-measuring during render). A table inside the box measures as
+   * a `TableMeasure`.
+   */
+  innerMeasures: Array<ParagraphMeasure | TableMeasure>;
 };
 
 /**

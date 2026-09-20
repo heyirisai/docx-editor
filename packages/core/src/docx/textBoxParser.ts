@@ -29,6 +29,7 @@ import type {
   TextBox,
   Paragraph,
   Table,
+  ShapeBlockContent,
   ImageSize,
   ImagePosition,
   ImageWrap,
@@ -42,16 +43,27 @@ import {
   getChildElements,
   elementToSelfContainedXml,
   getAttribute,
+  getLocalName,
   parseNumericAttribute,
   findByFullName,
   findChildrenByLocalName,
   type XmlElement,
 } from './xmlParser';
 import {
+  collectGroupLeaves,
+  mapX,
+  mapY,
+  readGroupAnchorPosition,
+  readXfrm,
+  rootGroupFrame,
+  type GroupFrame,
+} from './groupFrame';
+import {
   parseFill,
   parseOutline,
   parseAnchorPosition,
   parseAnchorWrap,
+  parsePresetGeometry,
   resolveColorValueToHex,
 } from './drawingUtils';
 import { emuToPixels } from '../utils/units';
@@ -159,12 +171,12 @@ export function parseTextBoxContent(
   numbering: NumberingMap | null,
   rels?: RelationshipMap | null,
   _media?: Map<string, MediaFile>
-): Paragraph[] {
+): ShapeBlockContent[] {
   if (!txbxContent) {
     return [];
   }
 
-  const paragraphs: Paragraph[] = [];
+  const blocks: ShapeBlockContent[] = [];
   const children = getChildElements(txbxContent);
 
   for (const child of children) {
@@ -173,17 +185,15 @@ export function parseTextBoxContent(
     const localName = colonIdx >= 0 ? name.substring(colonIdx + 1) : name;
 
     if (localName === 'p') {
-      // Parse paragraph
-      const paragraph = parseParagraph(child, styles, theme, numbering, rels);
-      paragraphs.push(paragraph);
+      blocks.push(parseParagraph(child, styles, theme, numbering, rels));
     } else if (localName === 'tbl' && parseTable) {
-      // Tables in text boxes - we can't directly include them in paragraphs array
-      // but we could store them separately. For now, skip (most text boxes don't have tables)
-      // Future enhancement: support BlockContent[] instead of just Paragraph[]
+      // `w:txbxContent` is EG_BlockLevelElts. Skipping tables here painted an
+      // empty frame wherever a template put a laid-out panel inside a box.
+      blocks.push(parseTable(child, styles, theme, numbering, rels, _media));
     }
   }
 
-  return paragraphs;
+  return blocks;
 }
 
 // ============================================================================
@@ -243,6 +253,36 @@ export function parseTextBox(drawingEl: XmlElement): TextBox | null {
 }
 
 /**
+ * `a:prstGeom` presets Word draws as a single stroke rather than a closed
+ * outline. `wps:cNvCnPr` (a connection shape) implies the same thing, so
+ * either signal is enough.
+ */
+const LINE_GEOMETRIES = new Set([
+  'line',
+  'straightConnector1',
+  'bentConnector2',
+  'bentConnector3',
+  'bentConnector4',
+  'bentConnector5',
+  'curvedConnector2',
+  'curvedConnector3',
+  'curvedConnector4',
+  'curvedConnector5',
+]);
+
+/**
+ * Direction of a stroke-only connector, or undefined when the shape is a
+ * normal closed geometry. See {@link Shape.lineShape}.
+ */
+function parseLineShape(wsp: XmlElement, spPr: XmlElement | undefined): 'down' | 'up' | undefined {
+  const isConnector = getChildElements(wsp).some((el) => el.name === 'wps:cNvCnPr');
+  const prst = getAttribute(findByFullName(spPr ?? null, 'a:prstGeom'), null, 'prst');
+  if (!isConnector && !(prst && LINE_GEOMETRIES.has(prst))) return undefined;
+  const flipV = getAttribute(findByFullName(spPr ?? null, 'a:xfrm'), null, 'flipV');
+  return flipV === '1' || flipV === 'true' ? 'up' : 'down';
+}
+
+/**
  * Parse a `wps:wsp` drawing into the {@link TextBox} model.
  *
  * `requireTextBox` false accepts a shape with no `wps:txbx` — a decorative
@@ -299,6 +339,12 @@ function parseWspDrawing(drawingEl: XmlElement, requireTextBox: boolean): TextBo
   // Parse outline
   const outline = parseOutline(spPr ?? null);
 
+  // A connector is a stroke between two corners of the extent box, not a
+  // rectangle: a footer rule (`prst="line"`, `cy="0"`) outlined as a box
+  // paints a full-width border where the file asked for a hairline.
+  const lineShape = parseLineShape(wsp, spPr);
+  const preset = parsePresetGeometry(spPr);
+
   // Parse body properties (margins)
   const bodyProps = parseBodyProperties(bodyPr ?? null);
 
@@ -313,6 +359,11 @@ function parseWspDrawing(drawingEl: XmlElement, requireTextBox: boolean): TextBo
   if (id) textBox.id = id;
   if (fill) textBox.fill = fill;
   if (outline) textBox.outline = outline;
+  if (lineShape) textBox.lineShape = lineShape;
+  if (preset) {
+    textBox.geometry = preset.geometry;
+    if (preset.cornerAdj !== undefined) textBox.cornerAdj = preset.cornerAdj;
+  }
   if (bodyProps.margins) textBox.margins = bodyProps.margins;
   // `wps:bodyPr` carries a dozen attributes and an autofit child that the
   // model has no field for; rebuilding it from margins alone dropped
@@ -388,6 +439,124 @@ export function isFilledShapeDrawing(drawingEl: XmlElement): boolean {
  */
 export function parseFilledShapeAsTextBox(drawingEl: XmlElement): TextBox | null {
   return parseWspDrawing(drawingEl, /* requireTextBox */ false);
+}
+
+/**
+ * Text boxes and shapes inside a grouped drawing (`wpg:wgp`), each already
+ * mapped from the group's child coordinate space onto the page.
+ *
+ * Word groups a callout panel — a filled rectangle, an accent bar and the
+ * text box over them — into one `wpg:wgp`. `isTextBoxDrawing` and
+ * `isFilledShapeDrawing` only look for a `wps:wsp` directly under
+ * `a:graphicData`, so the whole panel fell out of the model and the page
+ * showed nothing where the file drew a bordered box (and the body text that
+ * should wrap beside it ran full width instead).
+ *
+ * The group itself round-trips verbatim as preserved `rawXml`, so every box
+ * returned here is paint-only; the caller marks them `renderOnly`. The
+ * `wsp` element rides along so the caller can parse `w:txbxContent` with the
+ * paragraph parser it owns.
+ *
+ * @returns One entry per shape, in document order, or `[]` when the drawing
+ *   holds no group.
+ */
+export function parseGroupShapesAsTextBoxes(
+  drawingEl: XmlElement
+): Array<{ textBox: TextBox; wsp: XmlElement }> {
+  const children = getChildElements(drawingEl);
+  const container = children.find((el) => el.name === 'wp:inline' || el.name === 'wp:anchor');
+  if (!container) return [];
+  const graphicData = findByFullName(findByFullName(container, 'a:graphic'), 'a:graphicData');
+  if (!graphicData) return [];
+  const group = findByFullName(graphicData, 'wpg:wgp');
+  if (!group) return [];
+  const rootFrame = rootGroupFrame(group);
+  if (!rootFrame) return [];
+
+  const isAnchor = container.name === 'wp:anchor';
+  const posH = isAnchor ? readGroupAnchorPosition(container, 'positionH') : null;
+  const posV = isAnchor ? readGroupAnchorPosition(container, 'positionV') : null;
+  const wrap = isAnchor ? parseAnchorWrap(container) : undefined;
+  const groupRelativeHeight = isAnchor
+    ? parseNumericAttribute(container, null, 'relativeHeight')
+    : null;
+
+  const leaves: Array<{ element: XmlElement; frame: GroupFrame }> = [];
+  collectGroupLeaves(group, rootFrame, 'wsp', leaves);
+
+  const out: Array<{ textBox: TextBox; wsp: XmlElement }> = [];
+  leaves.forEach(({ element: wsp, frame }, index) => {
+    const spPr = getChildElements(wsp).find((el) => getLocalName(el.name ?? '') === 'spPr');
+    const bodyPr = getChildElements(wsp).find((el) => getLocalName(el.name ?? '') === 'bodyPr');
+    const xfrm = readXfrm(findByFullName(spPr ?? null, 'a:xfrm'));
+    if (!xfrm?.off || !xfrm.ext) return;
+
+    const fill = parseFill(spPr ?? null);
+    const outline = parseOutline(spPr ?? null);
+    const hasText = !!findByFullName(wsp, 'wps:txbx');
+    // Nothing to paint and nothing to read — skip it rather than stack an
+    // invisible click-through frame over the body.
+    if (!fill && !outline && !hasText) return;
+
+    const textBox: TextBox = {
+      type: 'textBox',
+      size: {
+        width: Math.round(xfrm.ext.x * frame.scaleX),
+        height: Math.round(xfrm.ext.y * frame.scaleY),
+      },
+      content: [],
+    };
+    if (fill) textBox.fill = fill;
+    if (outline) textBox.outline = outline;
+    const lineShape = parseLineShape(wsp, spPr);
+    if (lineShape) textBox.lineShape = lineShape;
+    const preset = parsePresetGeometry(spPr);
+    if (preset) {
+      textBox.geometry = preset.geometry;
+      if (preset.cornerAdj !== undefined) textBox.cornerAdj = preset.cornerAdj;
+    }
+    const bodyProps = parseBodyProperties(bodyPr ?? null);
+    if (bodyProps.margins) textBox.margins = bodyProps.margins;
+    if (bodyPr) textBox.bodyPrXml = elementToSelfContainedXml(bodyPr);
+
+    if (isAnchor) {
+      textBox.position = {
+        horizontal: {
+          relativeTo: (posH?.relativeTo ?? 'column') as ImagePosition['horizontal']['relativeTo'],
+          // An aligned group carries `alignment` and NO `posOffset`; emitting
+          // both silently pins it back to the origin. Same rule as
+          // `deriveGroupPreviewImages`.
+          //
+          // KNOWN LIMIT: the child's own mapped offset is dropped with it, so
+          // every child of an ALIGNED group aligns independently. Correct
+          // when the children share the group's box (a panel and the bar
+          // across its top — the common callout), wrong for a group whose
+          // children sit at different offsets. Fixing it needs the anchor to
+          // carry an alignment AND a delta, which the position model has no
+          // field for.
+          ...(posH?.hasOffset === false && posH.alignment
+            ? { alignment: posH.alignment as ImagePosition['horizontal']['alignment'] }
+            : { posOffset: Math.round((posH?.offset ?? 0) + mapX(frame, xfrm.off.x)) }),
+        },
+        vertical: {
+          relativeTo: (posV?.relativeTo ?? 'paragraph') as ImagePosition['vertical']['relativeTo'],
+          ...(posV?.hasOffset === false && posV.alignment
+            ? { alignment: posV.alignment as ImagePosition['vertical']['alignment'] }
+            : { posOffset: Math.round((posV?.offset ?? 0) + mapY(frame, xfrm.off.y)) }),
+        },
+      };
+      if (wrap) textBox.wrap = wrap;
+      // Children stack in document order within the group; keep them above
+      // one another but all at the group's own z-level.
+      if (groupRelativeHeight !== null && groupRelativeHeight !== undefined) {
+        textBox.relativeHeight = groupRelativeHeight + index;
+      }
+    }
+
+    out.push({ textBox, wsp });
+  });
+
+  return out;
 }
 
 /**
@@ -536,6 +705,7 @@ export function getTextBoxText(textBox: TextBox): string {
   const parts: string[] = [];
 
   for (const paragraph of textBox.content) {
+    if (paragraph.type !== 'paragraph') continue;
     const runTexts: string[] = [];
     for (const item of paragraph.content) {
       if (item.type === 'run') {

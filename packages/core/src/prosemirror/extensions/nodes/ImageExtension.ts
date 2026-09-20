@@ -219,6 +219,9 @@ export const ImageExtension = createNodeExtension({
       cropBottom: { default: null },
       cropLeft: { default: null },
       opacity: { default: null },
+      // `a:prstGeom` on the picture — the circular/rounded crop Word paints.
+      geometry: { default: null },
+      cornerAdj: { default: null },
       effectExtentTop: { default: null },
       effectExtentBottom: { default: null },
       effectExtentLeft: { default: null },

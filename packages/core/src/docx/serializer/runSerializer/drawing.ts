@@ -12,14 +12,15 @@ import type {
   Image,
   ImagePosition,
   ImageWrap,
-  Paragraph,
   Shape,
   ShapeContent,
   ShapeFill,
   ShapeOutline,
   ShapeTextBody,
+  ShapeBlockContent,
 } from '../../../types/document';
 import { serializeParagraph } from '../paragraphSerializer';
+import { serializeTable } from '../tableSerializer';
 import { escapeXml, intAttr } from '../xmlUtils';
 import { preservedBodyPrXml, preservedSpPrExtra } from '../../preservedShapeXml';
 
@@ -119,6 +120,39 @@ function modelledBodyPrAttrs(tb: ShapeTextBody): Record<string, string> {
 }
 
 /** `wps:spPr` children below the fill: the line, then the effects. */
+/**
+ * `a:prstGeom`. A modelled geometry wins: a `roundRect` pill, an `ellipse`
+ * badge or a circular headshot re-serialized as the default `rect` came back
+ * with square corners. Shared by `wps:spPr` and `pic:spPr` — the preset means
+ * the same thing on a picture as on a shape.
+ */
+function presetGeometryXml(
+  geometry: 'ellipse' | 'roundRect' | undefined,
+  cornerAdj: number | undefined,
+  fallbackPrst: string
+): string {
+  if (geometry === 'ellipse') return '<a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>';
+  if (geometry === 'roundRect') {
+    const avLst =
+      cornerAdj === undefined
+        ? '<a:avLst/>'
+        : `<a:avLst><a:gd name="adj" fmla="val ${Math.round(cornerAdj * 100000)}"/></a:avLst>`;
+    return `<a:prstGeom prst="roundRect">${avLst}</a:prstGeom>`;
+  }
+  return `<a:prstGeom prst="${fallbackPrst}"><a:avLst/></a:prstGeom>`;
+}
+
+/**
+ * A shape's `a:prstGeom`. `shapeType` 'textBox' is spelled `rect` in the file.
+ */
+function presetGeometry(shape: Shape): string {
+  return presetGeometryXml(
+    shape.geometry,
+    shape.cornerAdj,
+    shape.shapeType === 'textBox' ? 'rect' : shape.shapeType
+  );
+}
+
 function spPrExtras(shape: Shape): string {
   const preserved = preservedSpPrExtra(shape.spPrExtraXml);
   const ln = shape.outline ? serializeOutline(shape.outline) : (preserved.ln ?? '');
@@ -251,7 +285,7 @@ function serializePicGraphic(image: Image, sharedId: string): string {
     '<a:off x="0" y="0"/>',
     `<a:ext cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     '</a:xfrm>',
-    '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>',
+    presetGeometryXml(image.geometry, image.cornerAdj, 'rect'),
     image.outline ? serializeOutline(image.outline) : '',
     '</pic:spPr>',
     '</pic:pic>',
@@ -324,8 +358,12 @@ export function serializeDrawingContent(content: DrawingContent): string {
 }
 
 /** Serialize text body content for shapes/textboxes */
-function serializeShapeTextBody(paragraphs: Paragraph[]): string {
-  return paragraphs.map((p) => serializeParagraph(p)).join('');
+function serializeShapeTextBody(blocks: ShapeBlockContent[]): string {
+  // `w:txbxContent` is EG_BlockLevelElts, so a text box round-trips tables
+  // as well as paragraphs.
+  return blocks
+    .map((b) => (b.type === 'table' ? serializeTable(b) : serializeParagraph(b)))
+    .join('');
 }
 
 /**
@@ -359,7 +397,7 @@ export function serializeShapeContent(content: ShapeContent): string {
     '<a:off x="0" y="0"/>',
     `<a:ext cx="${intAttr(cx)}" cy="${intAttr(cy)}"/>`,
     '</a:xfrm>',
-    `<a:prstGeom prst="${shape.shapeType === 'textBox' ? 'rect' : shape.shapeType}"><a:avLst/></a:prstGeom>`,
+    presetGeometry(shape),
     serializeFill(shape.fill),
     // A model outline wins over the source `<a:ln>` — the user may have set one
     // through the UI. With nothing modelled, replay the source's: an explicit

@@ -53,6 +53,7 @@ import {
   parsePositionV,
   WRAP_ELEMENT_NAMES as WRAP_ELEMENTS,
   parseWrapElement,
+  parsePresetGeometry,
 } from './drawingUtils';
 
 // Re-export for backwards compatibility
@@ -308,11 +309,11 @@ function extractBlipRId(blip: XmlElement | null): string {
 }
 
 /**
- * Find transform (a:xfrm) from picture shape properties
+ * Find the picture's shape properties.
  *
- * Path: a:graphic > a:graphicData > pic:pic > pic:spPr > a:xfrm
+ * Path: a:graphic > a:graphicData > pic:pic > pic:spPr
  */
-function findPictureTransform(container: XmlElement): XmlElement | null {
+function findPictureSpPr(container: XmlElement): XmlElement | null {
   const graphic = findByFullName(container, 'a:graphic');
   if (!graphic) return null;
 
@@ -322,11 +323,16 @@ function findPictureTransform(container: XmlElement): XmlElement | null {
   const pic = findByFullName(graphicData, 'pic:pic');
   if (!pic) return null;
 
-  const spPr = findByFullName(pic, 'pic:spPr');
-  if (!spPr) return null;
+  return findByFullName(pic, 'pic:spPr');
+}
 
-  const xfrm = findByFullName(spPr, 'a:xfrm');
-  return xfrm;
+/**
+ * Find transform (a:xfrm) from picture shape properties
+ *
+ * Path: a:graphic > a:graphicData > pic:pic > pic:spPr > a:xfrm
+ */
+function findPictureTransform(container: XmlElement): XmlElement | null {
+  return findByFullName(findPictureSpPr(container), 'a:xfrm');
 }
 
 // ============================================================================
@@ -508,6 +514,10 @@ function parseInline(
   const xfrm = findPictureTransform(inlineEl);
   const transform = parseTransform(xfrm);
 
+  // `a:prstGeom` on `pic:spPr` — Word paints the preset, not the frame, so a
+  // headshot stored as `ellipse` is a circle.
+  const preset = parsePresetGeometry(findPictureSpPr(inlineEl));
+
   // Read distance attributes from wp:inline (OOXML spec: distT, distB, distL, distR)
   const distT = parseNumericAttribute(inlineEl, null, 'distT') ?? undefined;
   const distB = parseNumericAttribute(inlineEl, null, 'distB') ?? undefined;
@@ -540,6 +550,10 @@ function parseInline(
   if (transform) image.transform = transform;
   if (crop) image.crop = crop;
   if (opacity !== undefined) image.opacity = opacity;
+  if (preset) {
+    image.geometry = preset.geometry;
+    if (preset.cornerAdj !== undefined) image.cornerAdj = preset.cornerAdj;
+  }
 
   // Resolve image hyperlink (a:hlinkClick)
   if (props.hlinkRId && rels) {
@@ -629,6 +643,9 @@ function parseAnchor(
   const xfrm = findPictureTransform(anchorEl);
   const transform = parseTransform(xfrm);
 
+  // See parseInline: the preset geometry clips the picture.
+  const preset = parsePresetGeometry(findPictureSpPr(anchorEl));
+
   const image: Image = {
     type: 'image',
     rId,
@@ -650,6 +667,10 @@ function parseAnchor(
   if (transform) image.transform = transform;
   if (crop) image.crop = crop;
   if (opacity !== undefined) image.opacity = opacity;
+  if (preset) {
+    image.geometry = preset.geometry;
+    if (preset.cornerAdj !== undefined) image.cornerAdj = preset.cornerAdj;
+  }
   if (layoutInCell !== undefined) image.layoutInCell = layoutInCell;
   if (allowOverlap !== undefined) image.allowOverlap = allowOverlap;
   if (relativeHeight !== undefined) image.relativeHeight = relativeHeight;

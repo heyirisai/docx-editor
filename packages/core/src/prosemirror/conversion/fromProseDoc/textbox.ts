@@ -11,9 +11,16 @@
 
 import type { Node as PMNode } from 'prosemirror-model';
 import { pixelsToEmu } from '../../../docx/imageParser';
-import type { Paragraph, Run, Shape, ShapeContent } from '../../../types/document';
+import type {
+  Paragraph,
+  Run,
+  Shape,
+  ShapeBlockContent,
+  ShapeContent,
+} from '../../../types/document';
 import { textBoxPositionFromAttrs, textBoxWrapFromAttrs } from '../textBoxAnchors';
 import { convertPMParagraph } from './paragraph';
+import { convertPMTable } from './tables';
 
 /**
  * Convert a ProseMirror textBox node back to a Paragraph wrapping a ShapeContent run.
@@ -22,13 +29,15 @@ import { convertPMParagraph } from './paragraph';
 export function convertPMTextBoxRun(node: PMNode): Run {
   const attrs = node.attrs as import('../../extensions/nodes/TextBoxExtension').TextBoxAttrs;
 
-  // Extract child paragraphs from the text box content
-  const childParagraphs: Paragraph[] = [];
+  // Extract the text box's block content. `w:txbxContent` is
+  // EG_BlockLevelElts, so a table inside a box round-trips as a table.
+  const childBlocks: ShapeBlockContent[] = [];
   node.forEach((child) => {
     if (child.type.name === 'paragraph') {
-      childParagraphs.push(convertPMParagraph(child));
+      childBlocks.push(convertPMParagraph(child));
+    } else if (child.type.name === 'table') {
+      childBlocks.push(convertPMTable(child));
     }
-    // Tables inside text boxes are currently not round-tripped
   });
 
   // Build shape with text body. shapeType MUST be 'textBox' (not 'rect') so the
@@ -45,7 +54,7 @@ export function convertPMTextBoxRun(node: PMNode): Run {
       height: attrs.height ? pixelsToEmu(attrs.height) : 0,
     },
     textBody: {
-      content: childParagraphs.length > 0 ? childParagraphs : [{ type: 'paragraph', content: [] }],
+      content: childBlocks.length > 0 ? childBlocks : [{ type: 'paragraph', content: [] }],
       margins: {
         top: attrs.marginTop != null ? pixelsToEmu(attrs.marginTop) : undefined,
         bottom: attrs.marginBottom != null ? pixelsToEmu(attrs.marginBottom) : undefined,
@@ -59,6 +68,11 @@ export function convertPMTextBoxRun(node: PMNode): Run {
   // Canvas-only frame: the source markup is written back verbatim, so the run
   // serializer drops this shape rather than emitting a second copy of it.
   if (attrs.renderOnly) shape.renderOnly = true;
+  if (attrs.lineShape === 'down' || attrs.lineShape === 'up') shape.lineShape = attrs.lineShape;
+  if (attrs.geometry === 'ellipse' || attrs.geometry === 'roundRect') {
+    shape.geometry = attrs.geometry;
+    if (typeof attrs.cornerAdj === 'number') shape.cornerAdj = attrs.cornerAdj;
+  }
 
   const position = textBoxPositionFromAttrs(attrs);
   if (position) {

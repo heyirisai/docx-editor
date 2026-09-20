@@ -69,6 +69,8 @@ const DEFAULT_MARGINS: PageMargins = {
 export type SectionLayoutConfig = {
   pageSize: { w: number; h: number };
   margins: PageMargins;
+  /** `w:titlePg` — margins for this section's first page only, if different. */
+  firstPageMargins?: PageMargins;
   /** Optional. Sections without explicit columns inherit `{ count: 1 }`. */
   columns?: ColumnLayout;
 };
@@ -101,6 +103,7 @@ export function collectSectionConfigs(
     const config: SectionLayoutConfig = {
       pageSize: sb.pageSize ?? previousConfig.pageSize,
       margins: sb.margins ?? previousConfig.margins,
+      firstPageMargins: sb.firstPageMargins,
       columns: sb.columns,
     };
     configs.push(config);
@@ -214,10 +217,16 @@ export function layoutDocument(
   // ECMA-376 §17.6.22: each section break carries the CURRENT section's
   // properties; `w:type` describes how that section starts relative to the
   // previous one.
-  const bodyConfig: SectionLayoutConfig = { pageSize, margins, columns: options.columns };
+  const bodyConfig: SectionLayoutConfig = {
+    pageSize,
+    margins,
+    firstPageMargins: options.firstPageMargins,
+    columns: options.columns,
+  };
   const finalConfig: SectionLayoutConfig = {
     pageSize: finalPageSize,
     margins: finalMargins,
+    firstPageMargins: options.finalFirstPageMargins,
     columns: options.columns,
   };
   const { configs: sectionConfigs, breakIndices } = collectSectionConfigs(
@@ -236,6 +245,7 @@ export function layoutDocument(
   const paginator = createPaginator({
     pageSize: initialConfig.pageSize,
     margins: initialConfig.margins,
+    firstPageMargins: initialConfig.firstPageMargins,
     columns: initialConfig.columns ?? DEFAULT_COLUMNS,
     footnoteReservedHeights: options.footnoteReservedHeights,
   });
@@ -319,9 +329,18 @@ export function layoutDocument(
         break;
 
       case 'sectionBreak': {
-        // Use the NEXT section's columns; for break type, prefer next section's
-        // type but fall back to current break's type (preserves explicit 'continuous')
-        const nextType = sectionBreakTypes[sectionIdx + 1] ?? sectionBreakTypes[sectionIdx];
+        // §17.6.22: `w:type` says how the section it BELONGS TO starts relative
+        // to the previous one, so the break we are executing is governed by the
+        // section we are entering — not by the one we are leaving. Measured
+        // against Word: with `sectPr0 = nextPage, sectPr1 = continuous`, Word
+        // keeps section 1 on section 0's page; flip the two and every section
+        // gets its own page.
+        //
+        // An ABSENT `w:type` is `nextPage`, not "whatever the previous break
+        // was". Falling back to the outgoing break's type made COMET's three
+        // trailing `continuous` sections swallow the page break that opens the
+        // Compensation divider, losing that sheet entirely.
+        const nextType = sectionBreakTypes[sectionIdx + 1];
         const nextSectionConfig = sectionConfigs[sectionIdx + 1] ?? initialConfig;
         handleSectionBreak(
           block as SectionBreakBlock,
@@ -478,11 +497,19 @@ function layoutParagraph(
       continuesOnNext: !isLastFragment,
     };
 
+    // A zero-capacity cover page (a `w:titlePg` header that fills the sheet)
+    // may only swallow a fragment that paints nothing — an empty spacer line
+    // has width 0, real text does not. See `Paginator.ensureFits`.
+    const paintsSomething = measure.lines
+      .slice(currentLineIndex, currentLineIndex + fittingLines)
+      .some((line) => line.width > 0);
+
     const result = paginator.addFragment(
       fragment,
       linesHeight,
       effectiveSpaceBefore,
-      effectiveSpaceAfter
+      effectiveSpaceAfter,
+      paintsSomething
     );
     fragment.y = result.y;
 

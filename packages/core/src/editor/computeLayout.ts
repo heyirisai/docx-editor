@@ -287,17 +287,21 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
   // helper: uses in-flow `flowHeight` so page/margin-anchored floats (e.g. a
   // letterhead) don't push the body (issue #705), with a content-area clamp;
   // mutates each `sectionBreak.margins` in place.
-  const { margins: effectiveMargins, finalMargins: effectiveFinalMargins } =
-    extendMarginsForHeaderFooter({
-      pageSize,
-      margins,
-      finalMargins,
-      bodyBlocks: blocks,
-      sections: sectionHeaderFooters,
-      headers: [headerContentForRender, firstPageHeaderForRender],
-      footers: [footerContentForRender, firstPageFooterForRender],
-      warn: (msg) => console.warn(`[computeLayout] ${msg}`),
-    });
+  const {
+    margins: effectiveMargins,
+    finalMargins: effectiveFinalMargins,
+    firstPageMargins: effectiveFirstPageMargins,
+    finalFirstPageMargins: effectiveFinalFirstPageMargins,
+  } = extendMarginsForHeaderFooter({
+    pageSize,
+    margins,
+    finalMargins,
+    bodyBlocks: blocks,
+    sections: sectionHeaderFooters,
+    headers: [headerContentForRender, firstPageHeaderForRender],
+    footers: [footerContentForRender, firstPageFooterForRender],
+    warn: (msg) => console.warn(`[computeLayout] ${msg}`),
+  });
 
   // Step 3: Layout onto pages (two-pass when footnotes exist).
   const bodyBreakType = finalSectionProperties?.sectionStart as
@@ -311,6 +315,8 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     margins: effectiveMargins,
     finalPageSize,
     finalMargins: effectiveFinalMargins,
+    firstPageMargins: effectiveFirstPageMargins,
+    finalFirstPageMargins: effectiveFinalFirstPageMargins,
     columns: finalColumns,
     bodyBreakType,
     pageGap,

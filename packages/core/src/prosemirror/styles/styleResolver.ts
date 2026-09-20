@@ -28,6 +28,18 @@ export interface ResolvedParagraphStyle {
   paragraphFormatting?: ParagraphFormatting;
   /** Default run formatting from the style */
   runFormatting?: TextFormatting;
+  /**
+   * `runFormatting` WITHOUT the `w:docDefaults` layer — just what the style
+   * chain itself declares.
+   *
+   * Document defaults are the BOTTOM of the style hierarchy (§17.7.2:
+   * doc defaults → table style → numbering → paragraph style → character
+   * style → direct), so a caller that also holds table-style run properties
+   * has to slot them BETWEEN the two. Folded into `runFormatting` the two
+   * layers are indistinguishable, and a table style could never win over a
+   * document default.
+   */
+  ownRunFormatting?: TextFormatting;
 }
 
 /**
@@ -136,12 +148,17 @@ export class StyleResolver {
     if (this.docDefaults?.rPr) {
       result.runFormatting = { ...this.docDefaults.rPr };
     }
+    // Same merges, but starting from nothing, so the caller can see the style
+    // chain's own run properties separately from the document defaults.
+    const styleOnly: ResolvedParagraphStyle = {};
 
     // If no styleId, apply Normal style (if exists)
     if (!styleId) {
       if (this.defaultParagraphStyle) {
         this.mergeStyleIntoResult(result, this.defaultParagraphStyle);
+        this.mergeStyleIntoResult(styleOnly, this.defaultParagraphStyle);
       }
+      result.ownRunFormatting = styleOnly.runFormatting;
       return result;
     }
 
@@ -151,12 +168,16 @@ export class StyleResolver {
       // Style not found, fall back to Normal
       if (this.defaultParagraphStyle) {
         this.mergeStyleIntoResult(result, this.defaultParagraphStyle);
+        this.mergeStyleIntoResult(styleOnly, this.defaultParagraphStyle);
       }
+      result.ownRunFormatting = styleOnly.runFormatting;
       return result;
     }
 
     // Merge style properties into result
     this.mergeStyleIntoResult(result, style);
+    this.mergeStyleIntoResult(styleOnly, style);
+    result.ownRunFormatting = styleOnly.runFormatting;
 
     return result;
   }

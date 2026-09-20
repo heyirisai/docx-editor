@@ -73,6 +73,12 @@ export interface TextBoxAttrs {
    * it, because the source markup round-trips verbatim.
    */
   renderOnly?: boolean | null;
+  /** See `Shape.lineShape` — a stroke-only connector, not a closed box. */
+  lineShape?: 'down' | 'up' | null;
+  /** See `Shape.geometry` — a rounded `a:prstGeom` preset. */
+  geometry?: 'ellipse' | 'roundRect' | null;
+  /** See `Shape.cornerAdj` — `roundRect` corner radius / min(w, h). */
+  cornerAdj?: number | null;
 }
 
 export const TextBoxExtension = createNodeExtension({
@@ -116,6 +122,9 @@ export const TextBoxExtension = createNodeExtension({
       // Canvas-only frame lifted out of preserved markup (a decorative filled
       // shape with no text). Painted like any text box; `fromProseDoc` emits
       // nothing for it, because the source markup is written back verbatim.
+      lineShape: { default: null },
+      geometry: { default: null },
+      cornerAdj: { default: null },
       renderOnly: { default: null },
     },
     parseDOM: [

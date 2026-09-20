@@ -22,7 +22,7 @@ import { schema } from '../schema';
 import type { Document, BlockContent, StyleDefinitions, Theme } from '../../types/document';
 import { createStyleResolver, type StyleResolver } from '../styles';
 import { getDocumentWatermark } from '../../docx/watermarkApi';
-import { paragraphHasNonLeadingPageBreak } from './toProseDoc/paragraph';
+import { unrepresentedPageBreakCount } from './toProseDoc/paragraph';
 import { convertTable } from './toProseDoc/tables';
 import { convertParagraphWithTextBoxes } from './toProseDoc/textbox';
 import { sdtPropsToAttrs } from './sdtAttrs';
@@ -49,8 +49,13 @@ function convertBlocksToNodes(
   for (const block of blocks) {
     if (block.type === 'paragraph') {
       nodes.push(...convertParagraphWithTextBoxes(block, styleResolver, theme));
-      if (includePageBreaks && paragraphHasNonLeadingPageBreak(block)) {
-        nodes.push(schema.node('pageBreak'));
+      if (includePageBreaks) {
+        // One node per break the paragraph's own `pageBreakBefore` does not
+        // already stand for — a paragraph holding two hard breaks skips two
+        // pages in Word.
+        for (let n = unrepresentedPageBreakCount(block); n > 0; n--) {
+          nodes.push(schema.node('pageBreak'));
+        }
       }
     } else if (block.type === 'table') {
       nodes.push(convertTable(block, styleResolver, theme));

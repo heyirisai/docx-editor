@@ -91,11 +91,11 @@ describe('extendMarginsForHeaderFooter', () => {
       finalMargins: MARGINS,
       footers: [tallFooter],
     });
-    // The footer band's TOP anchors at the w:footer distance and shifts up
-    // only when the content is taller: the body clears the footer's top
-    // edge, max(distance 47, flowHeight 200) = 200 from the page bottom —
-    // not distance + height (Word doesn't stack the two).
-    expect(margins.bottom).toBe(200);
+    // §17.6.11: `w:footer` is the distance from the page bottom to the
+    // footer's BOTTOM edge, so the band occupies `distance + flowHeight` and
+    // the body clears 47 + 200 from the page bottom. Measured in Word at three
+    // `w:footer` values — see `renderPage`'s `footerBandTop`.
+    expect(margins.bottom).toBe(247);
   });
 
   test('the max band across header variants (default + first-page) wins', () => {
@@ -139,5 +139,55 @@ describe('extendMarginsForHeaderFooter', () => {
       headers: [hf({ flowHeight: 300 })],
     });
     expect(bodyBlocks[0].margins.top).toBe(347);
+  });
+});
+
+describe('w:titlePg — per-page bands', () => {
+  test("a cover's tall first-page header pushes ONLY its own page", () => {
+    // A full-page cover picture wrapped `square` in the first-page header:
+    // its own header text is displaced below the artwork, so the band is
+    // taller than the sheet. The rest of the section keeps a short header.
+    const { margins, firstPageMargins } = extendMarginsForHeaderFooter({
+      pageSize: PAGE,
+      margins: MARGINS,
+      finalMargins: MARGINS,
+      sections: [
+        {
+          header: hf({ flowHeight: 30 }),
+          firstHeader: hf({ flowHeight: 1200 }),
+          titlePg: true,
+        },
+      ],
+    });
+    // Pages 2+ keep the authored margin — `max(header, firstHeader)` used to
+    // hand them the cover's band and collapse every page of the section.
+    expect(margins.top).toBe(MARGINS.top);
+    // Page 1 gets a top margin bounded by the sheet, so nothing fits on it:
+    // Word starts the body overleaf.
+    expect(firstPageMargins).toBeDefined();
+    expect(firstPageMargins!.top).toBe(PAGE.h);
+    expect(firstPageMargins!.bottom).toBe(0);
+  });
+
+  test('titlePg with no first-page header means NO header on page one', () => {
+    const { margins, firstPageMargins } = extendMarginsForHeaderFooter({
+      pageSize: PAGE,
+      margins: MARGINS,
+      finalMargins: MARGINS,
+      sections: [{ header: hf({ flowHeight: 400 }), titlePg: true }],
+    });
+    expect(margins.top).toBe(47 + 400);
+    // No band on page one, so it keeps the authored margin.
+    expect(firstPageMargins).toEqual(MARGINS);
+  });
+
+  test('no titlePg → no per-page override at all', () => {
+    const { firstPageMargins } = extendMarginsForHeaderFooter({
+      pageSize: PAGE,
+      margins: MARGINS,
+      finalMargins: MARGINS,
+      sections: [{ header: hf({ flowHeight: 400 }) }],
+    });
+    expect(firstPageMargins).toBeUndefined();
   });
 });

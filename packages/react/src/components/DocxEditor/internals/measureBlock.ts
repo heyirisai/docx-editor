@@ -11,11 +11,7 @@
  * the FlowBlock invariant note in CLAUDE.md.
  */
 
-import {
-  DEFAULT_TEXTBOX_MARGINS,
-  DEFAULT_TEXTBOX_WIDTH,
-  assertExhaustiveFlowBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
+import { assertExhaustiveFlowBlock } from '@eigenpal/docx-editor-core/layout-engine';
 import type {
   FlowBlock,
   ImageBlock,
@@ -32,6 +28,7 @@ import {
   measureBlocksWithFloats,
   measureParagraph,
   measureTableBlock,
+  measureTextBoxBlock,
   setCachedParagraphMeasure,
 } from '@eigenpal/docx-editor-core/layout-bridge';
 
@@ -71,7 +68,9 @@ export function measureBlock(
     }
 
     case 'table': {
-      return measureTableBlock(block as TableBlock, contentWidth, measureBlock);
+      return measureTableBlock(block as TableBlock, contentWidth, measureBlock, (blocks, w) =>
+        measureBlocks(blocks, w)
+      );
     }
 
     case 'image': {
@@ -83,20 +82,10 @@ export function measureBlock(
       };
     }
 
-    case 'textBox': {
-      const tb = block as TextBoxBlock;
-      const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
-      const innerWidth = (tb.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
-      const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
-      const contentHeight = innerMeasures.reduce((sum, m) => sum + m.totalHeight, 0);
-      const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
-      return {
-        kind: 'textBox' as const,
-        width: tb.width ?? DEFAULT_TEXTBOX_WIDTH,
-        height: totalHeight,
-        innerMeasures,
-      };
-    }
+    case 'textBox':
+      return measureTextBoxBlock(block as TextBoxBlock, (inner, width) =>
+        measureBlock(inner, width)
+      );
 
     case 'pageBreak':
       return { kind: 'pageBreak' };

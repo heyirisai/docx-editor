@@ -265,6 +265,14 @@ export interface ImageAttrs {
   /** `a:alphaModFix amt` mapped to CSS `opacity` in [0, 1]. */
   opacity?: number;
   /**
+   * Rounded `a:prstGeom` preset on `pic:spPr` — `ellipse` is Word's circular
+   * picture crop, `roundRect` its rounded-corner one. Renders as a
+   * `border-radius`; absent means the default square `rect`.
+   */
+  geometry?: 'ellipse' | 'roundRect' | null;
+  /** `roundRect` corner adjust as a fraction of the shorter side. */
+  cornerAdj?: number | null;
+  /**
    * `wp:effectExtent` padding (pixels) — extra space reserved around the image
    * for shadows, glows, soft edges, etc. Applied as outer margin so the
    * effect isn't clipped by surrounding content.

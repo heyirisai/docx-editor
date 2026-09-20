@@ -44,6 +44,7 @@ import {
   calculateTabWidth,
   pixelsToTwips,
   type TabContext,
+  positionalTabStop,
 } from '../../prosemirror/utils/tabCalculator';
 import { getListMarkerInlineWidth } from './listMarkerWidth';
 
@@ -334,12 +335,18 @@ export function clampFloatingWrapMargins(
   leftMargin: number,
   rightMargin: number,
   contentWidth: number
-): { leftMargin: number; rightMargin: number } {
+): { leftMargin: number; rightMargin: number; fullWidthBlock?: boolean } {
   const cw = Math.max(1, contentWidth);
   const lm = Math.max(0, leftMargin);
   const rm = Math.max(0, rightMargin);
   if (lm >= cw || rm >= cw || lm + rm >= cw) {
-    return { leftMargin: 0, rightMargin: 0 };
+    // No usable room beside the float. Word does not ignore it — it pushes
+    // the line BELOW, exactly as for a `topAndBottom` wrap. Reporting "no
+    // exclusion" instead let a full-page header picture keep the header's own
+    // text at the top of the page, so the header band never grew and the body
+    // margin was never pushed down (a cover page's first body line then
+    // landed under the artwork instead of on the next page).
+    return { leftMargin: 0, rightMargin: 0, fullWidthBlock: true };
   }
   return { leftMargin: lm, rightMargin: rm };
 }
@@ -391,11 +398,15 @@ export function measureParagraph(
   const bodyContentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   // First line offset: positive = first-line indent (less space), negative = hanging (more space)
   // Subtracting gives correct width in both cases.
-  // Inline list markers in the firstLine path eat into the body width too —
-  // subtract the marker's footprint so long markers don't push the last run
-  // past the right edge. The hanging path already widens via firstLineOffset
-  // (= firstLine − hanging) so it must not be subtracted again.
-  const markerInlineWidth = (indent?.hanging ?? 0) === 0 ? getListMarkerInlineWidth(block) : 0;
+  //
+  // The marker's footprint comes off the first line on TOP of that. Both
+  // effects are real and independent: `firstLineOffset` moves where the line
+  // STARTS, and the marker then occupies that reclaimed space. Exempting the
+  // hanging path let a bulleted first line measure `hanging` px wider than the
+  // painter draws it — the painter puts body text at `indentLeft` either way —
+  // so the last word ran past the right edge and was clipped. Most visible in
+  // a narrow table cell, but the overrun is there for every hanging list.
+  const markerInlineWidth = getListMarkerInlineWidth(block);
   const baseFirstLineWidth = Math.max(1, bodyContentWidth - firstLineOffset - markerInlineWidth);
 
   // Track cumulative height for floating zone calculations
@@ -744,8 +755,19 @@ export function measureParagraph(
       const lineX = currentLine.width + (currentLine.leftOffset ?? 0);
       const isFirstLine = lines.length === 0;
       const contentX = indentLeft + (isFirstLine ? firstLineOffset : 0) + lineX;
+      // `<w:ptab>` names its own boundary, so it replaces the paragraph's
+      // stops for this run instead of searching them (§17.3.3.19).
       const tabContext: TabContext = {
-        explicitStops: attrs?.tabs,
+        explicitStops: run.ptab
+          ? [
+              positionalTabStop(run.ptab, {
+                contentWidthPx: maxWidth,
+                indentLeftPx: indentLeft,
+                indentRightPx: indentRight,
+              }),
+            ]
+          : attrs?.tabs,
+        positional: run.ptab !== undefined,
         leftIndent: pixelsToTwips(indentLeft),
       };
       const tabResult = calculateTabWidth(contentX, tabContext, { followingWidth });

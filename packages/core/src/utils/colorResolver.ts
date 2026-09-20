@@ -161,6 +161,67 @@ function rgbToHex(r: number, g: number, b: number): string {
 }
 
 /**
+ * Apply DrawingML `a:lumMod` / `a:lumOff` (§20.1.2.3.20-21): scale the
+ * colour's HSL luminance, then offset it. This is the pair Word writes for
+ * every "Lighter 40%" / "Darker 25%" theme variant in its colour picker —
+ * `lumMod` alone for a darker shade, `lumMod` + `lumOff` for a lighter one.
+ *
+ * @param hex - 6-character hex color (no #)
+ * @param lumMod - multiplier as a fraction, or `undefined` for 1
+ * @param lumOff - addend as a fraction, or `undefined` for 0
+ */
+function applyLuminance(hex: string, lumMod?: number, lumOff?: number): string {
+  if (lumMod === undefined && lumOff === undefined) return hex;
+  const { r, g, b } = hexToRgb(hex);
+  const [h, sat, lum] = rgbToHsl(r, g, b);
+  const next = Math.min(1, Math.max(0, lum * (lumMod ?? 1) + (lumOff ?? 0)));
+  const [nr, ng, nb] = hslToRgb(h, sat, next);
+  return rgbToHex(nr, ng, nb);
+}
+
+/** RGB (0-255) to HSL with h in [0,1) and s/l in [0,1]. */
+function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h: number;
+  if (max === rn) h = ((gn - bn) / d + (gn < bn ? 6 : 0)) / 6;
+  else if (max === gn) h = ((bn - rn) / d + 2) / 6;
+  else h = ((rn - gn) / d + 4) / 6;
+  return [h, s, l];
+}
+
+/** HSL back to RGB (0-255). */
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+  if (s === 0) {
+    const v = Math.round(l * 255);
+    return [v, v, v];
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const channel = (t: number): number => {
+    let tt = t;
+    if (tt < 0) tt += 1;
+    if (tt > 1) tt -= 1;
+    if (tt < 1 / 6) return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2) return q;
+    if (tt < 2 / 3) return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  return [
+    Math.round(channel(h + 1 / 3) * 255),
+    Math.round(channel(h) * 255),
+    Math.round(channel(h - 1 / 3) * 255),
+  ];
+}
+
+/**
  * Apply tint to a color (make lighter by blending with white)
  *
  * OOXML tint algorithm:
@@ -314,9 +375,14 @@ export function resolveColor(
       const shadeValue = parseModifierValue(color.themeShade);
       hexColor = applyShade(hexColor, shadeValue);
     }
+    hexColor = applyLuminance(hexColor, color.lumMod, color.lumOff);
   } else if (color.rgb) {
     // "auto" in OOXML means automatic color (typically black)
-    hexColor = color.rgb === 'auto' ? defaultColor : color.rgb;
+    hexColor = applyLuminance(
+      color.rgb === 'auto' ? defaultColor : color.rgb,
+      color.lumMod,
+      color.lumOff
+    );
   } else {
     // No color specified
     hexColor = defaultColor;
@@ -351,7 +417,7 @@ export function resolveColorToHex(
   }
 
   if (color.rgb && color.rgb !== 'auto') {
-    return color.rgb.toUpperCase().replace(/^#/, '');
+    return applyLuminance(color.rgb.toUpperCase().replace(/^#/, ''), color.lumMod, color.lumOff);
   }
 
   return undefined;

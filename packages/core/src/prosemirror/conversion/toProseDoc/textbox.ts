@@ -17,6 +17,7 @@ import { resolveColor } from '../../../utils/colorResolver';
 import type { StyleResolver } from '../../styles';
 import { isAnchoredDocxTextBox, textBoxAnchorAttrsFromDocx } from '../textBoxAnchors';
 import { convertParagraph } from './paragraph';
+import { convertTable } from './tables';
 
 /**
  * Convert a paragraph block to PM nodes, extracting text boxes as sibling nodes.
@@ -119,6 +120,9 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
               margins: shape.textBody.margins,
               bodyPrXml: shape.textBody.bodyPrXml,
               spPrExtraXml: shape.spPrExtraXml,
+              lineShape: shape.lineShape,
+              geometry: shape.geometry,
+              cornerAdj: shape.cornerAdj,
               renderOnly: shape.renderOnly,
             });
           }
@@ -138,8 +142,19 @@ function convertTextBox(
   theme?: Theme | null,
   hostParaId?: string | null
 ): PMNode {
-  const widthPx = textBox.size?.width ? emuToPixels(textBox.size.width) : 200;
-  const heightPx = textBox.size?.height ? emuToPixels(textBox.size.height) : undefined;
+  // A connector declares its real extent, and a rule's is zero on the axis it
+  // does not span: `cy="0"` for a horizontal one, `cx="0"` for a vertical one.
+  // Falling back on either axis drew the rule as a 200x26 diagonal instead.
+  const widthPx = textBox.size?.width
+    ? emuToPixels(textBox.size.width)
+    : textBox.lineShape
+      ? 0
+      : 200;
+  const heightPx = textBox.size?.height
+    ? emuToPixels(textBox.size.height)
+    : textBox.lineShape
+      ? 0
+      : undefined;
 
   // Convert fill color. Theme-referenced fills (a:schemeClr — e.g. a
   // full-page cover background rectangle filled with tx1/dk1) must
@@ -160,6 +175,10 @@ function convertTextBox(
     outlineWidth = Math.round((textBox.outline.width / 914400) * 96 * 100) / 100;
     if (textBox.outline.color?.rgb) {
       outlineColor = `#${textBox.outline.color.rgb}`;
+    } else if (textBox.outline.color?.themeColor) {
+      // Same reason as the fill above: a stroke declared as `a:schemeClr`
+      // fell through to the painter's black default.
+      outlineColor = resolveColor(textBox.outline.color, theme ?? null);
     }
     outlineStyle = textBox.outline.style || 'solid';
   }
@@ -172,10 +191,17 @@ function convertTextBox(
   const marginLeft = textBox.margins?.left != null ? emuToPixels(textBox.margins.left) : null;
   const marginRight = textBox.margins?.right != null ? emuToPixels(textBox.margins.right) : null;
 
-  // Convert text box content (paragraphs) to PM nodes
+  // Convert text box content to PM nodes. `w:txbxContent` is
+  // EG_BlockLevelElts, so it can hold tables too — the Iris proposal
+  // template's "PROOF POINT" panel is a two-column table inside a box, and
+  // dropping it painted an empty frame where the content should be.
   const contentNodes: PMNode[] = [];
-  for (const para of textBox.content) {
-    contentNodes.push(convertParagraph(para, styleResolver));
+  for (const child of textBox.content) {
+    contentNodes.push(
+      child.type === 'table'
+        ? convertTable(child, styleResolver, theme ?? null)
+        : convertParagraph(child, styleResolver)
+    );
   }
 
   // Ensure at least one paragraph
@@ -200,6 +226,9 @@ function convertTextBox(
       hostParaId: hostParaId ?? null,
       bodyPrXml: textBox.bodyPrXml ?? null,
       spPrExtraXml: textBox.spPrExtraXml ?? null,
+      lineShape: textBox.lineShape ?? null,
+      geometry: textBox.geometry ?? null,
+      cornerAdj: textBox.cornerAdj ?? null,
       renderOnly: textBox.renderOnly ?? null,
       ...textBoxAnchorAttrsFromDocx(textBox),
     },

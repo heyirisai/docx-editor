@@ -74,6 +74,13 @@ export interface ExtendMarginsForHeaderFooterInput {
 export interface ExtendMarginsForHeaderFooterResult {
   margins: PageMargins;
   finalMargins: PageMargins;
+  /**
+   * Margins for the FIRST page of the first / last section when `w:titlePg`
+   * gives it a different header-footer pair. `undefined` when that page is
+   * laid out like the rest of its section.
+   */
+  firstPageMargins?: PageMargins;
+  finalFirstPageMargins?: PageMargins;
 }
 
 /**
@@ -92,36 +99,53 @@ export function extendMarginsForHeaderFooter(
   const maxMargins = Math.max(0, pageSize.h - MIN_CONTENT_HEIGHT_PX);
   let clamped = false;
 
-  /** The band heights a section pushes its own body with. */
-  const bandsFor = (index: number): { header: number; footer: number } => {
+  /**
+   * The band heights a section pushes its own body with, split by page.
+   *
+   * `w:titlePg` gives the section's FIRST page its own header/footer pair, so
+   * its bands are measured separately: taking `max(header, firstHeader)` for
+   * the whole section let a cover's full-page first-page header shrink every
+   * page of that section to nothing.
+   */
+  const bandsFor = (
+    index: number
+  ): { rest: { header: number; footer: number }; first: { header: number; footer: number } } => {
     if (sections) {
       const sec = sections[index];
-      return {
-        header: Math.max(bandHeight(sec?.header), bandHeight(sec?.firstHeader)),
-        footer: Math.max(bandHeight(sec?.footer), bandHeight(sec?.firstFooter)),
-      };
+      const rest = { header: bandHeight(sec?.header), footer: bandHeight(sec?.footer) };
+      // With `w:titlePg` the first page uses its own pair — and a section that
+      // declares `titlePg` with no first-page reference has NO header there,
+      // which is a zero band, not the default one.
+      const first = sec?.titlePg
+        ? { header: bandHeight(sec.firstHeader), footer: bandHeight(sec.firstFooter) }
+        : rest;
+      return { rest, first };
     }
     // Single resolved pair for the whole document — the pre-section behaviour.
-    return {
+    const both = {
       header: Math.max(0, ...(headers ?? []).map(bandHeight)),
       footer: Math.max(0, ...(footers ?? []).map(bandHeight)),
     };
+    return { rest: both, first: both };
   };
 
   /**
    * Grow one section's margins past its own bands. The header band starts at
-   * the `w:header` distance and grows downward. The footer band's TOP anchors
-   * at the `w:footer` distance and content flows DOWN toward the page edge
-   * (shifting up only when taller than the distance), so the body must clear
-   * `max(distance, height)` from the page bottom — NOT distance + height,
-   * which reserved a full band-height too much whenever the distance exceeded
-   * the bottom margin.
+   * the `w:header` distance and grows downward (§17.6.13), so the body clears
+   * `headerDistance + height`. The footer is the mirror image (§17.6.11):
+   * `w:footer` is the distance from the page bottom to the footer's BOTTOM
+   * edge, so the band occupies `[h - distance - height, h - distance]` and the
+   * body must clear `distance + height`. Verified against Word at three
+   * different `w:footer` values — see `renderPage`'s `footerBandTop`.
    */
-  const extend = (m: PageMargins, index: number): PageMargins => {
-    const band = bandsFor(index);
+  const grow = (
+    m: PageMargins,
+    band: { header: number; footer: number },
+    allowEmptyContent: boolean
+  ): PageMargins => {
     const headerDistance = m.header ?? DEFAULT_HF_DISTANCE_PX;
     const footerDistance = m.footer ?? DEFAULT_HF_DISTANCE_PX;
-    const footerTopOffset = Math.max(footerDistance, band.footer);
+    const footerTopOffset = footerDistance + band.footer;
     // A section with no band has nothing for the body to clear. Without the
     // `> 0` guard the distance alone pushed the body down, so a full-bleed
     // cover that declares `w:pgMar top="0"` and no header still lost the
@@ -133,17 +157,34 @@ export function extendMarginsForHeaderFooter(
     const out = { ...m };
     if (growHeader) out.top = Math.max(m.top, headerDistance + band.header);
     if (growFooter) out.bottom = Math.max(m.bottom, footerTopOffset);
-    // Safety net: never let header + footer consume the whole page. Clamp the
-    // footer band first (it sits at the page bottom), then the header band if
-    // it alone still overflows, so the body keeps a positive content area.
-    if (out.top + out.bottom > maxMargins) {
-      clamped = true;
-      out.bottom = Math.max(0, Math.min(out.bottom, maxMargins - out.top));
-      if (out.top + out.bottom > maxMargins) {
-        out.top = Math.max(0, maxMargins - out.bottom);
+    // A `w:titlePg` cover page may legitimately have NO content area — Word
+    // fills the sheet with the first-page header's artwork and starts the
+    // body overleaf. That page is allowed to collapse to zero (bounded by the
+    // sheet); every other page keeps a content band so pagination can make
+    // progress.
+    const limit = allowEmptyContent ? pageSize.h : maxMargins;
+    if (out.top + out.bottom > limit) {
+      if (!allowEmptyContent) clamped = true;
+      // Clamp the footer band first (it sits at the page bottom), then the
+      // header band if it alone still overflows.
+      out.bottom = Math.max(0, Math.min(out.bottom, limit - out.top));
+      if (out.top + out.bottom > limit) {
+        out.top = Math.max(0, limit - out.bottom);
       }
     }
     return out;
+  };
+
+  const extend = (m: PageMargins, index: number): PageMargins =>
+    grow(m, bandsFor(index).rest, false);
+
+  /** `undefined` when the section's first page is laid out like the rest. */
+  const extendFirstPage = (m: PageMargins, index: number): PageMargins | undefined => {
+    const bands = bandsFor(index);
+    if (bands.first.header === bands.rest.header && bands.first.footer === bands.rest.footer) {
+      return undefined;
+    }
+    return grow(m, bands.first, true);
   };
 
   // Section 0 owns the body fallback margins; each `sectionBreak` owns the
@@ -156,6 +197,8 @@ export function extendMarginsForHeaderFooter(
 
   const extendedMargins = extend(margins, 0);
   const extendedFinal = extend(finalMargins, breaks.length);
+  const firstPageMargins = extendFirstPage(margins, 0);
+  const finalFirstPageMargins = extendFirstPage(finalMargins, breaks.length);
 
   // A section that overrides no margin inherits the previous section's, so the
   // base has to be tracked un-extended — otherwise the inherited value would
@@ -164,6 +207,7 @@ export function extendMarginsForHeaderFooter(
   for (let i = 0; i < breaks.length; i++) {
     const base = breaks[i].margins ?? inheritedBase;
     breaks[i].margins = extend(base, i);
+    breaks[i].firstPageMargins = extendFirstPage(base, i);
     inheritedBase = base;
   }
 
@@ -175,5 +219,10 @@ export function extendMarginsForHeaderFooter(
     );
   }
 
-  return { margins: extendedMargins, finalMargins: extendedFinal };
+  return {
+    margins: extendedMargins,
+    finalMargins: extendedFinal,
+    firstPageMargins,
+    finalFirstPageMargins,
+  };
 }

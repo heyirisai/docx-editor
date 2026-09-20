@@ -173,6 +173,18 @@ export interface Image {
    * serializer skips these. See docx/groupPreview.ts.
    */
   renderOnly?: boolean;
+  /**
+   * Rounded `a:prstGeom` preset on `pic:spPr` (§20.1.9.18). Word paints the
+   * preset rather than the picture's bounding box, so `ellipse` is the
+   * circular-headshot crop and `roundRect` the rounded-corner one. Absent
+   * means the default `rect`.
+   */
+  geometry?: 'ellipse' | 'roundRect';
+  /**
+   * `roundRect` corner adjust as a fraction of the SHORTER side, from
+   * `a:avLst/a:gd[@name="adj"]` (§20.1.9.11). Defaults to Word's 0.16667.
+   */
+  cornerAdj?: number;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
   /** Image outline/border */

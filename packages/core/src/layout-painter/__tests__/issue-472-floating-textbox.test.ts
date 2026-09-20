@@ -12,6 +12,7 @@ import {
   DEFAULT_TEXTBOX_WIDTH,
   type FlowBlock,
   type Measure,
+  type ParagraphBlock,
   type TextBoxBlock,
 } from '../../layout-engine/types';
 import { renderPage } from '../renderPage';
@@ -98,8 +99,8 @@ function measureFixtureBlock(block: FlowBlock): Measure {
     const textBox = block as TextBoxBlock;
     const margins = textBox.margins ?? DEFAULT_TEXTBOX_MARGINS;
     const innerWidth = (textBox.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
-    const innerMeasures = textBox.content.map((paragraph) =>
-      measureParagraph(paragraph, innerWidth)
+    const innerMeasures = textBox.content.map((child) =>
+      measureParagraph(child as ParagraphBlock, innerWidth)
     );
     return {
       kind: 'textBox',

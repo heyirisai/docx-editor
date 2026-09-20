@@ -17,6 +17,7 @@
 import type {
   Paragraph,
   Shape,
+  TextBox,
   ShapeContent,
   Theme,
   RelationshipMap,
@@ -35,6 +36,7 @@ import {
   isFilledShapeDrawing,
   parseTextBox,
   parseFilledShapeAsTextBox,
+  parseGroupShapesAsTextBoxes,
   getTextBoxContentElement,
   parseTextBoxContent,
 } from './textBoxParser';
@@ -60,16 +62,22 @@ const SYMBOL_BULLET_MAP: Record<number, string> = {
   0x0071: '○', // Wingdings q → white circle
   0x0075: '◆', // Wingdings u → black diamond
   0x0076: '❖', // Wingdings v → diamond
-  0x00a8: '✓', // Wingdings checkmark
+  0x00a8: '□', // Wingdings 0xA8 — hollow square (NOT a check; verified against the font)
   0x00fb: '✓', // Checkmark
   0x00fe: '✓', // Checkmark variant
 
-  // Common control characters that might appear
-  0xf0b7: '•', // Private use area bullet
-  0xf06e: '■', // Private use area square
-  0xf06f: '○', // Private use area circle
-  0xf0a7: '■', // Private use area
-  0xf0fc: '✓', // Private use area checkmark
+  // Symbol/Wingdings glyphs as Word stores them: the font's own code point
+  // OR'd into the private use area (0xF000 + code).
+  0xf0b7: '•', // Symbol 0xB7 — bullet
+  0xf06e: '■', // Wingdings 0x6E — black square
+  0xf06f: '○', // Wingdings 0x6F — white square/circle
+  0xf075: '◆', // Wingdings 0x75 — black diamond
+  0xf076: '❖', // Wingdings 0x76 — diamond
+  0xf0a7: '■', // Symbol 0xA7 — square
+  0xf0a8: '□', // Wingdings 0xA8 — hollow square
+  0xf0d8: '➢', // Wingdings 0xD8 — arrowhead; COMET's second-level bullet
+  0xf0e0: '➔', // Wingdings 0xE0 — arrow
+  0xf0fc: '✓', // Wingdings 0xFC — check
 
   // Other common bullet-like characters
   0x2022: '•', // Already a bullet
@@ -174,29 +182,47 @@ function enrichParagraphTextBoxes(
     // markup — preserved verbatim by the run parser — as the only thing
     // written back. See `isFilledShapeDrawing`.
     const isFilledShape = !isTextBox && isFilledShapeDrawing(drawingEl);
-    if (!isTextBox && !isFilledShape) return;
+    if (!isTextBox && !isFilledShape) {
+      // A grouped drawing (`wpg:wgp`) holds its shapes one level deeper, so
+      // neither predicate above sees them. Each one paints on its own.
+      for (const { textBox, wsp } of parseGroupShapesAsTextBoxes(drawingEl)) {
+        fillTextBoxContent(textBox, wsp);
+        emitShape(textBox, /* renderOnly */ true);
+      }
+      return;
+    }
 
     const textBox = isTextBox ? parseTextBox(drawingEl) : parseFilledShapeAsTextBox(drawingEl);
     if (!textBox) return;
 
     // Navigate to wps:wsp to get the txbxContent element
     const wsp = findDeep(drawingEl, 'wps', 'wsp');
-    if (wsp) {
-      const txbxContentEl = getTextBoxContentElement(wsp);
-      if (txbxContentEl) {
-        textBox.content = parseTextBoxContent(
-          txbxContentEl,
-          parseParagraph,
-          null, // table parser not needed for most text boxes
-          styles,
-          theme,
-          numbering,
-          rels ?? undefined,
-          media ?? undefined
-        );
-      }
-    }
+    if (wsp) fillTextBoxContent(textBox, wsp);
 
+    emitShape(textBox, isFilledShape);
+  }
+
+  function fillTextBoxContent(textBox: TextBox, wsp: XmlElement): void {
+    const txbxContentEl = getTextBoxContentElement(wsp);
+    if (!txbxContentEl) return;
+    textBox.content = parseTextBoxContent(
+      txbxContentEl,
+      parseParagraph,
+      (node, s2, t2, n2, r2, m2) => parseTable(node, s2, t2, n2, r2 ?? null, m2 ?? null),
+      styles,
+      theme,
+      numbering,
+      rels ?? undefined,
+      media ?? undefined
+    );
+    // Same bullet-glyph normalisation the body gets — a Symbol-font marker
+    // inside a text box is no different from one outside it.
+    for (const child of textBox.content) {
+      if (child.type === 'paragraph') resolveBulletMarker(child);
+    }
+  }
+
+  function emitShape(textBox: TextBox, renderOnly: boolean): void {
     // Convert to Shape with textBody and inject as ShapeContent.
     // shapeType MUST be 'textBox' (the serializer maps it to prstGeom
     // 'rect' on export): serializeShapeContent only emits the wps:txbx
@@ -219,7 +245,10 @@ function enrichParagraphTextBoxes(
       spPrExtraXml: textBox.spPrExtraXml,
     };
     if (textBox.id) shape.id = textBox.id;
-    if (isFilledShape) shape.renderOnly = true;
+    if (textBox.lineShape) shape.lineShape = textBox.lineShape;
+    if (textBox.geometry) shape.geometry = textBox.geometry;
+    if (textBox.cornerAdj !== undefined) shape.cornerAdj = textBox.cornerAdj;
+    if (renderOnly) shape.renderOnly = true;
 
     const shapeContent: ShapeContent = { type: 'shape', shape };
 

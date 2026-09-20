@@ -27,6 +27,25 @@ export interface TextContent {
  */
 export interface TabContent {
   type: 'tab';
+  /**
+   * `<w:ptab>` — an absolute-position tab (§17.3.3.19) rather than the
+   * ordinary `<w:tab>` that walks the paragraph's tab stops.
+   */
+  ptab?: PositionalTab;
+}
+
+/**
+ * An absolute-position tab (`<w:ptab>`, ECMA-376 §17.3.3.19).
+ *
+ * Unlike `<w:tab>` it does not consult the paragraph's tab stops: it names a
+ * boundary (`w:relativeTo`) and how the text after it sits against that
+ * boundary (`w:alignment`). Word footers use a centre `w:ptab` followed by a
+ * right `w:ptab` to push the PAGE field to the right margin.
+ */
+export interface PositionalTab {
+  relativeTo: 'margin' | 'indent' | 'leftMargin';
+  alignment: 'left' | 'center' | 'right';
+  leader?: 'none' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' | 'heavy';
 }
 
 /**

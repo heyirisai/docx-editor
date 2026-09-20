@@ -19,12 +19,19 @@ import type {
   ParagraphFragment,
 } from '../layout-engine/types';
 import type { RenderContext } from './renderPage';
-import { renderFloatingImagesLayer } from './floatingImageLayer';
-import { floatingImageIsBehindDoc, floatingImageWrapsText } from './floatingImageFlow';
 import { renderParagraphFragment } from './renderParagraph';
-import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
 import { resolveCellGrid } from '../layout-bridge/tableWidthUtils';
-import { extractCellFloatingImages } from './renderTableCellFloating';
+import {
+  appendCellFloatLayers,
+  buildCellFloatLayers,
+  cellContentShift,
+  cellContentWidth,
+  cellPadding,
+  extractCellFloatingImages,
+  type CellFloatLayer,
+} from './renderTableCellFloating';
+import { renderFloatingImagesLayer } from './floatingImageLayer';
+import { floatingImageIsBehindDoc } from './floatingImageFlow';
 import {
   applyBorder,
   buildRowYPositions,
@@ -85,58 +92,30 @@ function renderCellContent(
   contentEl.className = TABLE_CLASS_NAMES.cellContent;
   contentEl.style.position = 'relative';
   // Cell uses border-box sizing, so content width must subtract padding.
-  const padLeft = cell.padding?.left ?? 7;
-  const padRight = cell.padding?.right ?? 7;
-  const contentWidth = Math.max(0, cellMeasure.width - padLeft - padRight);
+  const contentWidth = cellContentWidth(cell, cellMeasure);
   contentEl.style.width = `${contentWidth}px`;
 
-  // Extract floating images from cell paragraphs
-  const cellFloatingImages = extractCellFloatingImages(cell, cellMeasure, contentWidth);
-
-  // Build floating zones for measurement and render floating layer
-  let floatingZones: FloatingImageZone[] | undefined;
-  if (cellFloatingImages.length > 0) {
-    floatingZones = cellFloatingImages.filter(floatingImageWrapsText).map((img) => {
-      const rectRight = img.x + img.width + img.distRight;
-      const rectTop = img.y - img.distTop;
-      const rectBottom = img.y + img.height + img.distBottom;
-
-      let leftMargin = 0;
-      let rightMargin = 0;
-      // Use wrapText to determine which side text flows on (same as rectsToFloatingZones in renderPage.ts)
-      const wt = img.wrapText ?? 'bothSides';
-      if (wt === 'right') {
-        // Text flows on RIGHT only -> image blocks the left side
-        leftMargin = rectRight;
-      } else if (wt === 'left') {
-        // Text flows on LEFT only -> image blocks the right side
-        rightMargin = contentWidth - (img.x - img.distLeft);
-      } else {
-        // bothSides / largest: use image position to determine which side it blocks
-        if (img.side === 'left') {
-          leftMargin = rectRight;
-        } else {
-          rightMargin = contentWidth - (img.x - img.distLeft);
-        }
-      }
-      return { leftMargin, rightMargin, topY: rectTop, bottomY: rectBottom };
-    });
-
-    const behindFloatingImages = cellFloatingImages.filter(floatingImageIsBehindDoc);
-    if (behindFloatingImages.length > 0) {
-      contentEl.appendChild(
-        renderFloatingImagesLayer(behindFloatingImages, doc, {
-          layerClass: 'layout-cell-floating-images-layer',
-          itemClass: 'layout-cell-floating-image',
-          sizing: 'fullSize',
-          layerMode: 'behind',
-          imageAssetLoader: context.imageAssetLoader,
-        })
-      );
-    }
+  // `behindDoc="1"` pictures paint here, under the cell's text but over its
+  // fill. IN-FRONT ones do not: `renderTableCell` hangs them off the ROW so
+  // the cell's clip can't cut them (see buildCellFloatLayers).
+  //
+  // Exclusion zones are NOT rebuilt here: the layout measure already applied
+  // them (see `measureCellBlocks` in `measureTableBlock`).
+  const behindFloats = extractCellFloatingImages(cell, cellMeasure, contentWidth).filter(
+    floatingImageIsBehindDoc
+  );
+  if (behindFloats.length > 0) {
+    contentEl.appendChild(
+      renderFloatingImagesLayer(behindFloats, doc, {
+        layerClass: 'layout-cell-floating-images-layer',
+        itemClass: 'layout-cell-floating-image',
+        sizing: 'origin',
+        layerMode: 'behind',
+        imageAssetLoader: context.imageAssetLoader,
+      })
+    );
   }
 
-  let cumulativeY = 0;
   let previousParagraphAfter = 0;
   for (let i = 0; i < cell.blocks.length; i++) {
     const block = cell.blocks[i];
@@ -144,19 +123,17 @@ function renderCellContent(
 
     if (block?.kind === 'paragraph' && measure?.kind === 'paragraph') {
       const paragraphBlock = block as ParagraphBlock;
-      let paragraphMeasure = measure as ParagraphMeasure;
+      // The layout measure already ran this cell's blocks through the float
+      // pipeline (see `measureCellBlocks` in `measureTableBlock`), so its
+      // lines carry the per-line offsets AND the `floatSkipBefore` that drops
+      // a line past a picture too wide to sit beside. Re-measuring here with
+      // a second, painter-local zone model threw that away and painted the
+      // text over the picture — and the row height, which comes from the
+      // layout measure, no longer matched what was drawn.
+      const paragraphMeasure = measure as ParagraphMeasure;
       const spacing = paragraphBlock.attrs?.spacing;
       // Match body paginator: max-collapse adjacent paragraph spacing.
       const effectiveSpaceBefore = Math.max(previousParagraphAfter, spacing?.before ?? 0);
-      cumulativeY += effectiveSpaceBefore;
-
-      // Re-measure with floating zones if floating images exist in this cell
-      if (floatingZones && floatingZones.length > 0) {
-        paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
-          floatingZones,
-          paragraphYOffset: cumulativeY,
-        });
-      }
 
       // Create synthetic fragment for the paragraph
       const syntheticFragment: ParagraphFragment = {
@@ -186,7 +163,6 @@ function renderCellContent(
         fragEl.style.marginTop = `${effectiveSpaceBefore}px`;
       }
       contentEl.appendChild(fragEl);
-      cumulativeY += paragraphMeasure.totalHeight;
       previousParagraphAfter = spacing?.after ?? 0;
     } else if (block?.kind === 'table' && measure?.kind === 'table') {
       // Nested table - render in normal document flow.
@@ -202,26 +178,12 @@ function renderCellContent(
         nestedTableEl.style.marginTop = `${effectiveSpaceBefore}px`;
       }
       contentEl.appendChild(nestedTableEl);
-      cumulativeY += effectiveSpaceBefore + ((measure as TableMeasure).totalHeight ?? 0);
       previousParagraphAfter = 0;
     }
   }
 
   if (previousParagraphAfter > 0) {
     contentEl.style.paddingBottom = `${previousParagraphAfter}px`;
-  }
-
-  const frontFloatingImages = cellFloatingImages.filter((img) => !floatingImageIsBehindDoc(img));
-  if (frontFloatingImages.length > 0) {
-    contentEl.appendChild(
-      renderFloatingImagesLayer(frontFloatingImages, doc, {
-        layerClass: 'layout-cell-floating-images-layer',
-        itemClass: 'layout-cell-floating-image',
-        sizing: 'fullSize',
-        layerMode: 'front',
-        imageAssetLoader: context.imageAssetLoader,
-      })
-    );
   }
 
   return contentEl;
@@ -352,7 +314,7 @@ function renderTableCell(
    * the per-cell border / background to avoid stacking 2-3 green visuals
    * on the same cell. */
   parentRowRevisionId?: number
-): HTMLElement {
+): { cellEl: HTMLElement; floatLayers: CellFloatLayer[] } {
   const cellEl = doc.createElement('div');
   cellEl.className = TABLE_CLASS_NAMES.cell;
 
@@ -369,11 +331,8 @@ function renderTableCell(
   cellEl.style.overflow = 'hidden';
   cellEl.style.boxSizing = 'border-box';
   // Use per-cell padding from DOCX margins, default to Word's visual rendering
-  const padTop = cell.padding?.top ?? 1;
-  const padRight = cell.padding?.right ?? 7;
-  const padBottom = cell.padding?.bottom ?? 1;
-  const padLeft = cell.padding?.left ?? 7;
-  cellEl.style.padding = `${padTop}px ${padRight}px ${padBottom}px ${padLeft}px`;
+  const pad = cellPadding(cell);
+  cellEl.style.padding = `${pad.top}px ${pad.right}px ${pad.bottom}px ${pad.left}px`;
 
   // Apply borders - use cell borders if available, otherwise no border
   if (cell.borders) {
@@ -431,6 +390,16 @@ function renderTableCell(
   const contentEl = renderCellContent(cell, cellMeasure, context, doc);
   cellEl.appendChild(contentEl);
 
+  // Anchored pictures ride OUTSIDE the cell — see buildCellFloatLayers.
+  const floatLayers = buildCellFloatLayers(
+    cell,
+    cellMeasure,
+    x,
+    cellContentShift(cell, cellMeasure, rowHeight, contentFillsBox),
+    context,
+    doc
+  );
+
   // Store PM positions for selection
   if (cell.blocks.length > 0) {
     const firstBlock = cell.blocks[0];
@@ -443,7 +412,7 @@ function renderTableCell(
     }
   }
 
-  return cellEl;
+  return { cellEl, floatLayers };
 }
 
 /**
@@ -614,7 +583,7 @@ function renderTableRow(
     const isFirstCol = bidi ? columnIndex + colSpan >= columnWidths.length : columnIndex === 0;
     const isLastCol = bidi ? columnIndex === 0 : columnIndex + colSpan >= columnWidths.length;
 
-    const cellEl = renderTableCell(
+    const { cellEl, floatLayers } = renderTableCell(
       cell,
       cellMeasure,
       bidi ? tableWidth - x - cellWidth : x,
@@ -633,6 +602,7 @@ function renderTableRow(
     }
 
     rowEl.appendChild(cellEl);
+    appendCellFloatLayers(rowEl, floatLayers, 0);
 
     // Track this cell as spanning if it spans multiple rows
     if (rowSpan > 1 && spanningCells) {
@@ -667,6 +637,21 @@ function renderTableRow(
 }
 
 /**
+ * True when the fragment shows only part of its table, so the table element's
+ * `overflow: hidden` is doing real work (see renderTableFragment).
+ */
+function isWindowedFragment(fragment: TableFragment, totalRows: number): boolean {
+  return (
+    fragment.continuesFromPrev === true ||
+    fragment.continuesOnNext === true ||
+    fragment.topClip !== undefined ||
+    fragment.bottomClip !== undefined ||
+    fragment.fromRow > 0 ||
+    fragment.toRow < totalRows
+  );
+}
+
+/**
  * Render a table fragment to DOM
  *
  * @param fragment - The table fragment to render
@@ -698,7 +683,16 @@ export function renderTableFragment(
   // Height is set below from the rounded row stack (`visibleHeight`) once the
   // window geometry is known — fragment.height (engine, unrounded) can be ~1px
   // short of the painter's rounded rows and would clip the bottom border.
-  tableEl.style.overflow = 'hidden';
+  //
+  // `overflow: hidden` here IS the page-break row window: a fragment showing
+  // only part of the table relies on it to hide the rows — and the mid-row
+  // slice — that belong to another page. A fragment showing the WHOLE table
+  // has no window to enforce, and clipping there costs real content: Word does
+  // not clip an anchored object to the table it sits in (measured against
+  // Word), so LCPS's header logo lost the mark drawn above its wordmark, which
+  // the anchor deliberately lifts above the row.
+  const windowed = isWindowedFragment(fragment, block.rows.length);
+  tableEl.style.overflow = windowed ? 'hidden' : 'visible';
 
   // Store metadata
   tableEl.dataset.blockId = String(fragment.blockId);
@@ -741,7 +735,7 @@ export function renderTableFragment(
     // window relies on vertical clipping to hide off-window rows / a row that
     // broke mid-content, so overflow-y must stay hidden.
     tableEl.style.overflowX = 'visible';
-    tableEl.style.overflowY = 'hidden';
+    tableEl.style.overflowY = windowed ? 'hidden' : 'visible';
   }
 
   // RTL table mirror axis (see computeCellGrid), reused by the handles below.
@@ -881,7 +875,7 @@ export function renderTableFragment(
     const isLastCol = bidi
       ? g.columnIndex === 0
       : g.columnIndex + g.colSpan >= measure.columnWidths.length;
-    const cellEl = renderTableCell(
+    const { cellEl, floatLayers } = renderTableCell(
       g.cell,
       cellMeasure,
       g.x,
@@ -890,7 +884,8 @@ export function renderTableFragment(
       context,
       doc
     );
-    cellEl.style.top = `${toBodyY(rowYPositions[g.rowIndex] ?? 0)}px`;
+    const spanTop = toBodyY(rowYPositions[g.rowIndex] ?? 0);
+    cellEl.style.top = `${spanTop}px`;
     cellEl.dataset.columnIndex = String(g.columnIndex);
     // Synthetic continuation slice: not directly selectable (the editable cell
     // lives on the fragment that owns its restart row).
@@ -898,6 +893,7 @@ export function renderTableFragment(
     delete cellEl.dataset.pmStart;
     delete cellEl.dataset.pmEnd;
     bodyParent.appendChild(cellEl);
+    appendCellFloatLayers(bodyParent, floatLayers, spanTop);
   }
 
   // Render content rows from fragment.fromRow to fragment.toRow in window coords.

@@ -114,7 +114,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Theme color references (accent1...) round-trip as references, not flattened to hex.',
+    notes:
+      'Theme color references (accent1...) round-trip as references, not flattened to hex. Their DrawingML luminance transforms resolve too — a:lumMod / a:lumOff are what Word writes for every “Lighter 40% / Darker 25%” variant, so a tinted panel paints its real colour rather than the raw accent.',
   },
   {
     id: 'text.highlight',
@@ -331,7 +332,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Shading resolves as the two-colour pattern OOXML defines: a solid pattern paints its colour, a percentage pattern blends, and a cell’s own shading (including an explicit “none”) overrides the table style’s conditional row and band fills.',
+      'Shading resolves as the two-colour pattern OOXML defines: a solid pattern paints its colour, a percentage pattern blends, and a cell’s own shading (including an explicit “none”) overrides the table style’s conditional row and band fills. A table style’s own w:tcPr supplies the cell default for the whole table — vertical alignment included — beneath any conditional part, and the style’s run properties sit below the paragraph style, as the OOXML style hierarchy specifies. Borders cascade PER SIDE across the default table style, the referenced style and the table’s own w:tblBorders, so a table that switches only its outer box off still draws the style’s inside rules.',
   },
   {
     id: 'tables.merge',
@@ -404,7 +405,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Drag-to-reposition and edge resize with Word-style handles; text reflows around float zones.',
+      'Drag-to-reposition and edge resize with Word-style handles; text reflows around float zones. An object anchored inside a table cell resolves its position against that cell (layoutInCell) but is not confined to it — like Word, it paints in full even where it reaches past the cell or the table.',
   },
   {
     id: 'images.wmf',
@@ -434,7 +435,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers) and round-trip. Inner text is editable; move and resize handles for the box are not built yet.',
+      'Anchored text boxes render (incl. page-anchored letterhead shapes in headers) and round-trip. A box’s content is block-level, so a table inside one lays out and paints like any other table. Inner text is editable; move and resize handles for the box are not built yet.',
   },
   {
     id: 'images.shapes',
@@ -445,7 +446,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'A shape outside a group (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged. A shape with a fill or an outline and no text — the colour panels and accent bars templates are built from — is painted as its anchored rectangle, so the text laid over it is legible; custom geometry paints as its bounding rectangle, and connectors and shape text are still not painted. Custom geometry authored in the editor is reduced to its bounding rectangle on save.',
+      'A shape (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged. A shape with a fill or an outline and no text — the colour panels and accent bars templates are built from — is painted as its anchored rectangle, so the text laid over it is legible. A stroke-only connector (prst="line", straight/bent/curved connectors) is painted as a single line between the corners of its extent, which is how a footer rule is authored. Rounded preset geometry is drawn as such: an ellipse (and the flow-chart connector preset) paints as an ellipse, and a roundRect takes its corner radius from a:avLst, so a pill button stays a pill through a save. Custom geometry still paints as its bounding rectangle, and shape text outside a text box is not painted; custom geometry authored in the editor is reduced to its bounding rectangle on save.',
   },
   {
     id: 'images.groups',
@@ -456,7 +457,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The group is preserved verbatim and survives a save untouched. Rendering is a paint-only view of its PICTURES: nested groups compose correctly and page/column anchoring is honoured, but shapes, text boxes and connectors inside the group are not painted, and a16 rotation/flip on a child is ignored. A branded cover of banner shape + logo therefore shows the logo over blank space.',
+      'The group is preserved verbatim and survives a save untouched. Rendering is a paint-only view of its children: pictures, shapes and text boxes are all painted, nested groups compose correctly, page/column anchoring is honoured and body text wraps around the group. a16 rotation/flip on a child is still ignored, a child of a group positioned by alignment rather than an offset is aligned independently (right for a panel and its header bar, wrong for children at different offsets), and nothing inside a group is editable.',
   },
   {
     id: 'images.crop',
@@ -466,7 +467,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'Crop renders and round-trips; cropping from the UI is not built.',
+    notes:
+      "Crop renders and round-trips, inside a table cell as well as in the body, a header or a footer; cropping from the UI is not built. A picture's own a:prstGeom is applied too: an ellipse (or the flow-chart connector preset) paints as the circular headshot crop Word draws, a roundRect takes its corner radius from a:avLst, and both survive a save.",
   },
   {
     id: 'images.adjustments',
@@ -541,7 +543,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Margins editable; mid-body sectPr (section breaks) render and round-trip, including a break carried on a paragraph inside a content control. Each page resolves its own section’s header, footer and margins, and w:titlePg applies only to the section that declares it. Inserting new sections from the UI is not built yet.',
+      'Margins editable; mid-body sectPr (section breaks) render and round-trip, including a break carried on a paragraph inside a content control. A break is governed by the type the section BEING ENTERED declares (§17.6.22) and an absent w:type is nextPage, so a run of continuous sections does not swallow the page break that follows it. Each page resolves its own section’s header, footer and margins, and w:titlePg applies only to the section that declares it. Inserting new sections from the UI is not built yet.',
   },
   {
     id: 'layout.headers-footers',
@@ -585,7 +587,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Text flows into newspaper columns with balancing and separators, including a mid-document continuous section that turns columns on and off — it balances across its columns and full-width content resumes below the tallest one. Column count is not editable from the UI.',
+      'Text flows into newspaper columns with balancing and separators, including a mid-document continuous section that turns columns on and off — it balances across its columns and full-width content resumes below the tallest one. Lines break at the column width even on a page that also carries a floating object. Column count is not editable from the UI.',
   },
   {
     id: 'layout.page-borders',

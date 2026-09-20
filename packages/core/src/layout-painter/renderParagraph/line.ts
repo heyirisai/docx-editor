@@ -8,6 +8,7 @@
  */
 
 import type {
+  TabRun,
   ParagraphBlock,
   MeasuredLine,
   Run,
@@ -19,6 +20,7 @@ import type { RenderContext } from '../renderPage';
 import { isFloatingImageRun } from '../floatingImageFlow';
 import {
   calculateTabWidth,
+  positionalTabStop,
   type TabContext,
   type TabStop as TabCalcStop,
 } from '../../prosemirror/utils/tabCalculator';
@@ -113,6 +115,15 @@ interface RenderLineOptions {
    * hung-out region for some inputs and would drift.
    */
   lineRightEdgePx?: number;
+  /**
+   * The paragraph's full content width and its right indent, as
+   * `measureParagraph` sees them. A `<w:ptab>` names a boundary in that
+   * space; `lineRightEdgePx` has already had the indent and any floating
+   * exclusion taken off it, so resolving the stop against it put the painted
+   * text a few px left of where it was measured.
+   */
+  contentWidthPx?: number;
+  indentRightPx?: number;
 }
 
 /**
@@ -340,7 +351,12 @@ export function renderLine(
   const lineEl = doc.createElement('div');
   lineEl.className = PARAGRAPH_CLASS_NAMES.line;
 
-  // Apply line height
+  // Apply line height. `box-sizing` is set EXPLICITLY: a host reset that makes
+  // everything `border-box` (Tailwind's preflight does, and the painter's DOM
+  // is not inside the library's `.ep-root` scope) would otherwise fold the
+  // float-skip `padding-top` that renderParagraph adds INTO this height, so a
+  // skipped line collapsed onto the one below instead of clearing the float.
+  lineEl.style.boxSizing = 'content-box';
   lineEl.style.height = `${line.lineHeight}px`;
   lineEl.style.lineHeight = `${line.lineHeight}px`;
 
@@ -491,8 +507,24 @@ export function renderLine(
       const decimalPrefixWidth =
         decimalIndex >= 0 ? measureText(followingText.slice(0, decimalIndex)) : 0;
 
-      // Calculate tab width based on current position
-      const tabResult = calculateTabWidth(currentX, tabContext, {
+      // Calculate tab width based on current position. `<w:ptab>` names its
+      // own boundary, so it replaces the paragraph's stops for this run
+      // (§17.3.3.19) — must match `measureParagraph`.
+      const runPtab = (run as TabRun).ptab;
+      const runTabContext: TabContext = runPtab
+        ? {
+            ...tabContext,
+            positional: true,
+            explicitStops: [
+              positionalTabStop(runPtab, {
+                contentWidthPx: options?.contentWidthPx ?? options?.lineRightEdgePx ?? 0,
+                indentLeftPx: leftIndentPx,
+                indentRightPx: options?.indentRightPx ?? 0,
+              }),
+            ],
+          }
+        : tabContext;
+      const tabResult = calculateTabWidth(currentX, runTabContext, {
         followingWidth,
         decimalPrefixWidth,
       });

@@ -7,24 +7,18 @@ import type { DrawingContent } from '../types/content';
 import type { Image } from '../types/content/image';
 import type { MediaFile, RelationshipMap } from '../types/document';
 import { resolveImageData } from './imageParser';
-import { getChildElements, getLocalName, getAttribute, type XmlElement } from './xmlParser';
-
-/**
- * Depth bound for the walks below. The markup is attacker-controlled (a `.docx`
- * is a zip of XML), and groups nest arbitrarily, so an unbounded walk overflows
- * the stack on a hostile file. Real drawings nest a handful of levels.
- */
-const MAX_DEPTH = 64;
-
-function findDeepByLocalName(root: XmlElement, localName: string, depth = 0): XmlElement | null {
-  if (depth >= MAX_DEPTH) return null;
-  for (const child of getChildElements(root)) {
-    if (getLocalName(child.name ?? '') === localName) return child;
-    const nested = findDeepByLocalName(child, localName, depth + 1);
-    if (nested) return nested;
-  }
-  return null;
-}
+import { getLocalName, getAttribute, type XmlElement } from './xmlParser';
+import {
+  collectGroupLeaves,
+  findDeepByLocalName,
+  mapX,
+  mapY,
+  numOrNull as num,
+  readGroupAnchorPosition as readAnchorPosition,
+  readXfrm,
+  rootGroupFrame,
+  type GroupFrame,
+} from './groupFrame';
 
 /**
  * `r:embed` off an `a:blip`. The relationships namespace is conventionally
@@ -38,97 +32,6 @@ function blipRelationshipId(blip: XmlElement | null): string | null {
     if (getLocalName(key) === 'embed') return String(value);
   }
   return null;
-}
-
-function num(value: string | null | undefined): number | null {
-  if (value === null || value === undefined || value === '') return null;
-  const n = Number(value);
-  return Number.isFinite(n) ? n : null;
-}
-
-/** `a:off` / `a:ext` pair from an `a:xfrm`, in EMU. */
-function readXfrm(xfrm: XmlElement | null) {
-  if (!xfrm) return null;
-  const read = (name: string, xAttr: string, yAttr: string) => {
-    const el = getChildElements(xfrm).find((c) => getLocalName(c.name ?? '') === name);
-    if (!el) return null;
-    const x = num(getAttribute(el, null, xAttr));
-    const y = num(getAttribute(el, null, yAttr));
-    return x === null || y === null ? null : { x, y };
-  };
-  return {
-    off: read('off', 'x', 'y'),
-    ext: read('ext', 'cx', 'cy'),
-    chOff: read('chOff', 'x', 'y'),
-    chExt: read('chExt', 'cx', 'cy'),
-  };
-}
-
-function readAnchorPosition(anchor: XmlElement, axis: 'positionH' | 'positionV') {
-  const pos = getChildElements(anchor).find((c) => getLocalName(c.name ?? '') === axis);
-  if (!pos) return null;
-  const relativeTo = getAttribute(pos, null, 'relativeFrom') ?? undefined;
-  const offsetEl = getChildElements(pos).find((c) => getLocalName(c.name ?? '') === 'posOffset');
-  const offset = offsetEl ? num((offsetEl.elements?.[0]?.text as string) ?? null) : null;
-  // An anchor carries EITHER `wp:posOffset` OR `wp:align`. Treating a missing
-  // offset as 0 pins a centred or right-aligned group to the top-left.
-  const alignEl = getChildElements(pos).find((c) => getLocalName(c.name ?? '') === 'align');
-  const alignment = (alignEl?.elements?.[0]?.text as string | undefined)?.trim() || undefined;
-  return { relativeTo, offset: offset ?? 0, alignment, hasOffset: offset !== null };
-}
-
-/** Maps a coordinate in some group's child space onto the page, in EMU. */
-interface GroupFrame {
-  scaleX: number;
-  scaleY: number;
-  chOffX: number;
-  chOffY: number;
-  baseX: number;
-  baseY: number;
-}
-
-const mapX = (f: GroupFrame, x: number): number => f.baseX + (x - f.chOffX) * f.scaleX;
-const mapY = (f: GroupFrame, y: number): number => f.baseY + (y - f.chOffY) * f.scaleY;
-
-/**
- * Pictures inside a group, each paired with the frame of the group that
- * actually contains it. A nested `wpg:grpSp` introduces its own child
- * coordinate space, so applying the outer group's scale to its pictures puts
- * them in the wrong place and at the wrong size.
- */
-function collectGroupPictures(
-  container: XmlElement,
-  frame: GroupFrame,
-  depth: number,
-  out: Array<{ pic: XmlElement; frame: GroupFrame }>
-): void {
-  if (depth >= MAX_DEPTH) return;
-  for (const child of getChildElements(container)) {
-    const name = getLocalName(child.name ?? '');
-    if (name === 'pic') {
-      out.push({ pic: child, frame });
-      continue;
-    }
-    if (name === 'grpSp') {
-      const xfrm = readXfrm(findDeepByLocalName(child, 'xfrm'));
-      let inner = frame;
-      if (xfrm?.off && xfrm.ext) {
-        const chExt = xfrm.chExt ?? xfrm.ext;
-        const chOff = xfrm.chOff ?? { x: 0, y: 0 };
-        inner = {
-          scaleX: (chExt.x === 0 ? 1 : xfrm.ext.x / chExt.x) * frame.scaleX,
-          scaleY: (chExt.y === 0 ? 1 : xfrm.ext.y / chExt.y) * frame.scaleY,
-          chOffX: chOff.x,
-          chOffY: chOff.y,
-          baseX: mapX(frame, xfrm.off.x),
-          baseY: mapY(frame, xfrm.off.y),
-        };
-      }
-      collectGroupPictures(child, inner, depth + 1, out);
-      continue;
-    }
-    collectGroupPictures(child, frame, depth + 1, out);
-  }
 }
 
 /**
@@ -145,22 +48,9 @@ export function deriveGroupPreviewImages(
   const group = findDeepByLocalName(anchor, 'wgp');
   if (!group) return [];
 
-  const grpSpPr = getChildElements(group).find((c) => getLocalName(c.name ?? '') === 'grpSpPr');
-  const groupXfrm = readXfrm(grpSpPr ? findDeepByLocalName(grpSpPr, 'xfrm') : null);
-  if (!groupXfrm?.ext || !groupXfrm.chExt) return [];
-
   // Child coordinates live in the group's own space; map them onto the page.
-  const scaleX = groupXfrm.chExt.x === 0 ? 1 : groupXfrm.ext.x / groupXfrm.chExt.x;
-  const scaleY = groupXfrm.chExt.y === 0 ? 1 : groupXfrm.ext.y / groupXfrm.chExt.y;
-  const chOff = groupXfrm.chOff ?? { x: 0, y: 0 };
-  const rootFrame: GroupFrame = {
-    scaleX,
-    scaleY,
-    chOffX: chOff.x,
-    chOffY: chOff.y,
-    baseX: 0,
-    baseY: 0,
-  };
+  const rootFrame: GroupFrame | null = rootGroupFrame(group);
+  if (!rootFrame) return [];
 
   const posH = readAnchorPosition(anchor, 'positionH');
   const posV = readAnchorPosition(anchor, 'positionV');
@@ -168,9 +58,9 @@ export function deriveGroupPreviewImages(
   const relativeHeight = num(getAttribute(anchor, null, 'relativeHeight')) ?? undefined;
 
   const out: DrawingContent[] = [];
-  const pictures: Array<{ pic: XmlElement; frame: GroupFrame }> = [];
-  collectGroupPictures(group, rootFrame, 0, pictures);
-  for (const { pic, frame } of pictures) {
+  const pictures: Array<{ element: XmlElement; frame: GroupFrame }> = [];
+  collectGroupLeaves(group, rootFrame, 'pic', pictures);
+  for (const { element: pic, frame } of pictures) {
     const rId = blipRelationshipId(findDeepByLocalName(pic, 'blip'));
     if (!rId) continue;
     const resolved = resolveImageData(rId, rels ?? undefined, media ?? undefined);

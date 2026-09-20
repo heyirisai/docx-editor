@@ -8,6 +8,7 @@
  */
 
 import type { InlineSdtWidget } from './inlineSdtWidgets';
+import type { PositionalTab } from '../types/content/run';
 
 export type { InlineSdtWidget } from './inlineSdtWidgets';
 
@@ -139,6 +140,8 @@ export type TextRun = RunFormatting & {
  */
 export type TabRun = RunFormatting & {
   kind: 'tab';
+  /** `<w:ptab>` — absolute-position tab; see `PositionalTab`. */
+  ptab?: PositionalTab;
   width?: number;
   pmStart?: number;
   pmEnd?: number;
@@ -197,6 +200,10 @@ export type ImageRun = {
   cropLeft?: number;
   /** a:alphaModFix → CSS opacity in [0, 1]. */
   opacity?: number;
+  /** Rounded `a:prstGeom` preset on the picture (see `Image.geometry`). */
+  geometry?: 'ellipse' | 'roundRect';
+  /** `roundRect` corner adjust as a fraction of the shorter side. */
+  cornerAdj?: number;
   /** Whether this picture is itself a tracked insertion (`<w:ins>`). */
   isInsertion?: boolean;
   /** Whether this picture is itself a tracked deletion (`<w:del>`). */
@@ -513,6 +520,10 @@ export type ImageBlock = {
   cropLeft?: number;
   /** a:alphaModFix → CSS opacity in [0, 1]. */
   opacity?: number;
+  /** Rounded `a:prstGeom` preset on the picture (see `ImageRun.geometry`). */
+  geometry?: 'ellipse' | 'roundRect';
+  /** `roundRect` corner adjust as a fraction of the shorter side. */
+  cornerAdj?: number;
   /** Painted from a preserved group; not selectable, since edits cannot save. */
   renderOnly?: boolean;
   anchor?: {
@@ -541,6 +552,11 @@ export type SectionBreakBlock = {
   pageSize?: { w: number; h: number };
   orientation?: 'portrait' | 'landscape';
   margins?: PageMargins;
+  /**
+   * Margins for this section's FIRST page only, when `w:titlePg` gives it a
+   * different header/footer pair. Set by `extendMarginsForHeaderFooter`.
+   */
+  firstPageMargins?: PageMargins;
   columns?: ColumnLayout;
 };
 
@@ -596,8 +612,11 @@ export type TextBoxBlock = {
   outlineStyle?: string;
   /** Internal padding */
   margins?: { top: number; bottom: number; left: number; right: number };
-  /** Paragraph blocks inside the text box */
-  content: ParagraphBlock[];
+  /**
+   * Blocks inside the text box. `w:txbxContent` is EG_BlockLevelElts, so a
+   * box can hold tables as well as paragraphs.
+   */
+  content: Array<ParagraphBlock | TableBlock>;
   /** Display mode copied from the ProseMirror text box node */
   displayMode?: 'inline' | 'float' | 'block';
   /** CSS float direction copied from the ProseMirror text box node */
@@ -624,6 +643,12 @@ export type TextBoxBlock = {
    * `ImageBlock.renderOnly`.
    */
   renderOnly?: boolean;
+  /** See `Shape.lineShape` — a stroke-only connector, not a closed box. */
+  lineShape?: 'down' | 'up';
+  /** See `Shape.geometry` — a rounded `a:prstGeom` preset. */
+  geometry?: 'ellipse' | 'roundRect';
+  /** See `Shape.cornerAdj`. */
+  cornerAdj?: number;
   pmStart?: number;
   pmEnd?: number;
 };
@@ -941,6 +966,10 @@ export type LayoutOptions = {
   finalPageSize?: { w: number; h: number };
   /** Body-level (final section) margins, used after the last explicit section break. */
   finalMargins?: PageMargins;
+  /** `w:titlePg` — first-page margins for the initial section, if different. */
+  firstPageMargins?: PageMargins;
+  /** `w:titlePg` — first-page margins for the body-level (final) section. */
+  finalFirstPageMargins?: PageMargins;
   /** Column configuration. */
   columns?: ColumnLayout;
   /** Gap between rendered pages (for UI). */

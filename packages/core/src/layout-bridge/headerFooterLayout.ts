@@ -253,10 +253,11 @@ export function headerFooterBandTop(
 ): number {
   return section === 'header'
     ? (margins.header ?? 48)
-    : // Footer band TOP anchors at the w:footer distance (content flows down
-      // toward the page edge); it shifts up only when taller than the
-      // distance. Must stay in lockstep with renderPage's footer placement.
-      pageHeight - Math.max(margins.footer ?? 48, flowHeight);
+    : // §17.6.11: `w:footer` is the distance from the page edge to the
+      // footer's BOTTOM, so the band starts a full flow-height above that and
+      // grows DOWN to the footer line. Must stay in lockstep with renderPage's
+      // `footerBandTop`.
+      Math.max(0, pageHeight - (margins.footer ?? 48) - flowHeight);
 }
 
 /** Shared by anchored image runs and anchored text boxes in an HF story. */
@@ -335,11 +336,10 @@ export function calculateHeaderFooterVisualBounds(
   const flowTop =
     metrics.section === 'header'
       ? (metrics.margins.header ?? 48)
-      : // Footer band TOP anchors at the w:footer distance (content flows
-        // down toward the page edge); it shifts up only when taller than
-        // the distance. Must stay in lockstep with renderPage's footer
-        // placement.
-        metrics.pageSize.h - Math.max(metrics.margins.footer ?? 48, flowHeight);
+      : // Same rule as `headerFooterBandTop`: §17.6.11 measures `w:footer` to
+        // the footer's BOTTOM edge. Must stay in lockstep with renderPage's
+        // `footerBandTop`.
+        Math.max(0, metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight);
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];

@@ -42,6 +42,14 @@ interface FloatingZoneWithAnchor extends FloatingImageZone {
   anchorBlockIndex: number;
   /** True for floats positioned relative to page/margin (not paragraph). */
   isMarginRelative?: boolean;
+  /**
+   * An OOXML `topAndBottom` wrap: a band pinned across the page that content
+   * BEFORE its own anchor paragraph must also clear. Distinct from
+   * `fullWidthBlock`, which any float wide enough to leave no room beside it
+   * now sets — such a float still only affects the flow from its own anchor
+   * onward, like any other float.
+   */
+  pinnedBand?: boolean;
 }
 
 /**
@@ -186,7 +194,7 @@ export function measureBlocksWithFloats(
     // explicit breaks reveal pages here. A later section with different
     // geometry can still over-reach — that needs real pagination.
     const anchor =
-      z.fullWidthBlock && z.isMarginRelative
+      z.pinnedBand && z.isMarginRelative
         ? (firstBlockOfPage.get(pageOf(z)) ?? 0)
         : z.anchorBlockIndex;
     const existing = zonesByAnchor.get(anchor) ?? [];
@@ -291,7 +299,7 @@ function computeAnchoredMargins(
   distLeft: number,
   distRight: number,
   contentWidth: number
-): { leftMargin: number; rightMargin: number } {
+): { leftMargin: number; rightMargin: number; fullWidthBlock?: boolean } {
   let leftMargin = 0;
   let rightMargin = 0;
 
@@ -311,6 +319,19 @@ function computeAnchoredMargins(
     leftMargin = width + distRight;
   } else if (cssFloat === 'right') {
     rightMargin = width + distLeft;
+  } else if (h?.align === 'center') {
+    // Last resort, AFTER the wrap direction: `cssFloat` is derived from the
+    // authored `wrapText` (see toProseDoc/runs), so an explicit "text on the
+    // left" must keep winning. What is left here is a centred picture with no
+    // side preference, which used to produce NO exclusion at all — text ran
+    // straight under it. Our zone model is a left/right pair and cannot punch
+    // a hole in the middle of the line, so push the text to the wider side.
+    const x = Math.max(0, (contentWidth - width) / 2);
+    if (x < contentWidth / 2) {
+      leftMargin = x + width + distRight;
+    } else {
+      rightMargin = contentWidth - x + distLeft;
+    }
   }
 
   return clampFloatingWrapMargins(leftMargin, rightMargin, contentWidth);
@@ -352,7 +373,7 @@ function extractImageZonesFromParagraph(
     }
     const bottomY = topY + imgRun.height;
 
-    const { leftMargin, rightMargin } = computeAnchoredMargins(
+    const { leftMargin, rightMargin, fullWidthBlock } = computeAnchoredMargins(
       imgRun.position,
       imgRun.cssFloat,
       imgRun.width,
@@ -361,7 +382,7 @@ function extractImageZonesFromParagraph(
       contentWidth
     );
 
-    if (leftMargin > 0 || rightMargin > 0) {
+    if (leftMargin > 0 || rightMargin > 0 || fullWidthBlock) {
       out.push({
         leftMargin,
         rightMargin,
@@ -369,6 +390,7 @@ function extractImageZonesFromParagraph(
         bottomY: bottomY + distBottom,
         anchorBlockIndex: blockIndex,
         isMarginRelative: isPositionMarginRelative(imgRun.position),
+        ...(fullWidthBlock ? { fullWidthBlock: true } : {}),
       });
     }
   }
@@ -420,12 +442,16 @@ function extractFloatingTableZone(
     rightMargin = contentWidth - x + distLeft;
   }
 
-  ({ leftMargin, rightMargin } = clampFloatingWrapMargins(leftMargin, rightMargin, contentWidth));
+  const clamped = clampFloatingWrapMargins(leftMargin, rightMargin, contentWidth);
+  leftMargin = clamped.leftMargin;
+  rightMargin = clamped.rightMargin;
+  const fullWidthBlock = clamped.fullWidthBlock;
 
   const topY = floating.tblpY ?? 0;
   const bottomY = topY + tableHeight;
 
   out.push({
+    ...(fullWidthBlock ? { fullWidthBlock: true } : {}),
     leftMargin,
     rightMargin,
     topY: topY - distTop,
@@ -487,6 +513,7 @@ function extractFloatingTextBoxZone(
       anchorBlockIndex: blockIndex,
       isMarginRelative: isPositionMarginRelative(tbBlock.position),
       fullWidthBlock: true,
+      pinnedBand: true,
     });
     return;
   }
@@ -497,7 +524,7 @@ function extractFloatingTextBoxZone(
   }
   const bottomY = topY + tbHeight;
 
-  const { leftMargin, rightMargin } = computeAnchoredMargins(
+  const { leftMargin, rightMargin, fullWidthBlock } = computeAnchoredMargins(
     tbBlock.position,
     tbBlock.cssFloat,
     tbWidth,
@@ -506,7 +533,7 @@ function extractFloatingTextBoxZone(
     contentWidth
   );
 
-  if (leftMargin <= 0 && rightMargin <= 0) return;
+  if (leftMargin <= 0 && rightMargin <= 0 && !fullWidthBlock) return;
 
   out.push({
     leftMargin,
@@ -515,6 +542,7 @@ function extractFloatingTextBoxZone(
     bottomY: bottomY + distBottom,
     anchorBlockIndex: blockIndex,
     isMarginRelative: isPositionMarginRelative(tbBlock.position),
+    ...(fullWidthBlock ? { fullWidthBlock: true } : {}),
   });
 }
 

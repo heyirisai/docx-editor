@@ -24,7 +24,12 @@ import { assertExhaustiveFlowBlock } from '../../layout-engine/types';
 import { anchoredTopInHeaderFooterBand } from '../../layout-bridge/headerFooterLayout';
 import { renderParagraphFragment } from '../renderParagraph';
 import { renderTableFragment } from '../renderTable';
-import { applyImageVisualAttrs, hasImageVisualAttrs, renderImageFragment } from '../renderImage';
+import {
+  applyImageVisualAttrs,
+  hasImageVisualAttrs,
+  imageCornerRadiusCss,
+  renderImageFragment,
+} from '../renderImage';
 import { renderTextBoxFragment } from '../renderTextBox';
 import { emuToPixels } from '../../utils/units';
 import { headerFooterFrontZIndex } from '../../layout-engine/zOrder';
@@ -521,10 +526,7 @@ export function renderHeaderFooterContent(
     // an approximation that leaks a sliver of the source when the display
     // aspect drifts from the cropped region's), header floats aren't
     // selectable/resizable, so we can afford the EXACT crop: a scaled
-    // inner img inside an overflow-hidden box. No z-index: header floats
-    // live in a separate stacking container, and a raw relativeHeight
-    // here escapes it and paints over higher-z body objects (a cover
-    // banner that Word draws over the page-1 header).
+    // inner img inside an overflow-hidden box.
     const run = floatImg.run;
     const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
     const cropL = clamp01(run.cropLeft ?? 0);
@@ -558,6 +560,17 @@ export function renderHeaderFooterContent(
     } else if (hasImageVisualAttrs(run)) {
       applyImageVisualAttrs(img, run);
     }
+    // `a:prstGeom` rounding belongs on whichever element is the picture's
+    // visible box — the overflow-hidden crop wrapper when there is one, the
+    // `<img>` otherwise (where `applyImageVisualAttrs` has already set it).
+    if (el !== img) {
+      const radius = imageCornerRadiusCss({
+        ...run,
+        width: floatImg.width,
+        height: floatImg.height,
+      });
+      if (radius) el.style.borderRadius = radius;
+    }
     if (run.transform) {
       img.style.transform = run.transform;
       img.style.transformOrigin = 'center center';
@@ -566,6 +579,16 @@ export function renderHeaderFooterContent(
     applyHeaderFooterFloatHorizontalPosition(el as HTMLImageElement, floatImg, layout);
     el.style.top = `${top}px`;
     if (floatImg.run.renderOnly) el.dataset.renderOnly = '1';
+
+    // Same band as an anchored HF TEXT BOX: `behindDoc="0"` means in front of
+    // every story's text, the footer's included. A COMET divider page is a
+    // full-bleed header picture whose white right half is what hides the
+    // footer in Word — painted in DOM order instead, our footer rule and page
+    // number sat on top of the artwork. Ordering by `relativeHeight` inside
+    // the band keeps HF floats stacked against each other as authored.
+    if (floatImg.run.wrapType !== 'behind') {
+      el.style.zIndex = String(headerFooterFrontZIndex(floatImg.run.relativeHeight ?? 1));
+    }
 
     // `behindDoc` floats paint under the flow text, and floats are appended
     // after it, so DOM order is what puts them behind (z-index cannot). Chain

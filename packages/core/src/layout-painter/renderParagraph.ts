@@ -430,6 +430,10 @@ export function renderParagraphFragment(
       // content-area-x=0 with full content-area width; the rightmost x where
       // inline content can land is `fragment.width - indentRight - lineRightOffset`.
       lineRightEdgePx: fragment.width - indentRight - lineRightOffset,
+      // Unreduced, for `<w:ptab>`: it names a boundary in the paragraph's own
+      // content space, which is what `measureParagraph` resolves against.
+      contentWidthPx: fragment.width,
+      indentRightPx: indentRight,
     });
 
     // Apply left offset from floating images (lines start after the floating image)
@@ -449,10 +453,17 @@ export function renderParagraphFragment(
     }
 
     // Lead skip: a line that was pushed past obstructing floats reserves
-    // vertical space above itself via marginTop. measureParagraph adds the
-    // same amount to totalHeight so containers stay sized correctly.
+    // vertical space above itself. measureParagraph adds the same amount to
+    // totalHeight so containers stay sized correctly.
+    //
+    // `padding-top`, NOT `margin-top`: a body fragment is absolutely
+    // positioned (its own block formatting context) but a fragment inside a
+    // table cell is only `position: relative`, so a top margin on its first
+    // line collapsed straight out through the paragraph and the cell's
+    // content box. The whole cell — picture included — slid down by the skip
+    // and the text still sat on top of the picture.
     if (line.floatSkipBefore && line.floatSkipBefore > 0) {
-      lineEl.style.marginTop = `${line.floatSkipBefore}px`;
+      lineEl.style.paddingTop = `${line.floatSkipBefore}px`;
     }
 
     // Apply line-level indentation

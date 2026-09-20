@@ -6,6 +6,16 @@
 import type { ColorValue } from '../colors';
 import type { ImageSize, ImagePosition, ImageWrap, ImageTransform } from './image';
 import type { Paragraph } from './paragraph';
+import type { Table } from './table';
+
+/**
+ * What a shape's text body can hold. `w:txbxContent` is `EG_BlockLevelElts`,
+ * so a text box may contain tables as well as paragraphs — the Iris proposal
+ * template's "PROOF POINT" panel is a two-column table inside one.
+ *
+ * @public
+ */
+export type ShapeBlockContent = Paragraph | Table;
 
 /**
  * Shape types
@@ -263,8 +273,8 @@ export interface ShapeTextBody {
     left?: number;
     right?: number;
   };
-  /** Paragraphs inside the shape */
-  content: Paragraph[];
+  /** Block content inside the shape — paragraphs and tables. */
+  content: ShapeBlockContent[];
   /**
    * The source `<wps:bodyPr>` verbatim.
    *
@@ -311,6 +321,30 @@ export interface Shape {
   /** Custom geometry points */
   customGeometry?: string;
   /**
+   * A stroke-only connector (`<wps:cNvCnPr>`, or `a:prstGeom` in the line
+   * family). Word draws these as a single line between two corners of the
+   * extent box, NOT as a rectangle — a footer rule is `prst="line"` with
+   * `cy="0"`, and outlining its bounding box paints a full-width border
+   * where the file asked for a hairline. `'down'` runs top-left to
+   * bottom-right, `'up'` (from `a:xfrm/@flipV`) bottom-left to top-right.
+   */
+  lineShape?: 'down' | 'up';
+  /**
+   * Rounded outline from `a:prstGeom` (§20.1.9.18). Word draws the preset's
+   * geometry, not its bounding box: an `ellipse` badge and a `roundRect`
+   * pill button both painted as hard-cornered rectangles without this.
+   * `'ellipse'` also covers the flow-chart connector preset (a circle);
+   * `'roundRect'` takes its corner radius from {@link Shape.cornerAdj}.
+   */
+  geometry?: 'ellipse' | 'roundRect';
+  /**
+   * `a:avLst/a:gd[@name="adj"]` as a fraction of the shape's SHORTER side
+   * (§20.1.9.11), so the corner radius is `cornerAdj * min(w, h)`. Word's
+   * default is 0.16667; `0.5` is a full pill. Only read for
+   * `geometry === 'roundRect'`.
+   */
+  cornerAdj?: number;
+  /**
    * Canvas-only shape lifted out of preserved markup so the page paints its
    * fill; the serializer skips it. Set for decorative filled shapes with no
    * text (`isFilledShapeDrawing`), whose original `mc:AlternateContent` is
@@ -354,8 +388,8 @@ export interface TextBox {
   fill?: ShapeFill;
   /** Outline */
   outline?: ShapeOutline;
-  /** Text content */
-  content: Paragraph[];
+  /** Text content — paragraphs and tables (§`w:txbxContent`). */
+  content: ShapeBlockContent[];
   /** Internal margins */
   margins?: {
     top?: number;
@@ -363,6 +397,12 @@ export interface TextBox {
     left?: number;
     right?: number;
   };
+  /** See {@link Shape.lineShape}. */
+  lineShape?: 'down' | 'up';
+  /** See {@link Shape.geometry}. */
+  geometry?: 'ellipse' | 'roundRect';
+  /** See {@link Shape.cornerAdj}. */
+  cornerAdj?: number;
   /** See {@link Shape.renderOnly}. */
   renderOnly?: boolean;
 }

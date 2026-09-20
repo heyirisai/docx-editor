@@ -86,9 +86,10 @@ export function rectsToFloatingZones(
 
     // Clamp margins that exceed contentWidth (near-full-width floats whose
     // outer edge sits past the content area). Without this, body text after
-    // the float collapses to ~1 glyph per line. Segments-based wrapping
-    // (centered both-sides) already keeps leftMargin/rightMargin at 0, so
-    // the clamp is a no-op there.
+    // the float collapses to ~1 glyph per line; such a float reserves a
+    // full-width band instead. Segments-based wrapping (centered both-sides)
+    // already keeps leftMargin/rightMargin at 0, so the clamp is a no-op
+    // there — and a split centred float genuinely does leave room.
     const clamped = clampFloatingWrapMargins(leftMargin, rightMargin, contentWidth);
     return {
       leftMargin: clamped.leftMargin,
@@ -96,6 +97,8 @@ export function rectsToFloatingZones(
       topY: rectTop,
       bottomY: rectBottom,
       segments,
+      // A float that leaves no room beside it behaves like `topAndBottom`.
+      ...(clamped.fullWidthBlock && !segments ? { fullWidthBlock: true } : {}),
     };
   });
 }

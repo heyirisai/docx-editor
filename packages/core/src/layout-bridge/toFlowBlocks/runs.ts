@@ -7,6 +7,7 @@
  */
 
 import type { Node as PMNode, Mark } from 'prosemirror-model';
+import type { PositionalTab } from '../../types/content/run';
 import type {
   Run,
   TextRun,
@@ -375,6 +376,7 @@ export function paragraphToRuns(
         kind: 'tab',
         ...paraDefaults,
         ...formatting,
+        ptab: (child.attrs.ptab as PositionalTab | null) ?? undefined,
         pmStart: childPos,
         pmEnd: childPos + child.nodeSize,
       };
@@ -421,6 +423,8 @@ export function paragraphToRuns(
         cropBottom: attrs.cropBottom as number | undefined,
         cropLeft: attrs.cropLeft as number | undefined,
         opacity: attrs.opacity as number | undefined,
+        geometry: (attrs.geometry as ImageRun['geometry'] | null) ?? undefined,
+        cornerAdj: (attrs.cornerAdj as number | null) ?? undefined,
         isInsertion: changeFmt.isInsertion,
         isDeletion: changeFmt.isDeletion,
         changeAuthor: changeFmt.changeAuthor,

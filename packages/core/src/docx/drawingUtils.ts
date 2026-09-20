@@ -91,6 +91,27 @@ function applyColorModifiers(color: ColorValue, element: XmlElement): ColorValue
     }
   }
 
+  // `a:lumMod` / `a:lumOff` (§20.1.2.3.20-21) are what Word's colour picker
+  // writes for every "Lighter/Darker N%" theme variant, so they are the
+  // common case on shapes — not `a:tint`/`a:shade`. Ignoring them painted
+  // ideagen's "Core Capabilities" panel (accent5 at 95% luminance) pure
+  // white instead of grey.
+  const percent = (name: string): number | undefined => {
+    const el = children.find((c) => c.name === name);
+    if (!el) return undefined;
+    const raw = getAttribute(el, null, 'val');
+    if (!raw) return undefined;
+    const parsed = Number.parseInt(raw, 10);
+    // A file-supplied number; keep it inside the legal 0..100% before it
+    // reaches the colour maths.
+    if (!Number.isFinite(parsed)) return undefined;
+    return Math.min(1, Math.max(0, parsed / 100000));
+  };
+  const lumMod = percent('a:lumMod');
+  if (lumMod !== undefined) color.lumMod = lumMod;
+  const lumOff = percent('a:lumOff');
+  if (lumOff !== undefined) color.lumOff = lumOff;
+
   return color;
 }
 
@@ -423,4 +444,58 @@ export function resolveColorValueToHex(color: ColorValue | undefined): string | 
   }
 
   return undefined;
+}
+
+// ============================================================================
+// PRESET GEOMETRY (a:prstGeom)
+// ============================================================================
+
+/**
+ * `a:prstGeom` presets Word draws with rounded corners (§20.1.9.18).
+ * Everything not listed keeps a square outline, which is what a `rect` — the
+ * overwhelming majority — wants anyway.
+ */
+const ROUND_GEOMETRIES: Record<string, 'ellipse' | 'roundRect'> = {
+  ellipse: 'ellipse',
+  // A flow-chart connector IS a circle in DrawingML, despite the name.
+  flowChartConnector: 'ellipse',
+  roundRect: 'roundRect',
+};
+
+/** Word's default `roundRect` corner adjust when `a:avLst` omits one. */
+export const DEFAULT_ROUND_RECT_ADJ = 0.16667;
+
+/**
+ * Preset geometry of a `wps:spPr` or `pic:spPr`, as `Shape.geometry` /
+ * `Shape.cornerAdj`. Undefined leaves the object a plain rectangle.
+ *
+ * Applies to PICTURES as well as shapes: `<a:prstGeom prst="ellipse"/>` under
+ * `pic:spPr` is how Word stores a headshot cropped to a circle, and the frame
+ * is still the picture's full `wp:extent` — the preset only says which part of
+ * it is painted.
+ */
+export function parsePresetGeometry(
+  spPr: XmlElement | null | undefined
+): { geometry: 'ellipse' | 'roundRect'; cornerAdj?: number } | undefined {
+  const prstGeom = findByFullName(spPr ?? null, 'a:prstGeom');
+  const prst = getAttribute(prstGeom, null, 'prst');
+  const geometry = prst ? ROUND_GEOMETRIES[prst] : undefined;
+  if (!geometry) return undefined;
+  if (geometry === 'ellipse') return { geometry };
+
+  // `<a:gd name="adj" fmla="val 50000"/>` — thousandths of a percent of the
+  // shorter side. A file-supplied number, so clamp it to the legal 0..50%
+  // rather than trusting it into a CSS length.
+  const avLst = findByFullName(prstGeom, 'a:avLst');
+  const gd = avLst
+    ? getChildElements(avLst).find(
+        (el) => el.name === 'a:gd' && getAttribute(el, null, 'name') === 'adj'
+      )
+    : undefined;
+  const raw = gd ? /^val\s+(-?\d+(?:\.\d+)?)$/.exec(getAttribute(gd, null, 'fmla') ?? '') : null;
+  const adj = raw ? Number(raw[1]) / 100000 : DEFAULT_ROUND_RECT_ADJ;
+  return {
+    geometry,
+    cornerAdj: Number.isFinite(adj) ? Math.min(0.5, Math.max(0, adj)) : DEFAULT_ROUND_RECT_ADJ,
+  };
 }

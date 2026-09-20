@@ -147,6 +147,10 @@ interface PageFloatingImage {
   cropLeft?: number;
   /** a:alphaModFix → opacity. */
   opacity?: number;
+  /** Rounded `a:prstGeom` preset on the picture (see `ImageRun.geometry`). */
+  geometry?: 'ellipse' | 'roundRect';
+  /** `roundRect` corner adjust as a fraction of the shorter side. */
+  cornerAdj?: number;
   /** OOXML z-order among overlapping anchored objects (higher on top). */
   relativeHeight?: number;
 }
@@ -329,6 +333,28 @@ function applyFragmentStyles(
 }
 
 /**
+ * Re-express page-level float exclusion zones in one fragment's coordinate
+ * space. Zone margins are measured from the CONTENT AREA's edges; a fragment
+ * narrower than the content area (a column) sits inside it, so the part of an
+ * exclusion that falls outside the fragment is not the fragment's to reserve.
+ * Returns the same array when the fragment spans the whole content area.
+ */
+function zonesForFragment(
+  zones: FloatingImageZone[],
+  fragmentX: number,
+  fragmentWidth: number,
+  contentWidth: number
+): FloatingImageZone[] {
+  if (fragmentX <= 0 && fragmentWidth >= contentWidth - 0.5) return zones;
+  const rightGap = Math.max(0, contentWidth - fragmentX - fragmentWidth);
+  return zones.map((zone) => ({
+    ...zone,
+    leftMargin: Math.max(0, zone.leftMargin - fragmentX),
+    rightMargin: Math.max(0, zone.rightMargin - rightGap),
+  }));
+}
+
+/**
  * Extract floating images from a paragraph block and determine their page-level positions.
  * Returns extracted images and info for the paragraph about space reserved.
  */
@@ -375,6 +401,8 @@ function extractFloatingImagesFromParagraph(
       cropBottom: imgRun.cropBottom,
       cropLeft: imgRun.cropLeft,
       opacity: imgRun.opacity,
+      geometry: imgRun.geometry,
+      cornerAdj: imgRun.cornerAdj,
       relativeHeight: imgRun.relativeHeight,
       renderOnly: imgRun.renderOnly,
     });
@@ -641,11 +669,21 @@ export function renderPage(
           renderedInlineImageKeysByBlock.set(blockKey, renderedInlineImageKeys);
         }
 
-        // Re-measure paragraph with floating zones for text wrapping
+        // Re-measure paragraph with floating zones for text wrapping. The
+        // bridge measured it before pagination, so it could only guess the
+        // paragraph's Y; here the fragment's real position on the page decides
+        // which floats it actually meets.
+        //
+        // MUST re-measure at the FRAGMENT's width, not the page content width:
+        // in a multi-column section the fragment is one column wide, and
+        // re-breaking its lines against the full page width painted them
+        // overflowing their column (ideagen's two-column "Core Capabilities"
+        // block ran clean across the page, one column's text over the other's).
         let paragraphMeasure = blockData.measure as ParagraphMeasure;
         if (floatingZones.length > 0) {
-          paragraphMeasure = measureParagraph(paragraphBlock, contentWidth, {
-            floatingZones,
+          const fragmentX = fragment.x - page.margins.left;
+          paragraphMeasure = measureParagraph(paragraphBlock, fragment.width, {
+            floatingZones: zonesForFragment(floatingZones, fragmentX, fragment.width, contentWidth),
             paragraphYOffset: fragmentContentY,
           });
         }
@@ -878,19 +916,21 @@ export function renderPage(
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = 'absolute';
-    // Word anchors the footer band's TOP at the w:footer distance from the
-    // page bottom — content flows DOWN toward the page edge (a one-line
-    // footer with the default 0.5in distance paints ~0.25-0.5in from the
-    // bottom). Only when the content is taller than the distance does the
-    // band shift up so it stays on the page. Pinning the BOTTOM at the
-    // distance (the old behavior) floated every footer a full band-height
-    // too high.
-    // Word puts the footer flow origin at `max(w:footer, in-flow height)` from
-    // the page bottom. The interactive box top can sit ABOVE that when it grows
-    // to cover an upward float, so keep the two separate: the box is the click
-    // target, `footerBandTop` is where content actually starts.
-    const footerBandTop = page.size.h - Math.max(footerDistance, footerFlowHeight);
-    const footerElTop = page.size.h - Math.max(footerDistance, interactiveFooterHeight);
+    // §17.6.11: `w:footer` is the distance from the page's BOTTOM edge to the
+    // footer's BOTTOM edge, so the band's origin is
+    // `pageHeight - w:footer - flowHeight` and content grows UPWARD from the
+    // footer line. Measured in Word with `w:footer` at 200/331/720 twips: the
+    // last footer line's bottom lands exactly that distance above the page
+    // edge every time. Treating the distance as the band's TOP put every
+    // footer one line-height too low — visible in the Iris proposal template,
+    // where the page-anchored icon beside "EHS.COM" ended up on its own line
+    // above the text it belongs to.
+    //
+    // The interactive box top can sit ABOVE the band when it grows to cover an
+    // upward float, so keep the two separate: the box is the click target,
+    // `footerBandTop` is where content actually starts.
+    const footerBandTop = Math.max(0, page.size.h - footerDistance - footerFlowHeight);
+    const footerElTop = Math.max(0, page.size.h - footerDistance - interactiveFooterHeight);
     footerEl.style.top = `${footerElTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;

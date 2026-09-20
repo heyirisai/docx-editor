@@ -267,16 +267,18 @@ test.describe('Float Text Wrapping (Issues #143 & #188)', () => {
   test('table cell text wraps around floating images', async ({ page }) => {
     await loadFixture(page);
 
-    // Check that lines inside table cells have offsets from floating images
+    // Check that lines inside table cells have offsets from floating images.
+    // The float layer hangs off the ROW (the cell clips its content and Word
+    // doesn't clip an anchored object to its cell), so look one level up.
     const cellWrapping = await page.evaluate(() => {
-      const cellContents = document.querySelectorAll('.layout-table-cell-content');
+      const rows = document.querySelectorAll('.layout-table-row');
       let cellsWithOffset = 0;
 
-      for (const cell of cellContents) {
-        const hasFloatLayer = cell.querySelector('.layout-cell-floating-images-layer');
+      for (const row of rows) {
+        const hasFloatLayer = row.querySelector('.layout-cell-floating-images-layer');
         if (!hasFloatLayer) continue;
 
-        const lines = cell.querySelectorAll('.layout-line');
+        const lines = row.querySelectorAll('.layout-line');
         for (const line of lines) {
           const ml = parseFloat((line as HTMLElement).style.marginLeft) || 0;
           if (ml > 5) {

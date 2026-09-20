@@ -57,6 +57,7 @@ export type {
   ShapeFill,
   ShapeOutline,
   ShapeTextBody,
+  ShapeBlockContent,
   Shape,
   TextBox,
 } from './content/shape';

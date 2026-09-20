@@ -55,6 +55,7 @@ import type {
 } from '@eigenpal/docx-editor-core/layout-bridge/measuring';
 import {
   measureTableBlock,
+  measureTextBoxBlock,
   getPageSize,
   getMargins,
   getColumns,
@@ -65,11 +66,7 @@ import {
   createLayoutScheduler,
   stripScrollFlag,
 } from '@eigenpal/docx-editor-core/editor';
-import {
-  DEFAULT_TEXTBOX_MARGINS,
-  DEFAULT_TEXTBOX_WIDTH,
-  assertExhaustiveFlowBlock,
-} from '@eigenpal/docx-editor-core/layout-engine';
+import { assertExhaustiveFlowBlock } from '@eigenpal/docx-editor-core/layout-engine';
 import { renderPages } from '@eigenpal/docx-editor-core/layout-painter/renderPage';
 import type {
   FlowBlock,
@@ -137,27 +134,19 @@ function measureBlock(
       });
 
     case 'table':
-      return measureTableBlock(block as TableBlock, contentWidth, measureBlock);
+      return measureTableBlock(block as TableBlock, contentWidth, measureBlock, (blocks, w) =>
+        measureBlocks(blocks, w)
+      );
 
     case 'image': {
       const ib = block as ImageBlock;
       return { kind: 'image', width: ib.width ?? 100, height: ib.height ?? 100 };
     }
 
-    case 'textBox': {
-      const tb = block as TextBoxBlock;
-      const margins = tb.margins ?? DEFAULT_TEXTBOX_MARGINS;
-      const innerWidth = (tb.width ?? DEFAULT_TEXTBOX_WIDTH) - margins.left - margins.right;
-      const innerMeasures = tb.content.map((p) => measureParagraph(p, innerWidth));
-      const contentHeight = innerMeasures.reduce((sum, m) => sum + m.totalHeight, 0);
-      const totalHeight = tb.height ?? contentHeight + margins.top + margins.bottom;
-      return {
-        kind: 'textBox' as const,
-        width: tb.width ?? DEFAULT_TEXTBOX_WIDTH,
-        height: totalHeight,
-        innerMeasures,
-      };
-    }
+    case 'textBox':
+      return measureTextBoxBlock(block as TextBoxBlock, (inner, width) =>
+        measureBlock(inner, width)
+      );
 
     case 'pageBreak':
       return { kind: 'pageBreak' };

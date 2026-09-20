@@ -393,8 +393,10 @@ export function detectVariablesInTextBox(textBox: TextBox): string[] {
 
   if (!textBox.content) return variables;
 
-  // TextBox.content is Paragraph[]
+  // A text box can also hold tables; those are scanned through the table
+  // walker like any other, so only its paragraphs are handled here.
   for (const paragraph of textBox.content) {
+    if (paragraph.type !== 'paragraph') continue;
     variables.push(...detectVariablesInParagraph(paragraph));
   }
 

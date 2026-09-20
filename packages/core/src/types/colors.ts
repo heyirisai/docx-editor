@@ -43,6 +43,19 @@ export interface ColorValue {
   themeTint?: string;
   /** Shade modifier (0-255 as hex string) - makes color darker */
   themeShade?: string;
+  /**
+   * DrawingML `a:lumMod` as a fraction (`val="95000"` -> `0.95`): multiplies
+   * the colour's HSL luminance. This is what Word's "Lighter 40% / Darker
+   * 25%" theme variants emit — as `lumMod` alone, or paired with
+   * {@link ColorValue.lumOff} — so it is far more common on shapes than
+   * `a:tint`/`a:shade`. §20.1.2.3.20.
+   */
+  lumMod?: number;
+  /**
+   * DrawingML `a:lumOff` as a fraction (`val="40000"` -> `0.40`): ADDS to the
+   * luminance after {@link ColorValue.lumMod}. §20.1.2.3.21.
+   */
+  lumOff?: number;
   /** Auto color - context-dependent (usually black for text) */
   auto?: boolean;
 }

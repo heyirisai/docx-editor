@@ -10,6 +10,8 @@
  * Based on ECMA-376 specification and clean-room understanding of tab layout.
  */
 
+import type { PositionalTab } from '../../types/content/run';
+
 /**
  * Tab alignment types
  */
@@ -42,6 +44,14 @@ export interface TabContext {
   defaultTabInterval?: number;
   /** Left indent in twips */
   leftIndent?: number;
+  /**
+   * The stops came from a `<w:ptab>` (§17.3.3.19), which NAMES its boundary
+   * rather than picking the next one along. Two consequences: a boundary the
+   * cursor already sits on is a zero-width advance (not "look further right"),
+   * and there is no fallback to the default grid — a left `w:ptab` at the
+   * margin of an unindented paragraph must not insert half an inch.
+   */
+  positional?: boolean;
 }
 
 /**
@@ -197,11 +207,23 @@ export function calculateTabWidth(
   // Convert current position to twips
   const currentXTwips = pixelsToTwips(currentXPx);
 
-  // Get computed tab stops
-  const stops = computeTabStops(context);
+  // Get computed tab stops. A POSITIONAL tab is resolved against its own
+  // boundary alone: `computeTabStops` would add the default grid and the
+  // implicit left-indent stop, and the search could then land on one of those
+  // instead of the boundary `w:ptab` named.
+  const stops = context.positional ? (context.explicitStops ?? []) : computeTabStops(context);
 
-  // Find next stop after current position
-  const nextStop = stops.find((stop) => stop.pos > currentXTwips);
+  // Find next stop after current position. A positional tab names ITS stop, so
+  // one the cursor already reached still applies and simply advances nothing.
+  const nextStop = context.positional
+    ? stops.find((stop) => stop.pos >= currentXTwips)
+    : stops.find((stop) => stop.pos > currentXTwips);
+
+  // A positional tab whose boundary is behind the cursor cannot move text
+  // backwards, and must not fall through to the default grid either.
+  if (!nextStop && context.positional) {
+    return { width: 0, alignment: 'start' };
+  }
 
   // Fallback to default grid
   if (!nextStop) {
@@ -270,4 +292,39 @@ export function calculateSimpleTabWidth(currentXPx: number): number {
     tabWidth += defaultTabPx;
   }
   return tabWidth;
+}
+
+/**
+ * The single tab stop a {@link PositionalTab} resolves to, in twips from the
+ * content-area left edge — the coordinate space `calculateTabWidth` works in.
+ * Pass it as the ONLY explicit stop for that run so the paragraph's own stops
+ * cannot win.
+ *
+ * @public
+ */
+export function positionalTabStop(
+  ptab: PositionalTab,
+  geometry: { contentWidthPx: number; indentLeftPx?: number; indentRightPx?: number }
+): TabStop {
+  const indentLeft = geometry.indentLeftPx ?? 0;
+  const indentRight = geometry.indentRightPx ?? 0;
+  // `leftMargin` names the band outside the text area; the only position it
+  // can offer inside the line is its right edge, which is the content-area
+  // left edge. `margin` spans the whole text area, `indent` the part of it
+  // this paragraph actually occupies.
+  const left = ptab.relativeTo === 'indent' ? indentLeft : 0;
+  const right =
+    ptab.relativeTo === 'leftMargin'
+      ? 0
+      : ptab.relativeTo === 'indent'
+        ? geometry.contentWidthPx - indentRight
+        : geometry.contentWidthPx;
+
+  if (ptab.alignment === 'right') {
+    return { val: 'end', pos: pixelsToTwips(right), leader: ptab.leader };
+  }
+  if (ptab.alignment === 'center') {
+    return { val: 'center', pos: pixelsToTwips((left + right) / 2), leader: ptab.leader };
+  }
+  return { val: 'start', pos: pixelsToTwips(left), leader: ptab.leader };
 }

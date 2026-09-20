@@ -309,7 +309,7 @@ export function handleSectionBreak(
     if (nextSectionIndex === undefined) return state;
     if (state.page.sectionIndex !== nextSectionIndex) {
       state.page.sectionIndex = nextSectionIndex;
-      state.page.isSectionFirstPage = true;
+      paginator.restampSectionFirstPage(state, true);
     }
     return state;
   };
@@ -320,7 +320,8 @@ export function handleSectionBreak(
         nextSectionConfig.pageSize,
         nextSectionConfig.margins,
         true,
-        nextSectionIndex
+        nextSectionIndex,
+        nextSectionConfig.firstPageMargins
       );
       claim(paginator.forcePageBreak());
       break;
@@ -330,15 +331,16 @@ export function handleSectionBreak(
         nextSectionConfig.pageSize,
         nextSectionConfig.margins,
         true,
-        nextSectionIndex
+        nextSectionIndex,
+        nextSectionConfig.firstPageMargins
       );
       const state = claim(paginator.forcePageBreak());
       // If landed on odd page, add another page. The sheet we just made is
       // then blank padding for the parity rule, not where the section opens —
       // `w:titlePg` must follow the opening page.
       if (state.page.number % 2 !== 0) {
-        state.page.isSectionFirstPage = false;
-        claim(paginator.forcePageBreak()).page.isSectionFirstPage = true;
+        paginator.restampSectionFirstPage(state, false);
+        paginator.restampSectionFirstPage(claim(paginator.forcePageBreak()), true);
       }
       break;
     }
@@ -348,13 +350,14 @@ export function handleSectionBreak(
         nextSectionConfig.pageSize,
         nextSectionConfig.margins,
         true,
-        nextSectionIndex
+        nextSectionIndex,
+        nextSectionConfig.firstPageMargins
       );
       const state = claim(paginator.forcePageBreak());
       // Same as `evenPage`: the padding sheet is not the section's first page.
       if (state.page.number % 2 === 0) {
-        state.page.isSectionFirstPage = false;
-        claim(paginator.forcePageBreak()).page.isSectionFirstPage = true;
+        paginator.restampSectionFirstPage(state, false);
+        paginator.restampSectionFirstPage(claim(paginator.forcePageBreak()), true);
       }
       break;
     }
@@ -377,7 +380,8 @@ export function handleSectionBreak(
           nextSectionConfig.pageSize,
           nextSectionConfig.margins,
           true,
-          nextSectionIndex
+          nextSectionIndex,
+          nextSectionConfig.firstPageMargins
         );
         claim(paginator.forcePageBreak());
       } else {
@@ -385,7 +389,8 @@ export function handleSectionBreak(
           nextSectionConfig.pageSize,
           nextSectionConfig.margins,
           /* applyImmediately */ false,
-          nextSectionIndex
+          nextSectionIndex,
+          nextSectionConfig.firstPageMargins
         );
       }
       break;

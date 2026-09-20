@@ -73,12 +73,15 @@ function getTableCellVerticalBorderHeight(cell: TableCell | undefined): number {
  *
  * `measureBlock` is the per-cell-content measurement callback the
  * adapter uses for everything inside a cell. The adapter passes its
- * own `measureBlock` so block coverage stays per-renderer.
+ * own `measureBlock` so block coverage stays per-renderer, plus
+ * `measureCellBlocks` (its float-aware array form) so floats anchored
+ * inside a cell exclude that cell's text.
  */
 export function measureTableBlock(
   tableBlock: TableBlock,
   contentWidth: number,
-  measureBlock: (block: FlowBlock, contentWidth: number) => Measure
+  measureBlock: (block: FlowBlock, contentWidth: number) => Measure,
+  measureCellBlocks?: (blocks: FlowBlock[], contentWidth: number) => Measure[]
 ): TableMeasure {
   const explicitWidthPx = resolveTableWidthPx(tableBlock.width, tableBlock.widthType, contentWidth);
   const targetWidth = explicitWidthPx ?? contentWidth;
@@ -113,7 +116,16 @@ export function measureTableBlock(
         const cellContentWidth = Math.max(1, cellWidth - padLeft - padRight);
 
         return {
-          blocks: cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
+          // `measureCellBlocks` runs the cell's own blocks through the
+          // float pipeline, so an image anchored INSIDE the cell
+          // (`layoutInCell="1"` — a head-shot beside a bio, say) excludes
+          // the cell's text the way it does in the body. Without it the
+          // text was measured at full cell width and painted straight over
+          // the picture. Callers that only need the table's height (the
+          // floating-table probe) may omit it.
+          blocks: measureCellBlocks
+            ? measureCellBlocks(cell.blocks, cellContentWidth)
+            : cell.blocks.map((b) => measureBlock(b, cellContentWidth)),
           width: cellWidth,
           height: 0,
           colSpan: cell.colSpan,

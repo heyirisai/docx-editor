@@ -156,7 +156,7 @@ function convertRunContent(content: RunContent, marks: ReturnType<typeof schema.
     case 'tab':
       // Carry marks (including any enclosing hyperlink) so round-trip keeps
       // the tab inside the hyperlink — TOC entries depend on this.
-      return [schema.node('tab', null, undefined, marks)];
+      return [schema.node('tab', { ptab: content.ptab ?? null }, undefined, marks)];
 
     case 'drawing':
       if (content.image) {
@@ -436,6 +436,8 @@ function convertImage(image: Image): PMNode {
     cropBottom: image.crop?.bottom,
     cropLeft: image.crop?.left,
     opacity: image.opacity,
+    geometry: image.geometry ?? null,
+    cornerAdj: image.cornerAdj ?? null,
     effectExtentTop,
     effectExtentBottom,
     effectExtentLeft,
