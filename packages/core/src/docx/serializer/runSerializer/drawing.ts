@@ -427,34 +427,34 @@ export function serializeShapeContent(content: ShapeContent): string {
     '</wps:spPr>',
   ].join('');
 
-  // Build text body if present
-  let textBody = '';
-  if (shape.textBody) {
-    const tb = shape.textBody;
-    const modelled = modelledBodyPrAttrs(tb);
+  // `wps:bodyPr` is REQUIRED by CT_WordprocessingShape — `minOccurs="1"` in
+  // dml-wordprocessingDrawing.xsd — even for a shape that holds no text at all.
+  // Emitting it only when the model had a `textBody` made Word REFUSE TO OPEN
+  // the whole document, not just drop the shape: COMET has one empty
+  // fill-and-outline box, and that single missing element cost the file.
+  const tb = shape.textBody;
+  const modelled = tb ? modelledBodyPrAttrs(tb) : {};
 
-    // The source element carries a dozen attributes plus an autofit child and
-    // the model holds five of them, so replay it when we have it, with the
-    // modelled attributes written back over it. Nothing in `bodyPr` depends on
-    // the shape's size or its text, so the rest stays correct across an edit.
-    // See ShapeTextBody.bodyPrXml.
-    const bodyPr =
-      preservedBodyPrXml(tb.bodyPrXml, { overrides: modelled }) ??
-      `<wps:bodyPr rot="0" vert="horz"${Object.entries(modelled)
-        .map(([name, value]) => ` ${name}="${value}"`)
-        .join('')}/>`;
+  // The source element carries a dozen attributes plus an autofit child and
+  // the model holds five of them, so replay it when we have it, with the
+  // modelled attributes written back over it. Nothing in `bodyPr` depends on
+  // the shape's size or its text, so the rest stays correct across an edit.
+  // See ShapeTextBody.bodyPrXml.
+  const bodyPr =
+    (tb ? preservedBodyPrXml(tb.bodyPrXml, { overrides: modelled }) : undefined) ??
+    `<wps:bodyPr rot="0" vert="horz"${Object.entries(modelled)
+      .map(([name, value]) => ` ${name}="${value}"`)
+      .join('')}/>`;
 
-    if (isTextBox) {
-      textBody = [
-        '<wps:txbx><w:txbxContent>',
-        serializeShapeTextBody(tb.content),
-        '</w:txbxContent></wps:txbx>',
-        bodyPr,
-      ].join('');
-    } else {
-      textBody = bodyPr;
-    }
-  }
+  const textBody =
+    tb && isTextBox
+      ? [
+          '<wps:txbx><w:txbxContent>',
+          serializeShapeTextBody(tb.content),
+          '</w:txbxContent></wps:txbx>',
+          bodyPr,
+        ].join('')
+      : bodyPr;
 
   // Build wps:wsp
   const wsp = [

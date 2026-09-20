@@ -191,3 +191,50 @@ describe('run formatting integer attributes (issue #417)', () => {
     expect(xml).toContain('<w:position w:val="-6"/>');
   });
 });
+
+// ---------------------------------------------------------------------------
+// `wps:bodyPr` is required, whether or not the shape holds text
+// ---------------------------------------------------------------------------
+
+/**
+ * CT_WordprocessingShape declares `bodyPr` with `minOccurs="1"`
+ * (dml-wordprocessingDrawing.xsd), so a `wps:wsp` without it is schema-invalid
+ * — and Word does not degrade gracefully: it refuses to open the DOCUMENT, not
+ * just the shape. COMET has one empty fill-and-outline box with no text body,
+ * and omitting its `bodyPr` cost the whole file.
+ *
+ * Round-trip checks cannot see this: our own parser reads the invalid markup
+ * back happily, so the file looks stable right up until Word declines it.
+ */
+const SHAPE_WITHOUT_TEXT_BODY: Run = {
+  type: 'run',
+  content: [
+    {
+      type: 'shape',
+      shape: {
+        type: 'shape',
+        shapeType: 'textBox',
+        size: { width: 1647825, height: 1571625 },
+        fill: { type: 'solid', color: { rgb: '001B49' } },
+        outline: { width: 57150, color: { rgb: 'A9B533' } },
+      },
+    },
+  ],
+};
+
+describe('wps:wsp always carries bodyPr', () => {
+  test('a shape with no textBody still emits <wps:bodyPr>', () => {
+    const xml = serializeRun(SHAPE_WITHOUT_TEXT_BODY);
+    expect(xml).toContain('<wps:wsp>');
+    expect(xml).toContain('<wps:bodyPr');
+  });
+
+  test('bodyPr is the LAST child of wps:wsp, as the sequence requires', () => {
+    const xml = serializeRun(SHAPE_WITHOUT_TEXT_BODY);
+    const bodyPrAt = xml.indexOf('<wps:bodyPr');
+    const spPrEndAt = xml.indexOf('</wps:spPr>');
+    const wspEndAt = xml.indexOf('</wps:wsp>');
+    expect(bodyPrAt).toBeGreaterThan(spPrEndAt);
+    expect(bodyPrAt).toBeLessThan(wspEndAt);
+  });
+});
