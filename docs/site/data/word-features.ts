@@ -446,7 +446,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'A shape (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged. A shape with a fill or an outline and no text — the colour panels and accent bars templates are built from — is painted as its anchored rectangle, so the text laid over it is legible. A stroke-only connector (prst="line", straight/bent/curved connectors) is painted as a single line between the corners of its extent, which is how a footer rule is authored. Rounded preset geometry is drawn as such: an ellipse (and the flow-chart connector preset) paints as an ellipse, and a roundRect takes its corner radius from a:avLst, so a pill button stays a pill through a save. Custom geometry still paints as its bounding rectangle, and shape text outside a text box is not painted; custom geometry authored in the editor is reduced to its bounding rectangle on save.',
+      'A shape (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged, including a gradient, pattern or picture fill the model has no field for. A shape with a fill or an outline and no text — the colour panels and accent bars templates are built from — is painted as its anchored rectangle, so the text laid over it is legible. A stroke-only connector (prst="line", straight/bent/curved connectors) is painted as a single line between the corners of its extent, which is how a footer rule is authored. Rounded preset geometry is drawn as such: an ellipse (and the flow-chart connector preset) paints as an ellipse, and a roundRect takes its corner radius from a:avLst, so a pill button stays a pill through a save. Custom geometry still paints as its bounding rectangle, and shape text outside a text box is not painted; custom geometry authored in the editor is reduced to its bounding rectangle on save.',
   },
   {
     id: 'images.groups',
@@ -805,7 +805,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable, and a block control inside a table cell or text box is not modeled.',
+      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable. A block control inside a table cell is modeled — it renders, edits and round-trips with its properties — but one inside a text box is not.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {

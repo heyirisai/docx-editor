@@ -375,6 +375,62 @@ templates carry comments, so the rest of `conform/word/*.pdf` is sound.
 
 ---
 
+## Round 4 — the Tier 1 corpus runner (`scripts/corpus/tier1.ts`)
+
+`bun run corpus:tier1 -- <dir>` round-trips every `.docx` under a path and
+asserts seven things that must hold for EVERY document, with no Word, no
+browser and no human judgement: `parse`, `serialize`,
+`serialize-deterministic`, `repack`, `reparse`, `text-preserved` and
+`roundtrip-stable`. Roughly a dozen documents a second, so a corpus of
+thousands is practical. `--json out.json` writes a machine-readable report;
+`--baseline b.json` exits 1 only on a regression against it, which is the
+shape CI wants (the absolute pass rate on a real corpus will never be 100%).
+
+`roundtrip-stable` is the one that earns its keep: it serializes the model,
+repacks it, parses THAT, and serializes again. Any difference means every save
+mutates the file — the drift that turns a template into garbage after a dozen
+edits.
+
+The first run over `~/Documents/Templates` failed 7/13 on `text-preserved` and
+5/13 on `roundtrip-stable`. All are now 13/13. What it found:
+
+| Defect                                                   | Where                                 | Effect before                                                                                                                                                 |
+| -------------------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Block `w:sdt` in a `w:tc` dropped                        | `docx/tableParser.ts`                 | SQE's locked "GET IN TOUCH" CTA box vanished from the render AND the saved file                                                                               |
+| `w:csTheme` written instead of `w:cstheme`               | `serializer/runSerializer.ts`         | CT_Fonts spells it all-lowercase; Word ignored the attribute and our own parser lost it on the 2nd save (GOODWIN, NNN)                                        |
+| `a:schemeClr val="text1"`                                | `serializer/runSerializer/drawing.ts` | WordprocessingML slot names written into DrawingML; re-read as `dk1`, so ideagen's black cover panel repainted itself each save                               |
+| `a:tint`/`a:shade` in the wrong unit                     | same                                  | a hex 0–255 modifier written where 1000ths-of-a-percent belong                                                                                                |
+| Gradient / pattern / picture fill destroyed              | `docx/preservedShapeXml.ts`           | `parseFill` flattens every gradient to `{type:'gradient'}` with no stops, so the fill was written as nothing — and `<a:noFill/>` on the save after that (NNN) |
+| `w:commentReference` carrier run kept AND re-synthesized | `paragraphParser/content.ts`          | one junk empty run added per comment per save (LCPS, Iris)                                                                                                    |
+
+Two notes on the runner itself, both learned the hard way:
+
+- `text-preserved` must strip `<mc:Fallback>` before comparing. A cover page is
+  authored twice — `mc:Choice` (DrawingML) and `mc:Fallback` (legacy VML) — and
+  counting the fallback copy scored Higher Education 86.7% for doing exactly
+  what Word does.
+- A bare percentage is not actionable. Every missing chunk is narrowed to the
+  longest substring that is genuinely absent and reported; an empty narrowing
+  means the chunk boundary, not the content, was the problem.
+
+### Still open after round 4
+
+- **Recursion depth on nested `w:sdt`** is unbounded in both the body path
+  (`blockContentParser.parseBlockSdt`) and the new cell path
+  (`tableParser.parseCellSdt`). CLAUDE.md asks for a cap; fix both together or
+  neither, since asymmetric limits are worse than none.
+- **Codex review did not run** on this change — the workspace is out of
+  credits ("ERROR: Your workspace is out of credits"). Self-reviewed against
+  the CLAUDE.md sink list instead; the sink grep is clean and the one judgement
+  call (allowing `a:blipFill` through `preservedSpPrExtra`) is argued in that
+  file's doc comment.
+- **Tier 2 and Tier 3** are not built. Tier 2 = the same corpus in a browser,
+  asserting layout invariants without an oracle (no overlapping line boxes, no
+  content outside the page box, page count stable across two layouts). Tier 3 =
+  the Word/LibreOffice oracle already scripted in `scripts/conformance/`.
+
+---
+
 ## Left to do
 
 1. **Tests for round 3.** Arsam asked for fixes first and tests at the end, so
@@ -390,9 +446,12 @@ templates carry comments, so the rest of `conform/word/*.pdf` is sound.
    paint → save path, the cell-float visual-attr forwarding, and the
    cell-anchored float position/clipping rules.
 2. **`! bun changeset`** — interactive, hand-writing `.changeset/*.md` is
-   forbidden. Not yet run for `9a77c32f` either, so this branch needs one.
-3. **Codex review, then commit.** Draft message in the session scratchpad at
-   `t2/commitmsg.txt`; it predates round 3 and needs rewriting.
+   forbidden. Not run for `9a77c32f`, `23cc0970` or `afd81a31` either, so this
+   branch still needs exactly one.
+3. **Tests for round 4**: the cell `w:sdt` parse → PM → flow → serialize path,
+   the `w:cstheme` spelling, the DrawingML scheme-colour inverse map, the
+   preserved gradient fill, and the comment-reference carrier rule (including
+   the guard that keeps a reference with no matching `commentRangeEnd`).
 4. **Aligned-group child offsets** (Codex P2 above) if it shows up in a real
    template.
 

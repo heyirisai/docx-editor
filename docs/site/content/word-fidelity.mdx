@@ -93,7 +93,10 @@ round-trip on save, so editing the document does not lose them.
 - **Text boxes**: render and round-trip; inner text is editable. A box holds
   block-level content, so a table inside one lays out and paints like any
   other table. Move and resize handles for the box are not built yet.
-- **Drawing shapes**: round-trip. A shape with a fill or an outline and no
+- **Drawing shapes**: round-trip, including a gradient, pattern or picture
+  fill — the fill markup is kept verbatim rather than rebuilt, so a shape the
+  model cannot describe comes back exactly as authored. A shape with a fill or
+  an outline and no
   text paints as its anchored rectangle — the colour panels and accent bars
   templates are built from — so text laid over one stays legible. A
   stroke-only connector (`prst="line"`, straight/bent/curved connectors)
