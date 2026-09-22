@@ -142,6 +142,48 @@ export function isWatermarkShape(shape: XmlElement, idLower: string): boolean {
  * @param media - The package media map (for resolving image data).
  * @returns The watermark, or undefined when the header has none.
  */
+/** The `v:shape` elements `extractWatermark` would claim, in document order. */
+function claimableWatermarkShapes(root: XmlElement | null | undefined): XmlElement[] {
+  if (!root) return [];
+  return findAllDeep(root, 'v', 'shape').filter((shape) => {
+    const idLower = (getAttribute(shape, null, 'id') ?? '').toLowerCase();
+    const textpath = getChildElements(shape).find(
+      (c) => c.name === 'v:textpath' || c.name?.endsWith(':textpath')
+    );
+    return isWatermarkShape(shape, idLower) || Boolean(textpath);
+  });
+}
+
+/**
+ * `id` of the shape `extractWatermark` claims from this subtree, or null when
+ * it claims none (or the shape is unnamed).
+ *
+ * A watermark authored as `mc:AlternateContent` is reachable from BOTH the
+ * header's watermark model and the run parser's preserved-source fallback, and
+ * serializing it twice puts two copies in the part — so one copy is dropped.
+ * With two watermark shapes in one header (DRAFT + CONFIDENTIAL) "the first
+ * one that looks like a watermark" is not necessarily the one the model took,
+ * and the wrong shape gets deleted. Word names these shapes
+ * (`PowerPlusWaterMarkObject…`), so ownership goes by that name.
+ */
+export function claimedWatermarkShapeId(root: XmlElement | null | undefined): string | null {
+  const shape = claimableWatermarkShapes(root)[0];
+  return shape ? (getAttribute(shape, null, 'id') ?? null) : null;
+}
+
+/**
+ * Whether the subtree holds the watermark shape named `shapeId` — or, when it
+ * is null, any claimable watermark shape at all.
+ */
+export function containsWatermarkShape(
+  root: XmlElement | null | undefined,
+  shapeId: string | null = null
+): boolean {
+  const shapes = claimableWatermarkShapes(root);
+  if (shapeId === null) return shapes.length > 0;
+  return shapes.some((shape) => getAttribute(shape, null, 'id') === shapeId);
+}
+
 export function extractWatermark(
   hdrRoot: XmlElement | null | undefined,
   rels: RelationshipMap | null = null,

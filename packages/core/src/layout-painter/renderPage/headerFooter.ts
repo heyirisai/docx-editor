@@ -26,6 +26,7 @@ import { renderTableFragment } from '../renderTable';
 import { applyImageVisualAttrs, hasImageVisualAttrs, renderImageFragment } from '../renderImage';
 import { renderTextBoxFragment } from '../renderTextBox';
 import { emuToPixels } from '../../utils/units';
+import { headerFooterFrontZIndex } from '../../layout-engine/zOrder';
 import type { RenderContext, RenderPageOptions } from '../renderPage';
 import { setImageAssetSource } from '../imageAssets';
 
@@ -411,15 +412,33 @@ export function renderHeaderFooterContent(
       // Text boxes stack in the HF flow. headerFooterLayout already reserves
       // their height; without this branch they were measured but never
       // painted, so they showed in the inline editor but not the page view.
+      // Reuse the image path's anchor resolution: a footer date is commonly
+      // anchored with a negative positionV so it paints above the footer band.
+      const boxTop = resolveHeaderFooterFloatTop(
+        { height: measure.height, paragraphY: cursorY, position: block.position ?? {} },
+        layout
+      );
       const syntheticFragment: TextBoxFragment = {
         kind: 'textBox',
         blockId: block.id,
         x: 0,
-        y: cursorY,
+        y: boxTop,
         width: measure.width,
         height: measure.height,
         pmStart: block.pmStart,
         pmEnd: block.pmEnd,
+        // Same stacking the body gives its floats — without it an anchored HF
+        // box paints under body artwork it is meant to sit on.
+        isFloating: block.displayMode === 'float',
+        // Only a FLOATING box stacks. An in-flow or topAndBottom box given a
+        // front z-index paints over the body and, being pointer-interactive,
+        // swallows clicks meant for the document text.
+        zIndex:
+          block.displayMode !== 'float'
+            ? undefined
+            : block.wrapType === 'behind'
+              ? -1
+              : headerFooterFrontZIndex(block.relativeHeight ?? 1),
       };
       const fragEl = renderTextBoxFragment(
         syntheticFragment,
@@ -428,10 +447,7 @@ export function renderHeaderFooterContent(
         { ...context, positioning: 'absolute' },
         { document: doc }
       );
-      // Vertical position stays on the HF flow cursor (the anchor's positionV
-      // is not yet honored for HF text boxes); only the horizontal anchor is
-      // resolved here, which is what the reported page-centered banner needs.
-      fragEl.style.top = `${cursorY}px`;
+      fragEl.style.top = `${boxTop}px`;
       // Honor the anchor's horizontal position (e.g. centered relative to the
       // page) instead of pinning the box to the left.
       fragEl.style.left = resolveHeaderFooterFloatLeft(
@@ -469,6 +485,7 @@ export function renderHeaderFooterContent(
   }
 
   // Render floating images with absolute positioning
+  let lastBehindEl: HTMLElement | null = null;
   for (const floatImg of floatingImages) {
     const top = resolveHeaderFooterFloatTop(floatImg, layout);
 
@@ -561,8 +578,20 @@ export function renderHeaderFooterContent(
 
     applyHeaderFooterFloatHorizontalPosition(el as HTMLImageElement, floatImg, layout);
     el.style.top = `${top}px`;
+    if (floatImg.run.renderOnly) el.dataset.renderOnly = '1';
 
-    containerEl.appendChild(el);
+    // `behindDoc` floats paint under the flow text, and floats are appended
+    // after it, so DOM order is what puts them behind (z-index cannot). Chain
+    // them off the last one so they keep document order among themselves.
+    if (floatImg.run.wrapType === 'behind') {
+      containerEl.insertBefore(
+        el,
+        lastBehindEl ? lastBehindEl.nextSibling : containerEl.firstChild
+      );
+      lastBehindEl = el;
+    } else {
+      containerEl.appendChild(el);
+    }
   }
 
   return containerEl;

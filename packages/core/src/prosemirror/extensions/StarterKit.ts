@@ -50,6 +50,7 @@ import { RunStyleExtension } from './marks/RunStyleExtension';
 import { HardBreakExtension } from './nodes/HardBreakExtension';
 import { TabExtension } from './nodes/TabExtension';
 import { ImageExtension } from './nodes/ImageExtension';
+import { RawXmlExtension } from './nodes/RawXmlExtension';
 import { TextBoxExtension } from './nodes/TextBoxExtension';
 import { ShapeExtension } from './nodes/ShapeExtension';
 import { HorizontalRuleExtension } from './nodes/HorizontalRuleExtension';
@@ -145,6 +146,7 @@ export function createStarterKit(options: StarterKitOptions = {}): AnyExtension[
   add('hardBreak', HardBreakExtension());
   add('tab', TabExtension());
   add('image', ImageExtension());
+  add('rawXml', RawXmlExtension());
   add('textBox', TextBoxExtension());
   add('shape', ShapeExtension());
   add('imageDrag', ImageDragExtension());

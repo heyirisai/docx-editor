@@ -23,7 +23,8 @@
 import type { Footnote, Endnote } from '../../types/content';
 import type { BlockContent } from '../../types/document';
 import { serializeBlockContent } from './documentSerializer';
-import { OOXML_NAMESPACES, MC_IGNORABLE } from './xmlUtils';
+import { MC_IGNORABLE } from './xmlUtils';
+import { OOXML_NAMESPACES } from './rootNamespaces';
 
 const XML_DECL = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>';
 

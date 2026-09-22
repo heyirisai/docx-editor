@@ -440,10 +440,21 @@ export const wordFeatures: WordFeature[] = [
     category: 'images',
     editing: 'none',
     rendering: 'none',
-    roundTrip: 'partial',
+    roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'Round-trip but are not painted yet. Custom geometry is reduced to its bounding rectangle on save.',
+      'A shape outside a group (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged, but is not painted — nothing appears where it sits. Custom geometry authored in the editor is reduced to its bounding rectangle on save.',
+  },
+  {
+    id: 'images.groups',
+    name: 'Grouped drawings (wpg:wgp)',
+    category: 'images',
+    editing: 'none',
+    rendering: 'partial',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes:
+      'The group is preserved verbatim and survives a save untouched. Rendering is a paint-only view of its PICTURES: nested groups compose correctly and page/column anchoring is honoured, but shapes, text boxes and connectors inside the group are not painted, and a16 rotation/flip on a child is ignored. A branded cover of banner shape + logo therefore shows the logo over blank space.',
   },
   {
     id: 'images.crop',
@@ -738,13 +749,24 @@ export const wordFeatures: WordFeature[] = [
   },
   {
     id: 'fields.other-codes',
-    name: 'Other field codes (DATE, REF, MERGEFIELD...)',
+    name: 'Other field codes (REF, MERGEFIELD...)',
     category: 'fields',
     editing: 'none',
     rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes: 'Last-computed field results display; the field codes themselves round-trip untouched.',
+  },
+  {
+    id: 'fields.date-time',
+    name: 'DATE / TIME fields',
+    category: 'fields',
+    editing: 'none',
+    rendering: 'full',
+    roundTrip: 'preserved',
+    tier: 'community',
+    notes:
+      'Recomputed on open like Word, and rendered through the field\'s `\\@` picture (e.g. `DATE \\@ "MMMM yyyy"` → September 2026) rather than the browser locale default, so a date sized for its text box still fits.',
   },
   {
     id: 'fields.citations',

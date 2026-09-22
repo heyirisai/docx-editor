@@ -41,6 +41,9 @@ export interface ParagraphAttrs {
   // Spacing (in twips)
   spaceBefore?: number;
   spaceAfter?: number;
+  /** w:beforeAutospacing / w:afterAutospacing, resolved through the style chain. */
+  beforeAutospacing?: boolean;
+  afterAutospacing?: boolean;
   lineSpacing?: number;
   lineSpacingRule?: LineSpacingRule;
   /** See ParagraphFormatting.spacingExplicit. */
@@ -279,6 +282,8 @@ export interface ImageAttrs {
   allowOverlap?: boolean;
   /** `wp:anchor relativeHeight` — z-order among overlapping anchored objects. */
   relativeHeight?: number;
+  /** Canvas-only picture derived from a preserved grouped drawing. */
+  renderOnly?: boolean | null;
 }
 
 /**

@@ -6,6 +6,7 @@
  * Supports inline and floating positioning.
  */
 
+import { preservedBodyPrXml, preservedSpPrExtraXml } from '../../../docx/preservedShapeXml';
 import { createNodeExtension } from '../create';
 
 export interface TextBoxAttrs {
@@ -25,14 +26,14 @@ export interface TextBoxAttrs {
   outlineColor?: string;
   /** Outline style */
   outlineStyle?: string;
-  /** Internal margin top in pixels */
-  marginTop?: number;
-  /** Internal margin bottom in pixels */
-  marginBottom?: number;
-  /** Internal margin left in pixels */
-  marginLeft?: number;
-  /** Internal margin right in pixels */
-  marginRight?: number;
+  /** Internal margin top in pixels; null when the source declared no inset */
+  marginTop?: number | null;
+  /** Internal margin bottom in pixels; null when the source declared no inset */
+  marginBottom?: number | null;
+  /** Internal margin left in pixels; null when the source declared no inset */
+  marginLeft?: number | null;
+  /** Internal margin right in pixels; null when the source declared no inset */
+  marginRight?: number | null;
   /** Vertical text alignment */
   verticalAlign?: string;
   /** Display mode */
@@ -47,6 +48,9 @@ export interface TextBoxAttrs {
   anchorTarget?: 'followingBlock';
   /** `wp:anchor relativeHeight` — z-order among overlapping anchored objects */
   relativeHeight?: number;
+  /** Source `wps:bodyPr` and unmodelled `wps:spPr` children, replayed on save. */
+  bodyPrXml?: string;
+  spPrExtraXml?: string;
   /** Anchor position copied from wp:positionH/wp:positionV */
   position?: {
     horizontal?: { relativeTo?: string; posOffset?: number; align?: string };
@@ -57,6 +61,12 @@ export interface TextBoxAttrs {
   distBottom?: number;
   distLeft?: number;
   distRight?: number;
+  /**
+   * `w14:paraId` of the host paragraph this box came from, set only when that
+   * paragraph held nothing else and was dropped on import. Export rebuilds it
+   * so the id stays attached to the content it labelled.
+   */
+  hostParaId?: string | null;
 }
 
 export const TextBoxExtension = createNodeExtension({
@@ -76,10 +86,12 @@ export const TextBoxExtension = createNodeExtension({
       outlineWidth: { default: null },
       outlineColor: { default: null },
       outlineStyle: { default: null },
-      marginTop: { default: 4 },
-      marginBottom: { default: 4 },
-      marginLeft: { default: 7 },
-      marginRight: { default: 7 },
+      // Null, not the CSS default: `wps:bodyPr` has its own inset defaults, so
+      // writing 4/7 back on a box whose source declared none would change it.
+      marginTop: { default: null },
+      marginBottom: { default: null },
+      marginLeft: { default: null },
+      marginRight: { default: null },
       verticalAlign: { default: null },
       displayMode: { default: 'inline' },
       cssFloat: { default: null },
@@ -88,10 +100,13 @@ export const TextBoxExtension = createNodeExtension({
       anchorTarget: { default: null },
       position: { default: null },
       relativeHeight: { default: null },
+      bodyPrXml: { default: null },
+      spPrExtraXml: { default: null },
       distTop: { default: null },
       distBottom: { default: null },
       distLeft: { default: null },
       distRight: { default: null },
+      hostParaId: { default: null },
     },
     parseDOM: [
       {
@@ -114,6 +129,14 @@ export const TextBoxExtension = createNodeExtension({
             displayMode: (el.dataset.displayMode as TextBoxAttrs['displayMode']) || undefined,
             cssFloat: (el.dataset.cssFloat as TextBoxAttrs['cssFloat']) || undefined,
             wrapType: el.dataset.wrapType || undefined,
+            // Pasted markup reaches the serializer verbatim, so the element
+            // it claims to be is checked here, at the trust boundary.
+            bodyPrXml: preservedBodyPrXml(el.dataset.bodyPrXml, {
+              requireBoundPrefixes: true,
+            }),
+            spPrExtraXml: preservedSpPrExtraXml(el.dataset.spPrExtraXml, {
+              requireBoundPrefixes: true,
+            }),
             wrapText: (el.dataset.wrapText as TextBoxAttrs['wrapText']) || undefined,
             anchorTarget: (el.dataset.anchorTarget as TextBoxAttrs['anchorTarget']) || undefined,
             position: el.dataset.position ? JSON.parse(el.dataset.position) : undefined,
@@ -147,6 +170,8 @@ export const TextBoxExtension = createNodeExtension({
       if (attrs.displayMode) domAttrs['data-display-mode'] = attrs.displayMode;
       if (attrs.cssFloat) domAttrs['data-css-float'] = attrs.cssFloat;
       if (attrs.wrapType) domAttrs['data-wrap-type'] = attrs.wrapType;
+      if (attrs.bodyPrXml) domAttrs['data-body-pr-xml'] = attrs.bodyPrXml;
+      if (attrs.spPrExtraXml) domAttrs['data-sp-pr-extra-xml'] = attrs.spPrExtraXml;
       if (attrs.wrapText) domAttrs['data-wrap-text'] = attrs.wrapText;
       if (attrs.anchorTarget) domAttrs['data-anchor-target'] = attrs.anchorTarget;
       if (attrs.position) domAttrs['data-position'] = JSON.stringify(attrs.position);

@@ -205,20 +205,29 @@ function enrichParagraphTextBoxes(
       textBody: {
         content: textBox.content,
         margins: textBox.margins,
+        bodyPrXml: textBox.bodyPrXml,
       },
+      spPrExtraXml: textBox.spPrExtraXml,
     };
     if (textBox.id) shape.id = textBox.id;
 
     const shapeContent: ShapeContent = { type: 'shape', shape };
 
-    // Clamp to the last parsed run: runIndex can outrun paragraph.content
-    // when an <w:r> contributes nothing parseable. Best-effort attachment —
-    // anchored boxes are off-flow, so the owning run matters less than
-    // keeping the shape from being dropped.
-    let targetIdx = runIndex;
-    if (targetIdx >= paragraph.content.length) {
-      targetIdx = -1;
-      for (let i = paragraph.content.length - 1; i >= 0; i--) {
+    // One <w:r> can parse into several items, so runIndex only approximates the
+    // target: take the nearest run at or after it, else the nearest before.
+    let targetIdx = -1;
+    for (
+      let i = Math.min(runIndex, paragraph.content.length - 1);
+      i < paragraph.content.length;
+      i++
+    ) {
+      if (i >= 0 && paragraph.content[i].type === 'run') {
+        targetIdx = i;
+        break;
+      }
+    }
+    if (targetIdx < 0) {
+      for (let i = Math.min(runIndex, paragraph.content.length - 1); i >= 0; i--) {
         if (paragraph.content[i].type === 'run') {
           targetIdx = i;
           break;

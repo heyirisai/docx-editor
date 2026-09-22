@@ -514,6 +514,8 @@ export interface DocumentBody {
     comments?: Comment_2[];
     content: BlockContent[];
     finalSectionProperties?: SectionProperties;
+    rootIgnorable?: string[];
+    rootNamespaces?: Record<string, string>;
     sections?: Section[];
 }
 
@@ -843,6 +845,9 @@ export function hasTemplateVariables(text: string): boolean;
 export interface HeaderFooter {
     content: BlockContent[];
     hdrFtrType: HeaderFooterType;
+    originalSnapshot?: string;
+    rootIgnorable?: string[];
+    rootNamespaces?: Record<string, string>;
     // (undocumented)
     type: 'header' | 'footer';
     watermark?: Watermark;
@@ -903,6 +908,7 @@ interface Image_2 {
     padding?: ImagePadding;
     position?: ImagePosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     rId: string;
     size: ImageSize;
     src?: string;
@@ -1608,7 +1614,7 @@ export interface Run {
 }
 
 // @public
-export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
+export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent | RawXmlContent;
 
 // @public
 export function sanitizeVariableName(name: string): string;
@@ -1746,6 +1752,7 @@ export interface Shape {
     relativeHeight?: number;
     shapeType: ShapeType;
     size: ImageSize;
+    spPrExtraXml?: string;
     textBody?: ShapeTextBody;
     transform?: ImageTransform;
     // (undocumented)
@@ -1896,6 +1903,7 @@ export interface TableSelectionSnapshot {
 
 // @public
 export interface TextBox {
+    bodyPrXml?: string;
     content: Paragraph[];
     fill?: ShapeFill;
     id?: string;
@@ -1909,6 +1917,7 @@ export interface TextBox {
     position?: ImagePosition;
     relativeHeight?: number;
     size: ImageSize;
+    spPrExtraXml?: string;
     // (undocumented)
     type: 'textBox';
     wrap?: ImageWrap;

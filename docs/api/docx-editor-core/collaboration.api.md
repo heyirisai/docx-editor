@@ -6,6 +6,9 @@
 
 import { Node as Node_2 } from 'prosemirror-model';
 
+// @public
+export function analyzeCollaborationParagraphChanges(baseDocument: Node_2, currentDocument: Node_2): ParagraphChangeAnalysis;
+
 // @public (undocumented)
 export interface CollaborationDiagnostic {
     // (undocumented)
@@ -179,6 +182,14 @@ export interface ParsedCollaborationPackage {
     // (undocumented)
     projection: CollaborationProjection;
 }
+
+// @public
+export function preserveSourceXmlAroundParagraphChanges(input: {
+    sourceBuffer: ArrayBuffer;
+    fullyRepackedBuffer: ArrayBuffer;
+    changedParagraphIds: ReadonlySet<string>;
+    preserveCommentParts?: boolean;
+}): Promise<ArrayBuffer>;
 
 // @public (undocumented)
 export function projectProseMirrorDocument(document: Node_2, options: CollaborationProjectionOptions): CollaborationProjection;

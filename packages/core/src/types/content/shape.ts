@@ -265,6 +265,17 @@ export interface ShapeTextBody {
   };
   /** Paragraphs inside the shape */
   content: Paragraph[];
+  /**
+   * The source `<wps:bodyPr>` verbatim.
+   *
+   * The element carries a dozen attributes plus an autofit child, and the
+   * fields above model five of them — rebuilding it from those alone dropped
+   * `<a:spAutoFit/>` (so Word and LibreOffice stopped sizing the box to its
+   * text) along with `wrap`, `vertOverflow`, `horzOverflow`, `anchor` and
+   * `compatLnSpc`. Nothing here depends on the shape's size or its text, so
+   * replaying it is safe across an edit. Re-validated before it is written.
+   */
+  bodyPrXml?: string;
 }
 
 /**
@@ -299,6 +310,15 @@ export interface Shape {
   textBody?: ShapeTextBody;
   /** Custom geometry points */
   customGeometry?: string;
+  /**
+   * `<wps:spPr>` children this model has no field for, verbatim — today
+   * `<a:ln>` and `<a:effectLst>`. A shape that explicitly declares "no
+   * outline" (`<a:ln><a:noFill/></a:ln>`) parses to no `outline`, so
+   * rebuilding spPr from the model alone silently swapped that for the
+   * default outline. Only emitted when the model has nothing of its own to
+   * say, so an edit through the UI still wins.
+   */
+  spPrExtraXml?: string;
 }
 
 /**
@@ -306,6 +326,10 @@ export interface Shape {
  */
 export interface TextBox {
   type: 'textBox';
+  /** See {@link ShapeTextBody.bodyPrXml}. */
+  bodyPrXml?: string;
+  /** See {@link Shape.spPrExtraXml}. */
+  spPrExtraXml?: string;
   /** Unique ID */
   id?: string;
   /** Size */

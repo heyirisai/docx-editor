@@ -44,11 +44,10 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
     alignment: attrs.alignment,
     spaceBefore: attrs.spaceBefore,
     spaceAfter: attrs.spaceAfter,
-    // HTML-origin auto spacing (w:beforeAutospacing/afterAutospacing) isn't a
-    // tracked PM attr; it rides along on _originalFormatting. Forward it so
-    // paragraphToStyle can render Word's ~14px auto spacing (issue #811).
-    beforeAutospacing: attrs._originalFormatting?.beforeAutospacing,
-    afterAutospacing: attrs._originalFormatting?.afterAutospacing,
+    // Word's ~14px auto spacing (issue #811). Styles declare it as often as
+    // paragraphs do, so prefer the style-resolved attr.
+    beforeAutospacing: attrs.beforeAutospacing ?? attrs._originalFormatting?.beforeAutospacing,
+    afterAutospacing: attrs.afterAutospacing ?? attrs._originalFormatting?.afterAutospacing,
     lineSpacing: attrs.lineSpacing,
     lineSpacingRule: attrs.lineSpacingRule,
     indentLeft: indentLeft,
@@ -270,6 +269,8 @@ const paragraphNodeSpec: NodeSpec = {
     alignment: { default: null },
     spaceBefore: { default: null },
     spaceAfter: { default: null },
+    beforeAutospacing: { default: null },
+    afterAutospacing: { default: null },
     lineSpacing: { default: null },
     lineSpacingRule: { default: null },
     spacingExplicit: { default: null },

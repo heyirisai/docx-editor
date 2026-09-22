@@ -30,8 +30,12 @@ describe('issue #811 — auto spacing (beforeAutospacing/afterAutospacing)', () 
       spaceBefore: 100, // would be ~6.7px; auto must win
       spaceAfter: 100,
     });
-    expect(style.marginTop).toBe(`${AUTO_PARAGRAPH_SPACING_PX}px`);
-    expect(style.marginBottom).toBe(`${AUTO_PARAGRAPH_SPACING_PX}px`);
+    // Word's "Auto" is 14pt, so this is no longer a whole number of pixels —
+    // compare against the same 2dp rounding `paragraphToStyle` emits.
+    const autoPx = `${Math.round(AUTO_PARAGRAPH_SPACING_PX * 100) / 100}px`;
+    expect(style.marginTop).toBe(autoPx);
+    expect(style.marginBottom).toBe(autoPx);
+    expect(AUTO_PARAGRAPH_SPACING_PX).toBeCloseTo((14 * 96) / 72, 5);
   });
 
   test('paragraphToStyle: explicit spacing still used when no auto flag', () => {
@@ -39,7 +43,7 @@ describe('issue #811 — auto spacing (beforeAutospacing/afterAutospacing)', () 
     expect(style.marginTop).toBe('16px');
   });
 
-  test('toFlowBlocks: auto spacing surfaces as ~14px before/after for pagination', () => {
+  test('toFlowBlocks: auto spacing surfaces as 14pt before/after for pagination', () => {
     const pmDoc = toProseDoc(makeDoc({ beforeAutospacing: true, afterAutospacing: true }));
     const blocks = toFlowBlocks(pmDoc, {});
     const para = blocks.find((b) => b.kind === 'paragraph');

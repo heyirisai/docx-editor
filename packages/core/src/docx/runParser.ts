@@ -32,6 +32,7 @@ import type {
   InstrTextContent,
   SoftHyphenContent,
   NoBreakHyphenContent,
+  RawXmlContent,
   DrawingContent,
   RunPropertyChange,
   TextFormatting,
@@ -52,9 +53,12 @@ import {
   getTextContent,
   parseBooleanElement,
   parseNumericAttribute,
+  elementToSelfContainedXml,
   type XmlElement,
 } from './xmlParser';
 import { resolveThemeFontRef } from './themeParser';
+import { isTextBoxDrawing } from './textBoxParser';
+import { deriveGroupPreviewImages } from './groupPreview';
 import { parseImage } from './imageParser';
 import { parseVmlImageContent } from './vmlImageParser';
 
@@ -674,15 +678,36 @@ function parseRunContents(
         const choiceEl = getChildElements(child).find((el) => getLocalName(el.name) === 'Choice');
         const targetEl =
           choiceEl ?? getChildElements(child).find((el) => getLocalName(el.name) === 'Fallback');
+        let modelled = false;
         if (targetEl) {
           for (const innerChild of getChildElements(targetEl)) {
             const innerName = getLocalName(innerChild.name);
             if (innerName === 'drawing') {
+              // blockContentParser lifts these out and serializes them from
+              // that model; keeping the source too would emit them twice.
+              if (isTextBoxDrawing(innerChild)) {
+                modelled = true;
+                continue;
+              }
               const innerDrawing = parseDrawingContent(innerChild, rels, media);
               // Only include drawings that have actual image data (skip shapes/connectors)
-              if (innerDrawing?.image?.src) contents.push(innerDrawing);
+              if (innerDrawing?.image?.src) {
+                contents.push(innerDrawing);
+                modelled = true;
+              }
             }
           }
+        }
+        // Shapes and grouped drawings have no model, so carry the source
+        // through instead of dropping it; the serializer writes it back as-is.
+        if (!modelled) {
+          contents.push({
+            type: 'rawXml',
+            xml: elementToSelfContainedXml(child),
+          } as RawXmlContent);
+          // Canvas-only images so the group can be painted; the preserved
+          // source above stays the only thing written back.
+          contents.push(...deriveGroupPreviewImages(child, rels, media));
         }
         break;
       }

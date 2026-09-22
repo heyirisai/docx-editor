@@ -29,6 +29,10 @@ export function paragraphAttrsFromResolvedStyle(
     alignment: ppr?.alignment ?? null,
     spaceBefore: ppr?.spaceBefore ?? null,
     spaceAfter: ppr?.spaceAfter ?? null,
+    // Reset with the spacing they qualify. Leaving these set kept automatic
+    // spacing on after switching to a style that declares explicit values.
+    beforeAutospacing: ppr?.beforeAutospacing ?? null,
+    afterAutospacing: ppr?.afterAutospacing ?? null,
     lineSpacing: ppr?.lineSpacing ?? null,
     lineSpacingRule: ppr?.lineSpacingRule ?? null,
     indentLeft: ppr?.indentLeft ?? null,

@@ -511,6 +511,8 @@ export interface DocumentBody {
     comments?: Comment_2[];
     content: BlockContent[];
     finalSectionProperties?: SectionProperties;
+    rootIgnorable?: string[];
+    rootNamespaces?: Record<string, string>;
     sections?: Section[];
 }
 
@@ -808,6 +810,7 @@ interface Image_2 {
     padding?: ImagePadding;
     position?: ImagePosition;
     relativeHeight?: number;
+    renderOnly?: boolean;
     rId: string;
     size: ImageSize;
     src?: string;
@@ -1484,7 +1487,7 @@ export interface Run {
 }
 
 // @public
-export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent;
+export type RunContent = TextContent | TabContent | BreakContent | SymbolContent | NoteReferenceContent | NoteRefMarkContent | SeparatorContent | FieldCharContent | InstrTextContent | SoftHyphenContent | NoBreakHyphenContent | DrawingContent | ShapeContent | RawXmlContent;
 
 // @public
 export function sanitizeVariableName(name: string): string;

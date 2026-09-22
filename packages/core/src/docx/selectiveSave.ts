@@ -108,11 +108,11 @@ export async function attemptSelectiveSave(
 
   const comments = doc.package.document.comments;
   const hasComments = comments && comments.length > 0;
-  const headerFooterUpdates = collectHeaderFooterUpdates(doc);
 
   try {
     const JSZip = (await import('jszip')).default;
     const zip = await JSZip.loadAsync(originalBuffer);
+    const headerFooterUpdates = collectHeaderFooterUpdates(doc, (path) => zip.file(path) !== null);
     const updates = new Map<string, string>();
 
     // Bail when the model references a header/footer part that the original

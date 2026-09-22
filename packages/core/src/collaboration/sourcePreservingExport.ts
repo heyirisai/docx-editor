@@ -1,7 +1,10 @@
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
-import type JSZip from 'jszip';
+import JSZip from 'jszip';
 import { extractParagraphXml, findParagraphOffsets } from '../docx/selectiveXmlPatch';
 import type { BlockContent } from '../types/content';
+import { comparableJson } from '../utils/comparableJson';
+
+export { comparableJson };
 
 export type CollaborationExportFidelityFailure =
   | 'structural_change'
@@ -33,28 +36,6 @@ export class CollaborationExportFidelityError extends Error {
 
 interface ParagraphChangeAnalysis {
   changedParagraphIds: Set<string>;
-}
-
-/**
- * Attributes added solely to support collaboration are not serialized into
- * OOXML and therefore do not constitute a document edit.
- */
-function comparableJson(value: unknown): unknown {
-  if (Array.isArray(value)) return value.map(comparableJson);
-  if (!value || typeof value !== 'object') return value;
-
-  // Sort keys so the JSON.stringify comparison in valuesEqual() is
-  // insertion-order independent. Yjs and the PM serializer can emit the same
-  // attrs with different key order, and an order-sensitive compare would read
-  // that as a real change and reject the export as a structural change.
-  const result: Record<string, unknown> = {};
-  for (const [key, child] of Object.entries(value).sort(([a], [b]) =>
-    a < b ? -1 : a > b ? 1 : 0
-  )) {
-    if (key === 'collaborationId') continue;
-    result[key] = comparableJson(child);
-  }
-  return result;
 }
 
 function valuesEqual(left: unknown, right: unknown): boolean {
@@ -329,7 +310,6 @@ export async function preserveSourceXmlAroundParagraphChanges(input: {
   changedParagraphIds: ReadonlySet<string>;
   preserveCommentParts?: boolean;
 }): Promise<ArrayBuffer> {
-  const JSZip = (await import('jszip')).default;
   const [sourceZip, exportZip] = await Promise.all([
     JSZip.loadAsync(input.sourceBuffer),
     JSZip.loadAsync(input.fullyRepackedBuffer),

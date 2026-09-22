@@ -627,6 +627,8 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         run = createImageRun(node);
       } else if (node.type.name === 'shape') {
         run = createShapeRun(node);
+      } else if (node.type.name === 'rawXml') {
+        run = { type: 'run', content: [{ type: 'rawXml', xml: String(node.attrs.xml ?? '') }] };
       } else {
         // Filter out the tracked change mark for text formatting extraction
         const otherMarks = node.marks.filter(
@@ -744,6 +746,18 @@ function extractParagraphContent(paragraph: PMNode): ParagraphContent[] {
         currentMarksKey = null;
       }
       content.push(createShapeRun(node));
+    } else if (node.type.name === 'rawXml') {
+      // Preserved OOXML the model cannot represent — ends the current run and
+      // rides back out untouched.
+      if (currentRun) {
+        content.push(currentRun);
+        currentRun = null;
+        currentMarksKey = null;
+      }
+      content.push({
+        type: 'run',
+        content: [{ type: 'rawXml', xml: String(node.attrs.xml ?? '') }],
+      });
     } else if (node.type.name === 'tab') {
       // Tab ends current run
       if (currentRun) {

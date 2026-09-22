@@ -24,6 +24,7 @@ import type {
   FontFamilyAttrs,
 } from '../../prosemirror/schema/marks';
 import type { Theme } from '../../types/document';
+import { dateFormatSwitch } from '../../docx/dateFormat';
 import { resolveColor, resolveHighlightToCss } from '../../utils/colorResolver';
 import { halfPointsToPixels, halfPointsToPoints } from '../../utils/units';
 import { twipsToPixels, constrainImageToPage } from './shared';
@@ -428,6 +429,7 @@ export function paragraphToRuns(
         distRight: attrs.distRight as number | undefined,
         position: attrs.position as ImageRun['position'] | undefined,
         relativeHeight: (attrs.relativeHeight as number | null) ?? undefined,
+        renderOnly: (attrs.renderOnly as boolean | null) ?? undefined,
         cropTop: attrs.cropTop as number | undefined,
         cropRight: attrs.cropRight as number | undefined,
         cropBottom: attrs.cropBottom as number | undefined,
@@ -465,6 +467,7 @@ export function paragraphToRuns(
         kind: 'field',
         fieldType: mappedType,
         fallback: (child.attrs.displayText as string) || '',
+        fieldFormat: dateFormatSwitch(child.attrs.instruction as string | undefined),
         ...paraDefaults,
         ...formatting,
         pmStart: childPos,

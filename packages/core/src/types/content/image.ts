@@ -168,6 +168,11 @@ export interface Image {
    * round-trips it.
    */
   relativeHeight?: number;
+  /**
+   * Canvas-only picture lifted out of a preserved grouped drawing; the
+   * serializer skips these. See docx/groupPreview.ts.
+   */
+  renderOnly?: boolean;
   /** Hyperlink URL for clickable image */
   hlinkHref?: string;
   /** Image outline/border */

@@ -40,6 +40,7 @@ import {
   elementToXml,
   type XmlElement,
 } from '../xmlParser';
+import type { RunContent } from '../../types/content';
 import { parseRun } from '../runParser';
 import { parseHyperlink as parseHyperlinkFromModule } from '../hyperlinkParser';
 import {
@@ -442,6 +443,35 @@ function parseSimpleField(
 // ============================================================================
 
 /**
+ * The `w:fldChar` markers with no partner — a paragraph-spanning field (the TOC
+ * wrapper) leaves its `begin` here, and the paragraph holding the other end
+ * leaves that `end`. Only those markers are passed through; fields nested
+ * inside them still get modelled.
+ *
+ * Keyed on the parsed item itself, not on a position shared with the walker:
+ * two independent traversals agreeing by index — one over raw `w:fldChar`
+ * elements, one over `parseRun` output — is a coupling that silently swallows
+ * the rest of the paragraph the day they drift apart.
+ */
+function unpairedFieldCharItems(runs: Iterable<Run>): Set<RunContent> {
+  const unpaired = new Set<RunContent>();
+  const openBegins: RunContent[] = [];
+  for (const run of runs) {
+    for (const item of run.content) {
+      if (item.type !== 'fieldChar') continue;
+      if (item.charType === 'end') {
+        if (openBegins.length === 0) unpaired.add(item);
+        else openBegins.pop();
+      } else if (item.charType !== 'separate') {
+        openBegins.push(item);
+      }
+    }
+  }
+  for (const begin of openBegins) unpaired.add(begin);
+  return unpaired;
+}
+
+/**
  * Parse all content within a paragraph
  *
  * Returns the parsed content and any complex fields that span multiple runs
@@ -458,8 +488,9 @@ export function parseParagraphContents(
   const contents: ParagraphContent[] = [];
   const children = getChildElements(paraElement);
 
-  // State for tracking complex fields
-  let inComplexField = false;
+  // Depth, not a flag: a TOC field's result holds one nested PAGEREF field per
+  // entry, and treating the inner `begin` as a new field loses the outer one.
+  let complexFieldDepth = 0;
   let complexFieldInstr = '';
   let complexFieldCodeRuns: Run[] = [];
   let complexFieldResultRuns: Run[] = [];
@@ -475,98 +506,150 @@ export function parseParagraphContents(
   let legacyResultXml = '';
   let legacySuffixXml = '';
 
+  // Parse every run once up front: the unpaired-marker scan below and the
+  // walker have to see the exact same items, and `parseRun` is the only thing
+  // that decides what a `w:fldChar` becomes.
+  const parsedRuns = new Map<XmlElement, Run>();
+  for (const child of children) {
+    if (getLocalName(child.name) !== 'r') continue;
+    const runElement =
+      trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
+    parsedRuns.set(child, parseRun(runElement, styles, theme, rels, media));
+  }
+
+  // A field straddling a paragraph boundary cannot be modelled by this
+  // per-paragraph walker, so its own markers ride through as run content (the
+  // serializer re-emits them). Fields fully contained in this paragraph — the
+  // PAGEREF in a TOC entry — are still modelled normally.
+  const unpairedFieldChars = unpairedFieldCharItems(parsedRuns.values());
+
   for (const child of children) {
     const localName = getLocalName(child.name);
 
     switch (localName) {
       case 'r': {
-        // Check for field characters in this run
-        const runElement =
-          trackedContext === 'deletion' ? normalizeDeletionContentElement(child) : child;
-        const run = parseRun(runElement, styles, theme, rels, media);
+        const run = parsedRuns.get(child)!;
 
-        // Look for field characters
-        let hasFieldBegin = false;
-        let hasFieldSeparate = false;
-        let hasFieldEnd = false;
-        let instrText = '';
+        // Split at run-CONTENT granularity: Word packs entry text and a whole
+        // field into one w:r, so treating the run as a unit loses its text.
+        let buffer: RunContent[] = [];
+        const placeRun = (piece: Run): void => {
+          if (complexFieldDepth === 0) contents.push(piece);
+          else if (afterSeparator) complexFieldResultRuns.push(piece);
+          else complexFieldCodeRuns.push(piece);
+        };
+        const flushBuffer = (): void => {
+          if (buffer.length === 0) return;
+          placeRun({ ...run, content: buffer });
+          buffer = [];
+        };
 
-        for (const content of run.content) {
-          if (content.type === 'fieldChar') {
-            if (content.charType === 'begin') {
-              hasFieldBegin = true;
-              if (content.fldLock) complexFieldLock = true;
-              if (content.dirty) complexFieldDirty = true;
-            } else if (content.charType === 'separate') {
-              hasFieldSeparate = true;
-            } else if (content.charType === 'end') {
-              hasFieldEnd = true;
-            }
-          } else if (content.type === 'instrText') {
-            instrText += content.text;
+        // Legacy form-field capture works at RUN granularity: Word writes each
+        // structural marker (`begin` + `w:ffData`, `instrText`, `separate`,
+        // `end`) in its own run and the verbatim replay depends on that. A
+        // structural run that also carries other content would have its bytes
+        // replayed AND its content re-serialized from the model, so such a
+        // field is left on the opaque complex-field passthrough instead.
+        const structuralOnly = run.content.every(
+          (item) => item.type === 'fieldChar' || item.type === 'instrText'
+        );
+        // Snapshot before this run's items move the state: the separator run
+        // still belongs to the prefix, and the run that opens the field is
+        // classified by what it opened, not by the previous field's state.
+        const afterSeparatorAtRunStart = afterSeparator;
+        let legacyBeginRun = false;
+        const captureLegacyRunXml = (): void => {
+          if (!legacyFfData) return;
+          // `w:lastRenderedPageBreak` is Word's render cache, not content: the
+          // paragraph serializer re-emits the paragraph's leading marker
+          // itself, so keeping it in the replayed bytes would double it.
+          const xml = elementToXml(child).replace(/<w:lastRenderedPageBreak\/>/g, '');
+          if (legacyBeginRun || !afterSeparatorAtRunStart) legacyPrefixXml += xml;
+          else legacyResultXml += xml;
+        };
+
+        // An empty run carries only w:rPr (Word emits these); it has no content
+        // to split, and dropping it would lose a run boundary.
+        if (run.content.length === 0) {
+          if (complexFieldDepth > 0 && !complexFieldFormatting && run.formatting) {
+            complexFieldFormatting = run.formatting;
           }
+          placeRun(run);
+          // Keep its bytes too so an rPr-only run inside a form field (Word
+          // emits these between the instruction and the separator) replays.
+          if (complexFieldDepth > 0) captureLegacyRunXml();
+          break;
         }
 
-        if (hasFieldBegin) {
-          // Starting a new complex field
-          inComplexField = true;
-          afterSeparator = false;
-          complexFieldInstr = '';
-          complexFieldCodeRuns = [];
-          complexFieldResultRuns = [];
-          complexFieldLock = false;
-          complexFieldDirty = false;
-          legacyFfData = findFfDataElement(child);
-          legacyPrefixXml = '';
-          legacyResultXml = '';
-          legacySuffixXml = '';
-          // The structural run carrying `begin` holds the field's run
-          // properties. Capture them so the result keeps its formatting even
-          // when there is no separate result run to read it from.
-          complexFieldFormatting = run.formatting;
-        }
-
-        if (inComplexField) {
-          // Capture the structural runs verbatim while this looks like a legacy
-          // form field: everything up to and including `separate` is the
-          // prefix, the `end` run is the suffix, and the result runs in between
-          // come from the normal run parser (their XML is kept too, so empty
-          // result runs can be replayed verbatim). `afterSeparator` is still
-          // the pre-update value here, so the separator run lands in the prefix.
-          if (legacyFfData) {
-            // `w:lastRenderedPageBreak` is Word's render cache, not content:
-            // the paragraph serializer re-emits the paragraph's leading marker
-            // itself, so keeping it in the replayed bytes would double it.
-            const xml = elementToXml(child).replace(/<w:lastRenderedPageBreak\/>/g, '');
-            if (hasFieldEnd) legacySuffixXml = xml;
-            else if (!afterSeparator) legacyPrefixXml += xml;
-            else legacyResultXml += xml;
-          }
-          if (instrText) {
-            complexFieldInstr += instrText;
-          }
-          // Prefer any field run that actually carries formatting (the begin
-          // run is often empty in docs that put `w:rPr` on a later code run).
-          if (!complexFieldFormatting && run.formatting) {
+        for (const item of run.content) {
+          // A field's w:rPr often sits on a later run, so capture it before the
+          // structural branches below `continue` past it.
+          if (complexFieldDepth > 0 && !complexFieldFormatting && run.formatting) {
             complexFieldFormatting = run.formatting;
           }
 
-          if (hasFieldSeparate) {
-            afterSeparator = true;
-          }
-
-          if (afterSeparator && !hasFieldEnd) {
-            // Add to result runs (excluding the separator run itself)
-            if (!hasFieldSeparate) {
-              complexFieldResultRuns.push(run);
+          if (item.type === 'fieldChar') {
+            if (unpairedFieldChars.has(item)) {
+              // Half of a paragraph-spanning field: pass it through untouched.
+              // Inside a form field this is not a shape we can replay.
+              if (complexFieldDepth > 0) legacyFfData = null;
+              buffer.push(item);
+              continue;
             }
-          } else if (!afterSeparator && !hasFieldBegin) {
-            // Add to code runs
-            complexFieldCodeRuns.push(run);
           }
 
-          if (hasFieldEnd) {
-            // Close the complex field
+          if (item.type === 'fieldChar' && item.charType === 'begin') {
+            flushBuffer();
+            if (complexFieldDepth === 0) {
+              afterSeparator = false;
+              complexFieldInstr = '';
+              complexFieldCodeRuns = [];
+              complexFieldResultRuns = [];
+              complexFieldLock = Boolean(item.fldLock);
+              complexFieldDirty = Boolean(item.dirty);
+              // Structural runs hold the w:rPr Word styles the result with.
+              complexFieldFormatting = run.formatting;
+              // A `begin` carrying `w:ffData` opens a legacy form field; the
+              // structural runs are captured verbatim from here to `end`.
+              legacyFfData = structuralOnly ? findFfDataElement(child) : null;
+              legacyPrefixXml = '';
+              legacyResultXml = '';
+              legacySuffixXml = '';
+              legacyBeginRun = true;
+            } else {
+              // Nested field — keep its markup verbatim inside the result.
+              // A form field never nests one, so stop treating it as one.
+              legacyFfData = null;
+              buffer.push(item);
+            }
+            complexFieldDepth++;
+            continue;
+          }
+
+          if (item.type === 'fieldChar' && item.charType === 'separate') {
+            flushBuffer();
+            if (complexFieldDepth === 1) {
+              afterSeparator = true;
+              if (!structuralOnly) legacyFfData = null;
+            } else buffer.push(item);
+            continue;
+          }
+
+          if (item.type === 'fieldChar' && item.charType === 'end') {
+            flushBuffer();
+            // Never below zero: an `end` with nothing open would route every
+            // later run into `complexFieldCodeRuns`, which is only flushed by a
+            // matching `end` that will now never come — the rest of the
+            // paragraph would vanish. Pass the stray marker through instead.
+            if (complexFieldDepth === 0) {
+              buffer.push(item);
+              continue;
+            }
+            complexFieldDepth--;
+            if (complexFieldDepth > 0) {
+              buffer.push(item);
+              continue;
+            }
             const complexField: ComplexField = {
               type: 'complexField',
               instruction: complexFieldInstr.trim(),
@@ -574,10 +657,17 @@ export function parseParagraphContents(
               fieldCode: complexFieldCodeRuns,
               fieldResult: complexFieldResultRuns,
             };
-
             if (complexFieldFormatting) complexField.formatting = complexFieldFormatting;
             if (complexFieldLock) complexField.fldLock = true;
             if (complexFieldDirty) complexField.dirty = true;
+
+            // The `end` run is the suffix. A run that both opens and closes
+            // the field, or carries other content, has no clean prefix/suffix
+            // split to replay, so fall back to the passthrough.
+            if (legacyFfData && (legacyBeginRun || !structuralOnly)) legacyFfData = null;
+            if (legacyFfData) {
+              legacySuffixXml = elementToXml(child).replace(/<w:lastRenderedPageBreak\/>/g, '');
+            }
 
             // A legacy form field is projected onto an inline SDT so it shares
             // the content-control discovery/edit/render path. `null` means the
@@ -597,12 +687,21 @@ export function parseParagraphContents(
               : null;
             contents.push(legacySdt ?? complexField);
             legacyFfData = null;
-            inComplexField = false;
+            continue;
           }
-        } else {
-          // Regular run, not part of a field
-          contents.push(run);
+
+          // Keep the item in the code runs too: the serializer only rebuilds an
+          // instruction when `fieldCode` is empty.
+          if (item.type === 'instrText' && complexFieldDepth === 1 && !afterSeparator) {
+            complexFieldInstr += item.text;
+          }
+          buffer.push(item);
         }
+        flushBuffer();
+        // Still open after this run: the run is part of the prefix (through
+        // the separator) or of the result. The `end` run was already taken as
+        // the suffix above and cleared the capture.
+        if (complexFieldDepth > 0) captureLegacyRunXml();
         break;
       }
 
@@ -639,6 +738,13 @@ export function parseParagraphContents(
           (el: XmlElement) =>
             el.type === 'element' && (el.name === 'w:sdtPr' || el.name?.endsWith(':sdtPr'))
         );
+        // The end-mark properties round-trip verbatim just like `w:sdtPr`;
+        // `parseSdtProperties` has always taken them, the inline path just
+        // never passed them, so every inline control lost its `w:sdtEndPr`.
+        const sdtEndPr = (child.elements ?? []).find(
+          (el: XmlElement) =>
+            el.type === 'element' && (el.name === 'w:sdtEndPr' || el.name?.endsWith(':sdtEndPr'))
+        );
         const sdtContentEl = (child.elements ?? []).find(
           (el: XmlElement) =>
             el.type === 'element' &&
@@ -654,7 +760,7 @@ export function parseParagraphContents(
             media,
             trackedContext
           );
-          const properties = parseSdtProperties(sdtPr ?? null);
+          const properties = parseSdtProperties(sdtPr ?? null, sdtEndPr ?? null);
           const inlineSdt: InlineSdt = {
             type: 'inlineSdt',
             properties,
@@ -802,6 +908,12 @@ export function parseParagraphContents(
         // Unknown element - skip
         break;
     }
+  }
+
+  // A `begin` the scan paired but whose `end` never arrived leaves runs stranded
+  // in the field buffers. Emit them rather than drop the tail of the paragraph.
+  if (complexFieldDepth > 0) {
+    contents.push(...complexFieldCodeRuns, ...complexFieldResultRuns);
   }
 
   return contents;

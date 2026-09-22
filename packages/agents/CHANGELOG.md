@@ -1,5 +1,16 @@
 # @eigenpal/docx-editor-agents
 
+## 1.13.1
+
+## 1.13.0
+
+### Patch Changes
+
+- 9e1ed68: Stop bundling a second copy of ProseMirror into the agents build, which threw
+  "Duplicate use of selection JSON ID cell" on import beside a host editor. All
+  nine `prosemirror-*` packages are now required peers and must be installed
+  alongside this one, including for the headless `DocxReviewer`.
+
 ## 1.12.0
 
 ## 1.11.0
