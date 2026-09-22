@@ -100,6 +100,46 @@ The CI error message points at the source file for each drifted entry, so the fi
 
 The same `@public` surface is also emitted as structured JSON for downstream docs sites: `bun run docs:json` writes `docs/json/<pkg-slug>/<subpath>.json` per published subpath, plus a root `docs/json/index.json`. **The JSON is gitignored** — downstream sites (e.g. `docx-editor-page`) clone the repo and run the script themselves. CI runs `bun run docs:json` as a smoke test so generator breakage surfaces in this repo, not in the consumer's build.
 
+## Core is consumer-agnostic
+
+`@eigenpal/docx-editor-core` never knows which product is embedding it. That
+splits every change into one of two buckets:
+
+- **Fidelity is shared.** Parsing, measurement, layout, pagination and
+  serialization follow Word's behavior, full stop. A fidelity fix lands in core
+  and applies to every consumer — there is no "this is how _our_ app wants
+  tables to break".
+- **Behavior and UX live in the host.** Anything a product wants to do
+  differently is expressed through adapter props, the ref API, or the plugin
+  API — not through core.
+
+So: **no `mode` / consumer / tenant flags in core.** If a behavior genuinely
+has to be tunable, expose a neutrally named option that describes the
+_behavior_, never the consumer, and default it to what Word does:
+
+```text
+good — names the behavior, Word's rule is the default:
+  tablePagination: { orphanHeaderRow: 'push' | 'allow' }   // default: 'push'
+
+bad — names the consumer:
+  tablePagination: { mode: 'proposals' | 'rfp' }
+```
+
+Don't add the knob speculatively. A Word-faithful fix with no option is the
+preferred shape; introduce an option only once a second real behavior is
+required.
+
+**Both fixture corpora must pass.** Layout changes are validated against the
+two document families the editor serves, and a change that fixes one while
+regressing the other is not done:
+
+- **proposal-style** — long narrative prose with narrow tables embedded in it
+  (`e2e/fixtures/table-header-orphan-proposal.docx`);
+- **RFP / questionnaire-style** — wide requirement matrices with repeating
+  header rows and many short body rows
+  (`e2e/fixtures/table-header-orphan-rfp.docx`,
+  `e2e/fixtures/table-header-orphan-cantsplit.docx`).
+
 ## Adapter Parity
 
 The editor ships first-party adapters for React (`packages/react`) and Vue (`packages/vue`). Both share `@eigenpal/docx-editor-core`, which owns the parser, ProseMirror schema, layout engine, layout bridge (page mapping, footnote convergence, header/footer measurement), and serializer. Adapters only own their framework-specific shell, components, and lifecycle wiring.

@@ -10,6 +10,9 @@ import { Element as Element_2 } from 'xml-js';
 export function attemptSelectiveSave(doc: Document_2, originalBuffer: ArrayBuffer, options: SelectiveSaveOptions): Promise<ArrayBuffer | null>;
 
 // @public
+export function buildLegacyFormFieldSdt(seq: LegacyFormFieldSequence): InlineSdt | null;
+
+// @public
 export function buildPatchedDocumentXml(originalXml: string, serializedXml: string, changedIds: Set<string>): string | null;
 
 // @public
@@ -86,10 +89,31 @@ export function extractTextBoxContentElements(txbxContent: Element_2 | null): {
 };
 
 // @public
+export interface FfDataProjection {
+    // (undocumented)
+    checked?: boolean;
+    // (undocumented)
+    defaultText?: string;
+    // (undocumented)
+    fieldType: LegacyFormFieldType;
+    // (undocumented)
+    name?: string;
+    // (undocumented)
+    options?: string[];
+    // (undocumented)
+    selectedIndex?: number;
+    // (undocumented)
+    sizeAuto?: boolean;
+}
+
+// @public
 export interface FieldSwitch {
     switch: string;
     value?: string;
 }
+
+// @public
+export function findFfDataElement(runElement: Element_2): Element_2 | null;
 
 // @public
 export interface FootnoteMap {
@@ -323,6 +347,33 @@ export function isTotalPagesField(field: Field): boolean;
 export const KNOWN_FIELD_TYPES: FieldType[];
 
 // @public
+export const LEGACY_CHECKBOX_GLYPHS: {
+    readonly checked: "☒";
+    readonly unchecked: "☐";
+};
+
+// @public
+export const LEGACY_FIELD_SDT_TYPE: Record<LegacyFormFieldType, SdtType>;
+
+// @public
+export function legacyCheckboxGlyph(checked: boolean | undefined): string;
+
+// @public
+export interface LegacyFormFieldSequence {
+    ffData: Element_2;
+    formatting?: Run['formatting'];
+    hasSeparate: boolean;
+    instruction: string;
+    prefixXml: string;
+    resultRuns: Run[];
+    resultXml?: string;
+    suffixXml: string;
+}
+
+// @public
+export function legacyFormFieldTypeFor(instruction: string): LegacyFormFieldType | null;
+
+// @public
 export function mergeTabStops(styleTabs: TabStop[] | undefined, directTabs: TabStop[] | undefined): TabStop[];
 
 // @public
@@ -362,6 +413,9 @@ export function parseEndnoteProperties(element: Element_2 | null): EndnoteProper
 
 // @public
 export function parseEndnotes(endnotesXml: string | null, styles?: StyleMap | null, theme?: Theme | null, numbering?: NumberingMap | null, rels?: RelationshipMap | null, media?: Map<string, MediaFile> | null): EndnoteMap;
+
+// @public
+export function parseFfData(ffData: Element_2): FfDataProjection | null;
 
 // @public
 export function parseFieldInstruction(instruction: string): ParsedFieldInstruction;
@@ -468,6 +522,18 @@ export function resolveTextBoxFillColor(textBox: TextBox): string | undefined;
 
 // @public
 export function resolveTextBoxOutlineColor(textBox: TextBox): string | undefined;
+
+// @public
+export function serializeLegacyFormField(field: LegacyFormField, resultXml: string, content?: InlineSdt['content']): string;
+
+// @public
+export function setLegacyCheckbox(field: LegacyFormField, checked: boolean): LegacyFormField;
+
+// @public
+export function setLegacyDropdownIndex(field: LegacyFormField, index: number): LegacyFormField;
+
+// @public
+export function setLegacyText(field: LegacyFormField, text: string): LegacyFormField;
 
 // @public
 export type TableParserFn = (node: Element_2, styles: StyleMap | null, theme: Theme | null, numbering: NumberingMap | null, rels?: RelationshipMap | null, media?: Map<string, MediaFile>) => Table;

@@ -12,7 +12,20 @@
  * same capture-and-replay contract used everywhere else for SDTs.
  */
 
-import type { Document, BlockContent, SdtProperties, Run, InlineSdt } from '../types/document';
+import type {
+  Document,
+  BlockContent,
+  SdtProperties,
+  Run,
+  InlineSdt,
+  LegacyFormField,
+} from '../types/document';
+import {
+  legacyCheckboxGlyph,
+  setLegacyCheckbox,
+  setLegacyDropdownIndex,
+  setLegacyText,
+} from '../docx/legacyFormField';
 import {
   ContentControlLockedError,
   ContentControlBoundError,
@@ -29,7 +42,13 @@ import {
 export type ContentControlValue =
   | { kind: 'dropdown'; value: string }
   | { kind: 'checkbox'; checked: boolean }
-  | { kind: 'date'; date: string };
+  | { kind: 'date'; date: string }
+  /**
+   * Free text. Accepted by legacy `FORMTEXT` fields and by free-form
+   * (`richText` / `plainText`) content controls — the typed controls reject it,
+   * as they do any other mismatched value kind.
+   */
+  | { kind: 'text'; text: string };
 
 /** The control doesn't support the requested value kind, or the value is invalid. */
 export class ContentControlValueError extends Error {
@@ -151,14 +170,86 @@ function withoutPlaceholder(props: SdtProperties, nextRaw: string): SdtPropertie
 }
 
 /**
+ * Apply a typed value to a **legacy Word form field**. The `w:ffData` state is
+ * patched with the same targeted-string contract used for raw `w:sdtPr`, and
+ * the display content is rebuilt so the painted page matches Word:
+ *
+ * - dropdown → `w:ddList/w:result` index + the selected entry as the result run
+ * - checkbox → `w:checkBox/w:default` **and** `w:checked` + the ☒/☐ glyph
+ * - text     → the result run text (`w:ffData` is left alone)
+ *
+ * Everything else inside `w:ffData` (`w:enabled`, `w:calcOnExit`, help text,
+ * macros, text-input formats) is replayed verbatim.
+ */
+function applyLegacyFormFieldValue(
+  props: SdtProperties,
+  field: LegacyFormField,
+  value: ContentControlValue
+): { properties: SdtProperties; content: BlockContent[] } {
+  const done = (next: LegacyFormField, text: string) => ({
+    properties: {
+      ...props,
+      ...(next.checked != null ? { checked: next.checked } : {}),
+      legacyFormField: next,
+    },
+    content: [paragraph(text)],
+  });
+
+  switch (value.kind) {
+    case 'dropdown': {
+      if (field.fieldType !== 'dropdown') {
+        throw new ContentControlValueError(
+          `Legacy form field is a '${field.fieldType}' field, not a dropdown.`
+        );
+      }
+      const options = field.options ?? [];
+      const index = options.indexOf(value.value);
+      if (index < 0) {
+        throw new ContentControlValueError(
+          `'${value.value}' is not one of the field's list entries.`
+        );
+      }
+      const next = setLegacyDropdownIndex(field, index);
+      return done(next, options[index]);
+    }
+    case 'checkbox': {
+      if (field.fieldType !== 'checkbox') {
+        throw new ContentControlValueError(
+          `Legacy form field is a '${field.fieldType}' field, not a checkbox.`
+        );
+      }
+      const next = setLegacyCheckbox(field, value.checked);
+      return done(next, legacyCheckboxGlyph(value.checked));
+    }
+    case 'text': {
+      if (field.fieldType !== 'text') {
+        throw new ContentControlValueError(
+          `Legacy form field is a '${field.fieldType}' field, not a text field.`
+        );
+      }
+      return done(setLegacyText(field, value.text), value.text);
+    }
+    case 'date':
+      throw new ContentControlValueError('Legacy form fields have no date type.');
+  }
+}
+
+/**
  * Compute the new properties + display blocks for applying a typed value, without
  * touching a document. Shared by the headless setter and the editor (PM) path.
  * Throws {@link ContentControlValueError} on a type/value mismatch.
+ *
+ * Legacy Word form fields (`w:fldChar` + `w:ffData`) are routed to their own
+ * applier — they carry no `w:sdtPr` to patch — so callers treat legacy fields
+ * and `w:sdt` controls identically.
  */
 export function applyContentControlValue(
   props: SdtProperties,
   value: ContentControlValue
 ): { properties: SdtProperties; content: BlockContent[] } {
+  if (props.legacyFormField) {
+    return applyLegacyFormFieldValue(props, props.legacyFormField, value);
+  }
   const raw = props.rawPropertiesXml ?? '';
   switch (value.kind) {
     case 'dropdown': {
@@ -222,6 +313,23 @@ export function applyContentControlValue(
       return {
         properties: withoutPlaceholder(props, nextRaw),
         content: [paragraph(formatSdtDate(iso, pattern))],
+      };
+    }
+    case 'text': {
+      // Free text only fits a free-form control; a typed one would desync its
+      // structured state from the visible value.
+      if (
+        props.sdtType !== 'richText' &&
+        props.sdtType !== 'plainText' &&
+        props.sdtType !== 'unknown'
+      ) {
+        throw new ContentControlValueError(
+          `Control is '${props.sdtType}'; free text would desync its typed state.`
+        );
+      }
+      return {
+        properties: withoutPlaceholder(props, raw),
+        content: [paragraph(value.text)],
       };
     }
   }

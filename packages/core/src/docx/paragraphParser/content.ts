@@ -48,6 +48,7 @@ import {
 } from '../bookmarkParser';
 import { parseParagraphProperties } from './properties';
 import { parseSdtProperties } from '../sdtProperties';
+import { buildLegacyFormFieldSdt, findFfDataElement } from '../legacyFormField';
 
 /**
  * Extract plain text from a math element (recursive text content extraction)
@@ -466,6 +467,13 @@ export function parseParagraphContents(
   let complexFieldLock = false;
   let complexFieldDirty = false;
   let complexFieldFormatting: Run['formatting'] | undefined;
+  // Legacy form-field capture (`w:fldChar` + `w:ffData`). Verbatim XML of the
+  // structural runs is kept alongside the parsed model so the field replays
+  // byte-for-byte on save; see `docx/legacyFormField.ts`.
+  let legacyFfData: XmlElement | null = null;
+  let legacyPrefixXml = '';
+  let legacyResultXml = '';
+  let legacySuffixXml = '';
 
   for (const child of children) {
     const localName = getLocalName(child.name);
@@ -508,6 +516,10 @@ export function parseParagraphContents(
           complexFieldResultRuns = [];
           complexFieldLock = false;
           complexFieldDirty = false;
+          legacyFfData = findFfDataElement(child);
+          legacyPrefixXml = '';
+          legacyResultXml = '';
+          legacySuffixXml = '';
           // The structural run carrying `begin` holds the field's run
           // properties. Capture them so the result keeps its formatting even
           // when there is no separate result run to read it from.
@@ -515,6 +527,21 @@ export function parseParagraphContents(
         }
 
         if (inComplexField) {
+          // Capture the structural runs verbatim while this looks like a legacy
+          // form field: everything up to and including `separate` is the
+          // prefix, the `end` run is the suffix, and the result runs in between
+          // come from the normal run parser (their XML is kept too, so empty
+          // result runs can be replayed verbatim). `afterSeparator` is still
+          // the pre-update value here, so the separator run lands in the prefix.
+          if (legacyFfData) {
+            // `w:lastRenderedPageBreak` is Word's render cache, not content:
+            // the paragraph serializer re-emits the paragraph's leading marker
+            // itself, so keeping it in the replayed bytes would double it.
+            const xml = elementToXml(child).replace(/<w:lastRenderedPageBreak\/>/g, '');
+            if (hasFieldEnd) legacySuffixXml = xml;
+            else if (!afterSeparator) legacyPrefixXml += xml;
+            else legacyResultXml += xml;
+          }
           if (instrText) {
             complexFieldInstr += instrText;
           }
@@ -552,7 +579,24 @@ export function parseParagraphContents(
             if (complexFieldLock) complexField.fldLock = true;
             if (complexFieldDirty) complexField.dirty = true;
 
-            contents.push(complexField);
+            // A legacy form field is projected onto an inline SDT so it shares
+            // the content-control discovery/edit/render path. `null` means the
+            // sequence isn't a (well-formed) form field — keep the existing
+            // opaque complex-field passthrough rather than risk corrupting it.
+            const legacySdt = legacyFfData
+              ? buildLegacyFormFieldSdt({
+                  ffData: legacyFfData,
+                  instruction: complexFieldInstr,
+                  prefixXml: legacyPrefixXml,
+                  suffixXml: legacySuffixXml,
+                  hasSeparate: afterSeparator,
+                  resultRuns: complexFieldResultRuns,
+                  resultXml: legacyResultXml,
+                  formatting: complexFieldFormatting,
+                })
+              : null;
+            contents.push(legacySdt ?? complexField);
+            legacyFfData = null;
             inComplexField = false;
           }
         } else {

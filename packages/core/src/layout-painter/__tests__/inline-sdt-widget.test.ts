@@ -34,4 +34,31 @@ describe('inline SDT widget paint', () => {
     expect(el.getAttribute('aria-checked')).toBe('false');
     expect(el.getAttribute('tabindex')).toBe('0');
   });
+
+  test('renders a dropdown result run as a listbox trigger', () => {
+    // Legacy FORMDROPDOWN fields (and inline w:dropDownList SDTs) paint their
+    // result text as the click target that opens the option menu.
+    const el = renderTextRun(
+      {
+        kind: 'text',
+        text: 'Never',
+        inlineSdtWidget: {
+          kind: 'dropdown',
+          groupId: 'sdt@12',
+          pos: 12,
+          tag: 'Drop1',
+        },
+      },
+      document
+    );
+
+    expect(el.classList.contains('layout-inline-sdt-widget')).toBe(true);
+    expect(el.dataset.sdtWidget).toBe('dropdown');
+    expect(el.dataset.sdtPos).toBe('12');
+    expect(el.getAttribute('role')).toBe('button');
+    expect(el.getAttribute('aria-haspopup')).toBe('listbox');
+    expect(el.getAttribute('aria-checked')).toBeNull();
+    expect(el.getAttribute('aria-label')).toBe('Drop1');
+    expect(el.getAttribute('tabindex')).toBe('0');
+  });
 });

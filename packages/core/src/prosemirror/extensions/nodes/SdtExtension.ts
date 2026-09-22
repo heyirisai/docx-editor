@@ -44,6 +44,11 @@ export const SdtExtension = createNodeExtension({
       rawPropertiesXml: { default: null },
       /** Captured `<w:sdtEndPr>` XML (verbatim), if present. */
       rawEndPropertiesXml: { default: null },
+      /**
+       * Legacy Word form field state (`w:fldChar` + `w:ffData`) as a JSON
+       * string, when this node is a legacy field projected onto the SDT model.
+       */
+      legacyFormField: { default: null },
     },
     parseDOM: [
       {
@@ -67,6 +72,7 @@ export const SdtExtension = createNodeExtension({
             dataBinding: el.dataset.dataBinding || null,
             rawPropertiesXml: el.dataset.rawPropertiesXml || null,
             rawEndPropertiesXml: el.dataset.rawEndPropertiesXml || null,
+            legacyFormField: el.dataset.legacyFormField || null,
           };
         },
       },
@@ -92,6 +98,8 @@ export const SdtExtension = createNodeExtension({
         dataAttrs['data-raw-properties-xml'] = String(attrs.rawPropertiesXml);
       if (attrs.rawEndPropertiesXml)
         dataAttrs['data-raw-end-properties-xml'] = String(attrs.rawEndPropertiesXml);
+      if (attrs.legacyFormField)
+        dataAttrs['data-legacy-form-field'] = String(attrs.legacyFormField);
 
       // Checkbox renders with a checkbox-like indicator
       if (attrs.sdtType === 'checkbox') {

@@ -131,9 +131,11 @@ export {
   ContentControlTypeError,
   ContentControlBoundError,
   ContentControlKindError,
+  contentControlSource,
   type ContentControlFilter,
   type ContentControlInfo,
   type ContentControlLocation,
+  type ContentControlSource,
   type FindContentControlsOptions,
 } from './agent/contentControls';
 export {
@@ -155,6 +157,21 @@ export {
   isRepeatingSectionItem,
   RepeatingSectionError,
 } from './agent/repeatingSection';
+export {
+  findGlyphCheckboxes,
+  type GlyphCheckboxCandidate,
+  type FindGlyphCheckboxesOptions,
+} from './agent/glyphCheckboxes';
+export {
+  legacyFormFieldTypeFor,
+  legacyCheckboxGlyph,
+  setLegacyDropdownIndex,
+  setLegacyCheckbox,
+  setLegacyText,
+  LEGACY_FIELD_SDT_TYPE,
+  LEGACY_CHECKBOX_GLYPHS,
+} from './docx/legacyFormField';
+export type { LegacyFormField, LegacyFormFieldType } from './types/document';
 
 // ============================================================================
 // PARSER / SERIALIZER

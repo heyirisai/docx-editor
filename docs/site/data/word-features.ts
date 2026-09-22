@@ -379,7 +379,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes: 'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
+    notes:
+      'tbRl/btLr cell text renders via writing-mode and round-trips; not settable from the UI.',
   },
 
   // --- Images & drawings ---------------------------------------------------
@@ -632,7 +633,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'none',
     tier: 'community',
-    notes: 'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
+    notes:
+      'Not modeled; numbering start/format (i, ii, A) is dropped and PAGE fields render as arabic.',
   },
 
   // --- Review ---------------------------------------------------------------
@@ -759,12 +761,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'fields.legacy-forms',
     name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
     category: 'fields',
-    editing: 'none',
-    rendering: 'partial',
-    roundTrip: 'partial',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'The field result shows as static text; w:ffData (checkbox state, constraints) is dropped and the control is not interactive.',
+      'Parsed from w:ffData and surfaced alongside content controls (source: "legacy"): discover by name, set a dropdown selection or checkbox state from the headless API or the editor, click to toggle/choose in the paged view. A field without a stored result displays what Word shows (current list entry, checkbox glyph, text default or blank). The w:ffData block round-trips verbatim. Text-input constraints (maxLength, format, calculated fields) and form protection are not enforced.',
+    docsLink: '/docs/1.x/guides/content-controls',
   },
 
   // --- Document structure & content controls ---------------------------------
@@ -788,8 +791,7 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'full',
     roundTrip: 'full',
     tier: 'community',
-    notes:
-      'Add and remove items from the editor; the section configuration itself is read-only.',
+    notes: 'Add and remove items from the editor; the section configuration itself is read-only.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {
@@ -820,7 +822,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
+    notes:
+      'Never executed, by design (client-side security); the vbaProject part survives open -> save.',
   },
   {
     id: 'structure.ole',
@@ -840,7 +843,8 @@ export const wordFeatures: WordFeature[] = [
     rendering: 'none',
     roundTrip: 'preserved',
     tier: 'community',
-    notes: 'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
+    notes:
+      'Protection settings round-trip but are not enforced; inline permission ranges may be dropped.',
   },
 
   // --- Collaboration, i18n & editing UX ---------------------------------------

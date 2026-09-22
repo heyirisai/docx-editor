@@ -316,3 +316,91 @@ describe('PM inline content controls (write/remove)', () => {
     expect(deleted.doc.textContent).toBe('Dear .'); // control content gone, siblings intact
   });
 });
+
+describe('PM legacy form fields', () => {
+  /** A legacy FORMDROPDOWN as the parser projects it onto an inline `sdt` node. */
+  const legacyDropdown = {
+    kind: 'legacy',
+    fieldType: 'dropdown',
+    name: 'Drop1',
+    options: ['Never', 'Sometimes', 'Always'],
+    selectedIndex: 0,
+    value: 'Never',
+    instruction: 'FORMDROPDOWN',
+    ffDataXml:
+      '<w:ffData><w:name w:val="Drop1"/><w:enabled/><w:ddList><w:result w:val="0"/>' +
+      '<w:listEntry w:val="Never"/><w:listEntry w:val="Sometimes"/>' +
+      '<w:listEntry w:val="Always"/></w:ddList></w:ffData>',
+    rawPrefixXml:
+      '<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Drop1"/><w:enabled/>' +
+      '<w:ddList><w:result w:val="0"/><w:listEntry w:val="Never"/>' +
+      '<w:listEntry w:val="Sometimes"/><w:listEntry w:val="Always"/></w:ddList>' +
+      '</w:ffData></w:fldChar></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> FORMDROPDOWN </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>',
+    rawSuffixXml: '<w:r><w:fldChar w:fldCharType="end"/></w:r>',
+    hasSeparate: true,
+    hasResult: true,
+  };
+
+  function legacyState() {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(
+        null,
+        inlineSdt(
+          {
+            sdtType: 'dropDownList',
+            tag: 'Drop1',
+            alias: 'Drop1',
+            listItems: JSON.stringify([
+              { displayText: 'Never', value: 'Never' },
+              { displayText: 'Sometimes', value: 'Sometimes' },
+              { displayText: 'Always', value: 'Always' },
+            ]),
+            legacyFormField: JSON.stringify(legacyDropdown),
+          },
+          'Never'
+        )
+      ),
+    ]);
+    return EditorState.create({ schema, doc });
+  }
+
+  test('surfaces legacy fields with source and state, and filters on it', () => {
+    const state = legacyState();
+    const [control] = findContentControlsInPM(state.doc, { source: 'legacy' });
+    expect(control.source).toBe('legacy');
+    expect(control.tag).toBe('Drop1');
+    expect(control.legacyFormField?.options).toEqual(['Never', 'Sometimes', 'Always']);
+    expect(findContentControlsInPM(state.doc, { source: 'sdt' })).toEqual([]);
+  });
+
+  test('setContentControlValueTr selects an entry and patches w:ffData', () => {
+    const state = legacyState();
+    const tr = setContentControlValueTr(
+      state,
+      { tag: 'Drop1' },
+      {
+        kind: 'dropdown',
+        value: 'Always',
+      }
+    );
+    const next = state.apply(tr);
+    const [control] = findContentControlsInPM(next.doc, { source: 'legacy' });
+    expect(control.text).toBe('Always');
+    expect(control.legacyFormField?.selectedIndex).toBe(2);
+    expect(control.legacyFormField?.ffDataXml).toContain('<w:result w:val="2"/>');
+    // The captured run XML is patched in step, so the save path stays lossless.
+    expect(control.legacyFormField?.rawPrefixXml).toContain('<w:result w:val="2"/>');
+    expect(control.legacyFormField?.rawPrefixXml).toContain(' FORMDROPDOWN ');
+  });
+
+  test('setContentControlValueAtPosTr works for an untagged legacy field', () => {
+    const state = legacyState();
+    const pos = findContentControlsInPM(state.doc)[0].pos;
+    const next = state.apply(
+      setContentControlValueAtPosTr(state, pos, { kind: 'dropdown', value: 'Sometimes' })
+    );
+    expect(findContentControlsInPM(next.doc)[0].text).toBe('Sometimes');
+  });
+});

@@ -115,9 +115,11 @@ export {
   ContentControlTypeError,
   ContentControlBoundError,
   ContentControlKindError,
+  contentControlSource,
   type ContentControlFilter,
   type ContentControlInfo,
   type ContentControlLocation,
+  type ContentControlSource,
   type FindContentControlsOptions,
 } from './contentControls';
 export {
@@ -139,3 +141,8 @@ export {
   isRepeatingSectionItem,
   RepeatingSectionError,
 } from './repeatingSection';
+export {
+  findGlyphCheckboxes,
+  type GlyphCheckboxCandidate,
+  type FindGlyphCheckboxesOptions,
+} from './glyphCheckboxes';

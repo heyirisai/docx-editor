@@ -32,6 +32,7 @@ import type {
   SdtType,
   SdtProperties,
   SdtDataBinding,
+  LegacyFormField,
 } from '../types/document';
 import { getParagraphText, getTableText, getRunText, getHyperlinkText } from './text-utils';
 
@@ -45,7 +46,21 @@ export interface ContentControlFilter {
   id?: number;
   /** Control type projection (`richText`, `dropDownList`, …). */
   type?: SdtType;
+  /**
+   * Restrict to modern `w:sdt` controls (`sdt`) or legacy Word form fields
+   * (`legacy`). Omitted = both, which is what most callers want.
+   */
+  source?: ContentControlSource;
 }
+
+/**
+ * How a control is encoded in the file: a real `w:sdt` content control, or a
+ * legacy Word form field (`w:fldChar` + `w:ffData`) projected onto the same
+ * model. Both are addressed and edited through this module; the discriminator
+ * exists so callers that care about fidelity (or about which Word UI the user
+ * will see) can tell them apart.
+ */
+export type ContentControlSource = 'sdt' | 'legacy';
 
 /**
  * Where a control lives. `body` = the main document story; `header`/`footer`
@@ -92,6 +107,14 @@ export interface ContentControlInfo {
   kind: 'block' | 'inline';
   /** Where the control lives (body vs a header/footer part). */
   location: ContentControlLocation;
+  /** Whether this is a `w:sdt` content control or a legacy Word form field. */
+  source: ContentControlSource;
+  /**
+   * Legacy form-field state (`w:ffData`), present iff `source === 'legacy'`.
+   * Carries the field name, list entries, selected index and checkbox state
+   * plus the captured raw XML used for the lossless round trip.
+   */
+  legacyFormField?: LegacyFormField;
 }
 
 /** Narrow a {@link Document} or {@link DocumentBody} to its block list. */
@@ -156,7 +179,13 @@ function matches(props: SdtProperties, filter: ContentControlFilter): boolean {
   if (filter.alias !== undefined && props.alias !== filter.alias) return false;
   if (filter.id !== undefined && props.id !== filter.id) return false;
   if (filter.type !== undefined && props.sdtType !== filter.type) return false;
+  if (filter.source !== undefined && contentControlSource(props) !== filter.source) return false;
   return true;
+}
+
+/** Whether these properties describe a `w:sdt` control or a legacy form field. */
+export function contentControlSource(props: SdtProperties): ContentControlSource {
+  return props.legacyFormField ? 'legacy' : 'sdt';
 }
 
 function infoOf(
@@ -183,6 +212,8 @@ function infoOf(
     depth,
     kind: control.type === 'inlineSdt' ? 'inline' : 'block',
     location,
+    source: contentControlSource(p),
+    ...(p.legacyFormField ? { legacyFormField: p.legacyFormField } : {}),
   };
 }
 

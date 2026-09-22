@@ -114,6 +114,7 @@ export class ContentControlCreateError extends Error {
 export interface ContentControlFilter {
     alias?: string;
     id?: number;
+    source?: ContentControlSource;
     tag?: string;
     type?: SdtType;
 }
@@ -127,6 +128,7 @@ export interface ContentControlInfo {
     depth: number;
     id?: number;
     kind: 'block' | 'inline';
+    legacyFormField?: LegacyFormField;
     listItems?: {
         displayText: string;
         value: string;
@@ -137,6 +139,7 @@ export interface ContentControlInfo {
     placeholder?: string;
     sdtType: SdtType;
     showingPlaceholder?: boolean;
+    source: ContentControlSource;
     tag?: string;
     text: string;
 }
@@ -165,6 +168,12 @@ export class ContentControlNotFoundError extends Error {
 }
 
 // @public
+export type ContentControlSource = 'sdt' | 'legacy';
+
+// @public
+export function contentControlSource(props: SdtProperties): ContentControlSource;
+
+// @public
 export class ContentControlTypeError extends Error {
     constructor(sdtType: SdtType);
 }
@@ -179,6 +188,15 @@ export type ContentControlValue = {
 } | {
     kind: 'date';
     date: string;
+}
+/**
+* Free text. Accepted by legacy `FORMTEXT` fields and by free-form
+* (`richText` / `plainText`) content controls — the typed controls reject it,
+* as they do any other mismatched value kind.
+*/
+| {
+    kind: 'text';
+    text: string;
 };
 
 // @public
@@ -305,6 +323,14 @@ export interface FindContentControlsOptions {
 }
 
 // @public
+export function findGlyphCheckboxes(input: Document_2 | DocumentBody, options?: FindGlyphCheckboxesOptions): GlyphCheckboxCandidate[];
+
+// @public
+export interface FindGlyphCheckboxesOptions {
+    includeHeadersFooters?: boolean;
+}
+
+// @public
 export interface FormatParagraphCommand extends BaseCommand {
     formatting: Partial<ParagraphFormatting>;
     paragraphIndex: number;
@@ -397,6 +423,19 @@ export function getTextAfter(paragraphs: Paragraph[], position: Position_2, maxC
 
 // @public
 export function getTextBefore(paragraphs: Paragraph[], position: Position_2, maxChars: number): string;
+
+// @public
+export interface GlyphCheckboxCandidate {
+    char: string;
+    checked: boolean;
+    encoding: 'sym' | 'text';
+    font?: string;
+    kind: 'glyph';
+    location: ContentControlLocation;
+    paragraphText: string;
+    path: number[];
+    runIndex: number;
+}
 
 // @public
 export function hasHyperlinks(body: DocumentBody): boolean;

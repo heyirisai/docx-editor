@@ -21,6 +21,7 @@ import {
   isDataBound,
   clearShowingPlaceholderXml,
   type ContentControlFilter,
+  type ContentControlSource,
 } from '../agent/contentControls';
 import { applyContentControlValue, type ContentControlValue } from '../agent/contentControlValues';
 import {
@@ -30,7 +31,7 @@ import {
 } from '../agent/repeatingSection';
 import type { FontFamilyAttrs } from './schema/marks';
 import { sdtAttrsToProps, sdtPropsToAttrs } from './conversion/sdtAttrs';
-import type { SdtType, SdtProperties, SdtDataBinding } from '../types/document';
+import type { SdtType, SdtProperties, SdtDataBinding, LegacyFormField } from '../types/document';
 
 /** A control discovered in the PM doc, with its PM position for scroll/edit. */
 export interface PMContentControl {
@@ -53,6 +54,10 @@ export interface PMContentControl {
   dateValue?: string;
   /** Plain text of the control's content. */
   text: string;
+  /** Whether this is a `w:sdt` content control or a legacy Word form field. */
+  source: ContentControlSource;
+  /** Legacy form-field state (`w:ffData`), present iff `source === 'legacy'`. */
+  legacyFormField?: LegacyFormField;
   /** PM position of the `blockSdt` or inline `sdt` node (its `before` position). */
   pos: number;
   /** Nesting depth among content controls (0 = not inside another control). */
@@ -74,7 +79,13 @@ function attrsMatch(attrs: Record<string, unknown>, filter: ContentControlFilter
   if (filter.alias !== undefined && attrs.alias !== filter.alias) return false;
   if (filter.id !== undefined && attrs.id !== filter.id) return false;
   if (filter.type !== undefined && (attrs.sdtType ?? 'richText') !== filter.type) return false;
+  if (filter.source !== undefined && sourceOfAttrs(attrs) !== filter.source) return false;
   return true;
+}
+
+/** `sdt`/`legacy` for a PM SDT node's attrs (legacy fields carry the JSON attr). */
+function sourceOfAttrs(attrs: Record<string, unknown>): ContentControlSource {
+  return attrs.legacyFormField ? 'legacy' : 'sdt';
 }
 
 function isContentControlNode(node: PMNode): boolean {
@@ -98,6 +109,8 @@ function controlInfo(node: PMNode, pos: number, depth: number): PMContentControl
       String(a.rawPropertiesXml ?? '')
     )?.[1],
     text: node.textBetween(0, node.content.size, '\n'),
+    source: sourceOfAttrs(a),
+    legacyFormField: parseAttrJson<LegacyFormField>(a.legacyFormField),
     pos,
     depth,
   };

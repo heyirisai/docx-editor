@@ -116,6 +116,8 @@ export type {
   SdtType,
   SdtProperties,
   SdtDataBinding,
+  LegacyFormFieldType,
+  LegacyFormField,
   InlineSdt,
   BlockSdt,
   ParagraphContent,

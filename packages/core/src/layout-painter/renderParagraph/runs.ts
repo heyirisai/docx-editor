@@ -275,13 +275,25 @@ function applyInlineSdtWidgetAttrs(element: HTMLElement, run: TextRun): void {
   element.dataset.sdtPos = String(widget.pos);
   if (widget.tag) element.dataset.sdtTag = widget.tag;
   if (widget.alias) element.dataset.sdtAlias = widget.alias;
-  if (typeof widget.checked === 'boolean') {
+  if (widget.kind === 'checkbox' && typeof widget.checked === 'boolean') {
     element.dataset.sdtChecked = String(widget.checked);
     element.setAttribute('aria-checked', String(widget.checked));
   }
-  element.setAttribute('role', 'checkbox');
+  if (widget.kind === 'dropdown') {
+    // A dropdown opens a listbox popup rather than toggling, so it is a button
+    // with `aria-haspopup` — matching the block-level trigger in sdtBoundary.
+    element.setAttribute('role', 'button');
+    element.setAttribute('aria-haspopup', 'listbox');
+  } else {
+    element.setAttribute('role', 'checkbox');
+  }
   element.setAttribute('tabindex', '0');
-  element.setAttribute('aria-label', widget.alias || widget.tag || 'Checkbox content control');
+  element.setAttribute(
+    'aria-label',
+    widget.alias ||
+      widget.tag ||
+      (widget.kind === 'dropdown' ? 'Dropdown content control' : 'Checkbox content control')
+  );
 }
 
 /**

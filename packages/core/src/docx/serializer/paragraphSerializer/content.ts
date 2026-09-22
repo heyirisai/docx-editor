@@ -25,6 +25,7 @@ import type {
 } from '../../../types/document';
 import { serializeRun, serializeTextFormatting } from '../runSerializer';
 import { escapeXml } from '../xmlUtils';
+import { serializeLegacyFormField } from '../../legacyFormField';
 
 /**
  * Serialize bookmark start (w:bookmarkStart)
@@ -320,6 +321,12 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
       }
     })
     .join('');
+
+  // A legacy form field is an inline SDT only in the model — on the wire it is
+  // the captured `w:fldChar` run sequence, replayed verbatim around the result.
+  if (props.legacyFormField) {
+    return serializeLegacyFormField(props.legacyFormField, contentXml, sdt.content);
+  }
 
   const sdtPrXml = props.rawPropertiesXml ?? synthesizeSdtPr(props);
   const sdtEndPrXml = props.rawEndPropertiesXml ?? '';
