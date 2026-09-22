@@ -956,14 +956,14 @@ export function renderPage(
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = 'absolute';
-    // Word anchors the footer band's TOP at the w:footer distance from the
-    // page bottom — content flows DOWN toward the page edge (a one-line
-    // footer with the default 0.5in distance paints ~0.25-0.5in from the
-    // bottom). Only when the content is taller than the distance does the
-    // band shift up so it stays on the page. Pinning the BOTTOM at the
-    // distance (the old behavior) floated every footer a full band-height
-    // too high.
-    footerEl.style.top = `${page.size.h - Math.max(footerDistance, interactiveFooterHeight)}px`;
+    // Word anchors the footer band's BOTTOM at the w:footer distance from the
+    // page's bottom edge ("Footer from bottom", ECMA-376 §17.6.11 pgMar) and
+    // the band grows UPWARD from that line — a one-line footer with the
+    // default 0.5in distance paints between ~0.5in and ~0.7in from the
+    // bottom, and a tall footer pushes the body up by distance + height
+    // (see extendMarginsForHeaderFooter). Must stay in lockstep with
+    // calculateHeaderFooterVisualBounds / resolveHeaderFooterVisualTop.
+    footerEl.style.top = `${page.size.h - footerDistance - interactiveFooterHeight}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
@@ -973,8 +973,8 @@ export function renderPage(
     let shouldClipFooter = !footerOverflows;
     if (options.footerContent && options.footerContent.blocks.length > 0) {
       const layout: HeaderFooterLayoutInfo = {
-        // Top-anchored at the footer distance, like the band above.
-        flowTop: page.size.h - Math.max(footerDistance, options.footerContent?.height ?? 0),
+        // Bottom-anchored at the footer distance, like the band above.
+        flowTop: page.size.h - footerDistance - (options.footerContent?.height ?? 0),
         flowLeft: page.margins.left,
         contentWidth: footerContentWidth,
         pageWidth: page.size.w,

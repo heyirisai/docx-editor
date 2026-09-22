@@ -91,11 +91,10 @@ describe('extendMarginsForHeaderFooter', () => {
       finalMargins: MARGINS,
       footers: [tallFooter],
     });
-    // The footer band's TOP anchors at the w:footer distance and shifts up
-    // only when the content is taller: the body clears the footer's top
-    // edge, max(distance 47, flowHeight 200) = 200 from the page bottom —
-    // not distance + height (Word doesn't stack the two).
-    expect(margins.bottom).toBe(200);
+    // Word's footer band sits with its BOTTOM at the w:footer distance and
+    // grows upward, so the body clears distance + flowHeight from the page
+    // bottom (47 + 200), mirroring the header's distance + height rule.
+    expect(margins.bottom).toBe(47 + 200);
   });
 
   test('the max band across header variants (default + first-page) wins', () => {

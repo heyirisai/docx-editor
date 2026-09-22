@@ -3,7 +3,9 @@
  *
  * Word grows the header (or footer) band when its in-flow content is taller
  * than the authored top (or bottom) margin minus the header/footer distance,
- * pushing the body text down (or up). This module owns that computation so the
+ * pushing the body text down (or up): body top = max(top margin, header
+ * distance + header height) and body bottom = max(bottom margin, footer
+ * distance + footer height), both measured from the page edges. This module owns that computation so the
  * React and Vue adapters share one implementation instead of byte-identical
  * inline copies (the layout pipelines were drifting candidates — see
  * `docx-editor` engine-unification work, issue #696).
@@ -90,13 +92,13 @@ export function extendMarginsForHeaderFooter(
   const footerContentHeight = Math.max(0, ...(footers ?? []).map(bandHeight));
 
   const extendHeader = headerContentHeight > availableHeaderSpace;
-  // The footer band's TOP anchors at the w:footer distance and content
-  // flows DOWN toward the page edge (shifting up only when taller than
-  // the distance) — see the painter's footer placement. The body must
-  // clear the footer's top edge: max(distance, height) from the page
-  // bottom — NOT distance + height, which reserved a full band-height
-  // too much whenever footerDistance > bottomMargin.
-  const footerTopOffset = Math.max(footerDistance, footerContentHeight);
+  // Word's footer band mirrors the header band: `w:footer` is the distance
+  // from the page's bottom edge to the BOTTOM edge of the footer (ECMA-376
+  // §17.6.11 pgMar), and the footer grows upward from that line. The body
+  // must therefore clear distance + in-flow height from the page bottom —
+  // the same `distance + height` rule the header uses at the top. Must stay
+  // in lockstep with the painter's footer placement (renderPage.ts).
+  const footerTopOffset = footerDistance + footerContentHeight;
   const extendFooter = footerTopOffset > margins.bottom;
   if (!extendHeader && !extendFooter) {
     return { margins, finalMargins };

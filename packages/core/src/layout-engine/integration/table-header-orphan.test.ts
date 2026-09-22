@@ -99,12 +99,14 @@ describe('Layout engine — table header orphan rule', () => {
     expect(tableFrags[0].frag.toRow).toBeGreaterThan(1);
   });
 
-  test('a mid-row split suppresses the repeated header on the continuation (Word quirk)', () => {
+  test('a mid-row split still repeats the header on the continuation (ECMA-376 17.4.78)', () => {
     const options = makeLayoutOptions();
     const contentHeight = options.pageSize.h - options.margins.top - options.margins.bottom;
 
     // Header + one data row far taller than a page: the data row must split
-    // mid-content, and Word does NOT repeat the header above the remainder.
+    // mid-content, and the header repeats above the remainder — a `w:tblHeader`
+    // row repeats on "each new page on which part of this table is displayed",
+    // and a page showing the tail of a split row displays part of the table.
     const tallRow = contentHeight * 1.5;
     const { block, measure } = buildHeaderTable([LINE, tallRow]);
     measure.rows[1].cells[0].blocks = [paraMeasure(Math.ceil(tallRow / LINE))];
@@ -121,10 +123,12 @@ describe('Layout engine — table header orphan rule', () => {
       }
     }
     expect(continuations.length).toBeGreaterThan(0);
-    for (const frag of continuations) {
-      if (frag.topClip && frag.topClip > 0) {
-        expect(frag.headerRowCount).toBeUndefined();
-      }
+    const resumed = continuations.filter((frag) => (frag.topClip ?? 0) > 0);
+    expect(resumed.length).toBeGreaterThan(0);
+    for (const frag of resumed) {
+      expect(frag.headerRowCount).toBe(1);
+      // The repeated header is reserved on top of the visible body band.
+      expect(frag.height).toBeGreaterThan(LINE);
     }
   });
 
