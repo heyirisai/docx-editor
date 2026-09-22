@@ -404,3 +404,70 @@ describe('PM legacy form fields', () => {
     expect(findContentControlsInPM(next.doc)[0].text).toBe('Sometimes');
   });
 });
+
+describe('PM legacy FORMTEXT descriptor', () => {
+  /** A blank FORMTEXT as the parser projects it: no result, five-space display. */
+  const legacyText = {
+    kind: 'legacy',
+    fieldType: 'text',
+    name: 'Text1',
+    value: '',
+    instruction: 'FORMTEXT',
+    ffDataXml: '<w:ffData><w:name w:val="Text1"/><w:textInput/></w:ffData>',
+    rawPrefixXml:
+      '<w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Text1"/><w:textInput/>' +
+      '</w:ffData></w:fldChar></w:r>' +
+      '<w:r><w:instrText xml:space="preserve"> FORMTEXT </w:instrText></w:r>' +
+      '<w:r><w:fldChar w:fldCharType="separate"/></w:r>',
+    rawSuffixXml: '<w:r><w:fldChar w:fldCharType="end"/></w:r>',
+    hasSeparate: true,
+    hasResult: false,
+  };
+  const BLANK = '     ';
+
+  function textState() {
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(
+        null,
+        inlineSdt(
+          {
+            sdtType: 'plainText',
+            tag: 'Text1',
+            alias: 'Text1',
+            legacyFormField: JSON.stringify(legacyText),
+          },
+          BLANK
+        )
+      ),
+    ]);
+    return EditorState.create({ schema, doc });
+  }
+
+  test('reports the parsed descriptor while the display is still the blank', () => {
+    const [control] = findContentControlsInPM(textState().doc, { source: 'legacy' });
+    expect(control.text).toBe(BLANK);
+    expect(control.legacyFormField).toMatchObject({ value: '', hasResult: false });
+  });
+
+  test('typing into the field is reflected in value/hasResult, as on save', () => {
+    const state = textState();
+    const { pos } = findContentControlsInPM(state.doc)[0];
+    const node = state.doc.nodeAt(pos)!;
+    const typed = state.apply(
+      state.tr.replaceWith(pos + 1, pos + 1 + node.content.size, schema.text('Typed'))
+    );
+    const [control] = findContentControlsInPM(typed.doc, { source: 'legacy' });
+    expect(control.text).toBe('Typed');
+    expect(control.legacyFormField).toMatchObject({ value: 'Typed', hasResult: true });
+    // The node attr itself is untouched — the sync is a read-side projection.
+    expect(JSON.parse(String(typed.doc.nodeAt(pos)!.attrs.legacyFormField)).hasResult).toBe(false);
+  });
+
+  test('setContentControlContentTr on the field keeps the descriptor in step too', () => {
+    const state = textState();
+    const next = state.apply(setContentControlContentTr(state, { tag: 'Text1' }, 'Filled'));
+    const [control] = findContentControlsInPM(next.doc, { source: 'legacy' });
+    expect(control.text).toBe('Filled');
+    expect(control.legacyFormField).toMatchObject({ value: 'Filled', hasResult: true });
+  });
+});

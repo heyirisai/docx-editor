@@ -26,6 +26,7 @@ import type { ParagraphAttrs } from '../../schema/nodes';
 import { getMarkSetKey, RUN_BOUNDARY_MARK_EXCLUSIONS } from '../markKeys';
 import { getLinkKey, getMarksKey, marksToTextFormatting } from './marks';
 import { sdtAttrsToProps } from '../sdtAttrs';
+import { syncLegacyFormFieldContent } from '../../../docx/legacyFormField';
 import {
   createHyperlink,
   addNodeToHyperlink,
@@ -814,7 +815,9 @@ function createInlineSdtFromNode(node: PMNode): InlineSdt {
 
   return {
     type: 'inlineSdt',
-    properties,
+    // Typing into a projected legacy FORMTEXT replaces its runs without going
+    // through the typed setter; mirror the text into the descriptor here.
+    properties: syncLegacyFormFieldContent(properties, content),
     content,
   };
 }

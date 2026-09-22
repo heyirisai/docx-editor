@@ -24,6 +24,7 @@ import {
   type ContentControlSource,
 } from '../agent/contentControls';
 import { applyContentControlValue, type ContentControlValue } from '../agent/contentControlValues';
+import { syncLegacyTextField } from '../docx/legacyFormField';
 import {
   RepeatingSectionError,
   rawIsRepeatingSectionItem,
@@ -94,6 +95,8 @@ function isContentControlNode(node: PMNode): boolean {
 
 function controlInfo(node: PMNode, pos: number, depth: number): PMContentControl {
   const a = node.attrs as Record<string, unknown>;
+  const text = node.textBetween(0, node.content.size, '\n');
+  const legacy = parseAttrJson<LegacyFormField>(a.legacyFormField);
   return {
     tag: a.tag != null ? String(a.tag) : undefined,
     alias: a.alias != null ? String(a.alias) : undefined,
@@ -108,9 +111,12 @@ function controlInfo(node: PMNode, pos: number, depth: number): PMContentControl
     dateValue: /<w:date\b[^>]*\bw:fullDate="(\d{4}-\d{2}-\d{2})/.exec(
       String(a.rawPropertiesXml ?? '')
     )?.[1],
-    text: node.textBetween(0, node.content.size, '\n'),
+    text,
     source: sourceOfAttrs(a),
-    legacyFormField: parseAttrJson<LegacyFormField>(a.legacyFormField),
+    // The attr is the descriptor as parsed; text typed into a legacy FORMTEXT
+    // since then lives only in the node content, so mirror it (as
+    // fromProseDoc does on save) rather than report the stale value.
+    legacyFormField: legacy ? syncLegacyTextField(legacy, text) : undefined,
     pos,
     depth,
   };

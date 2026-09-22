@@ -21,12 +21,22 @@ import { parseDocumentBody } from '../documentParser';
 import { serializeDocumentBody } from '../serializer/documentSerializer';
 import { toProseDoc } from '../../prosemirror/conversion/toProseDoc';
 import { fromProseDoc } from '../../prosemirror/conversion/fromProseDoc';
-import { findContentControls, findContentControl } from '../../agent/contentControls';
+import { EditorState } from 'prosemirror-state';
+
+import {
+  findContentControls,
+  findContentControl,
+  setContentControlContent,
+} from '../../agent/contentControls';
 import { setContentControlValue } from '../../agent/contentControlValues';
 import { findGlyphCheckboxes } from '../../agent/glyphCheckboxes';
-import { LEGACY_TEXT_PLACEHOLDER } from '../legacyFormField';
+import {
+  LEGACY_TEXT_PLACEHOLDER,
+  setLegacyCheckbox,
+  setLegacyDropdownIndex,
+} from '../legacyFormField';
 import type { ContentControlInfo } from '../../agent/contentControls';
-import type { Document, DocumentBody, Run } from '../../types/document';
+import type { Document, DocumentBody, LegacyFormField, Run } from '../../types/document';
 
 const FIXTURE = join(import.meta.dir, '../../../../../e2e/fixtures/multi-column-controls.docx');
 
@@ -565,5 +575,226 @@ describe('glyph checkbox detection', () => {
       checked: true,
       font: 'Wingdings',
     });
+  });
+});
+
+describe("legacy form fields — ffData patching follows the file's own prefixes", () => {
+  /**
+   * The parser accepts ffData children by local name, so a file that binds the
+   * WordprocessingML namespace to another prefix inside the field projects
+   * exactly like a `w:` one. Patches must then speak that prefix too, or the
+   * modeled state and the replayed bytes disagree after save.
+   */
+  const XNS = `${NS} xmlns:x="http://schemas.openxmlformats.org/wordprocessingml/2006/main"`;
+  const xDropdownXml =
+    '<w:r><w:fldChar w:fldCharType="begin"><x:ffData><x:name w:val="XD"/><x:enabled/>' +
+    '<x:ddList><x:listEntry w:val="A"/><x:listEntry w:val="B"/><x:listEntry w:val="C"/>' +
+    '</x:ddList></x:ffData></w:fldChar></w:r>' +
+    '<w:r><w:instrText xml:space="preserve"> FORMDROPDOWN </w:instrText></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="end"/></w:r>';
+
+  test('a dropdown whose ffData uses another prefix keeps its edit through save and reparse', () => {
+    const body = parseDocumentBody(
+      `<w:document ${XNS}><w:body><w:p>${xDropdownXml}</w:p></w:body></w:document>`
+    );
+    expect(findContentControl(body, { tag: 'XD' })!.text).toBe('A');
+
+    const next = setContentControlValue(
+      asDocument(body),
+      { tag: 'XD' },
+      { kind: 'dropdown', value: 'B' }
+    );
+    const out = serializeDocumentBody(next.package.document);
+    // `w:result` is inserted in the file's dialect, first in `x:ddList`.
+    expect(out).toContain('<x:ddList><x:result w:val="1"/><x:listEntry w:val="A"/>');
+    expect(out).toContain('<w:t>B</w:t>');
+
+    const reparsed = parseDocumentBody(`<w:document ${XNS}><w:body>${out}</w:body></w:document>`);
+    expect(findContentControl(reparsed, { tag: 'XD' })!.legacyFormField).toMatchObject({
+      selectedIndex: 1,
+      value: 'B',
+    });
+  });
+
+  /** A descriptor as the parser would build it, for the setters alone. */
+  const fieldWith = (ffDataXml: string, extra: Partial<LegacyFormField>): LegacyFormField => ({
+    kind: 'legacy',
+    fieldType: 'checkbox',
+    instruction: 'FORMCHECKBOX',
+    ffDataXml,
+    rawPrefixXml: `<w:r><w:fldChar w:fldCharType="begin">${ffDataXml}</w:fldChar></w:r>`,
+    rawSuffixXml: '<w:r><w:fldChar w:fldCharType="end"/></w:r>',
+    hasSeparate: true,
+    hasResult: false,
+    ...extra,
+  });
+
+  test('checkbox patches use the prefix of both the elements and the val attribute', () => {
+    const ffData =
+      '<x:ffData><x:name x:val="XC"/><x:checkBox><x:sizeAuto/><x:default x:val="0"/></x:checkBox></x:ffData>';
+    const next = setLegacyCheckbox(fieldWith(ffData, { checked: false }), true);
+    const patched =
+      '<x:ffData><x:name x:val="XC"/><x:checkBox><x:sizeAuto/><x:default x:val="1"/>' +
+      '<x:checked x:val="1"/></x:checkBox></x:ffData>';
+    expect(next.ffDataXml).toBe(patched);
+    expect(next.rawPrefixXml).toContain(patched);
+    expect(next.checked).toBe(true);
+  });
+
+  test('a default-namespace (unprefixed) ffData is patched without inventing a prefix', () => {
+    const ffData =
+      '<ffData><name val="D"/><ddList><listEntry val="A"/><listEntry val="B"/></ddList></ffData>';
+    const field = fieldWith(ffData, {
+      fieldType: 'dropdown',
+      instruction: 'FORMDROPDOWN',
+      options: ['A', 'B'],
+      selectedIndex: 0,
+    });
+    const next = setLegacyDropdownIndex(field, 1);
+    expect(next.ffDataXml).toBe(
+      '<ffData><name val="D"/><ddList><result val="1"/><listEntry val="A"/><listEntry val="B"/></ddList></ffData>'
+    );
+    expect(setLegacyDropdownIndex(next, 0).ffDataXml).toContain('<ddList><result val="0"/>');
+    expect(next).toMatchObject({ selectedIndex: 1, value: 'B', hasResult: true });
+  });
+
+  test('the w: prefix still patches exactly as before', () => {
+    const ffData = '<w:ffData><w:name w:val="C"/><w:checkBox><w:sizeAuto/></w:checkBox></w:ffData>';
+    expect(setLegacyCheckbox(fieldWith(ffData, {}), true).ffDataXml).toBe(
+      '<w:ffData><w:name w:val="C"/><w:checkBox><w:sizeAuto/><w:default w:val="1"/><w:checked w:val="1"/></w:checkBox></w:ffData>'
+    );
+  });
+});
+
+describe('legacy form fields — FORMTEXT descriptor follows generic content writes', () => {
+  const RPR = '<w:rPr><w:sz w:val="13"/></w:rPr>';
+  const textXml = (textInput: string, name: string) =>
+    `<w:r>${RPR}<w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="${name}"/>` +
+    (textInput ? `<w:textInput>${textInput}</w:textInput>` : '<w:textInput/>') +
+    `</w:ffData></w:fldChar></w:r>` +
+    `<w:r>${RPR}<w:instrText xml:space="preserve"> FORMTEXT </w:instrText></w:r>` +
+    `<w:r>${RPR}<w:fldChar w:fldCharType="separate"/></w:r>` +
+    `<w:r>${RPR}<w:fldChar w:fldCharType="end"/></w:r>`;
+  const docXml = (...paragraphs: string[]) =>
+    `<w:document ${NS}><w:body>${paragraphs.map((p) => `<w:p>${p}</w:p>`).join('')}</w:body></w:document>`;
+
+  test('setContentControlContent updates value/hasResult alongside the runs', () => {
+    const doc = asDocument(parseDocumentBody(docXml(textXml('', 'T'))));
+    expect(findContentControl(doc, { tag: 'T' })!.legacyFormField).toMatchObject({
+      value: '',
+      hasResult: false,
+    });
+
+    const next = setContentControlContent(doc, { tag: 'T' }, 'Yes');
+    const info = findContentControl(next, { tag: 'T' })!;
+    expect(info.text).toBe('Yes');
+    expect(info.legacyFormField).toMatchObject({
+      fieldType: 'text',
+      value: 'Yes',
+      hasResult: true,
+    });
+
+    const out = serializeDocumentBody(next.package.document);
+    expect(out).toContain('<w:fldChar w:fldCharType="separate"/></w:r><w:r>');
+    expect(out).toContain('<w:t>Yes</w:t>');
+    expect(out).not.toContain(LEGACY_TEXT_PLACEHOLDER);
+    const reparsed = findContentControl(reparse(out), { tag: 'T' })!;
+    expect(reparsed.text).toBe('Yes');
+    expect(reparsed.legacyFormField).toMatchObject({ value: 'Yes', hasResult: true });
+  });
+
+  test("writing the field's own default keeps it result-less and byte-identical", () => {
+    const xml = docXml(textXml('<w:default w:val="TBD"/>', 'T'));
+    const doc = asDocument(parseDocumentBody(xml));
+    const next = setContentControlContent(doc, { tag: 'T' }, 'TBD');
+    expect(findContentControl(next, { tag: 'T' })!.legacyFormField).toMatchObject({
+      value: 'TBD',
+      hasResult: false,
+    });
+    expect(serializeDocumentBody(next.package.document)).toBe(
+      serializeDocumentBody(doc.package.document)
+    );
+  });
+
+  test('typing over the field in the editor reaches the descriptor on the way back', () => {
+    const body = parseDocumentBody(docXml(textXml('', 'T')));
+    const pmDoc = toProseDoc(asDocument(body));
+    let sdtPos = -1;
+    let sdtSize = 0;
+    pmDoc.descendants((node, pos) => {
+      if (node.type.name === 'sdt' && sdtPos < 0) {
+        sdtPos = pos;
+        sdtSize = node.content.size;
+      }
+      return sdtPos < 0;
+    });
+    expect(sdtPos).toBeGreaterThanOrEqual(0);
+
+    const state = EditorState.create({ doc: pmDoc });
+    const typed = state.apply(
+      state.tr.replaceWith(sdtPos + 1, sdtPos + 1 + sdtSize, state.schema.text('Typed answer'))
+    );
+    const edited = fromProseDoc(typed.doc).package.document;
+    const info = findContentControl(edited, { tag: 'T' })!;
+    expect(info.text).toBe('Typed answer');
+    expect(info.legacyFormField).toMatchObject({ value: 'Typed answer', hasResult: true });
+    expect(serializeDocumentBody(edited)).toContain('<w:t>Typed answer</w:t>');
+
+    // An untouched trip through the editor still leaves the descriptor alone.
+    const untouched = findContentControl(fromProseDoc(pmDoc).package.document, { tag: 'T' })!;
+    expect(untouched.legacyFormField).toMatchObject({ value: '', hasResult: false });
+  });
+});
+
+describe('glyph checkbox detection — several boxes in one run', () => {
+  const WNS = 'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"';
+  const para = (...runs: string[]) =>
+    `<w:document ${WNS}><w:body><w:p>${runs.join('')}</w:p></w:body></w:document>`;
+
+  test('an answer line typed as one run yields one candidate per box, with offsets', () => {
+    const body = parseDocumentBody(
+      para('<w:r><w:t xml:space="preserve">☐ Yes ☐ No ☒ N/A</w:t></w:r>')
+    );
+    const glyphs = findGlyphCheckboxes(body);
+    expect(glyphs.map((g) => [g.char, g.checked, g.runIndex, g.offset])).toEqual([
+      ['☐', false, 0, 0],
+      ['☐', false, 0, 6],
+      ['☒', true, 0, 11],
+    ]);
+    expect(glyphs[0].paragraphText).toBe('☐ Yes ☐ No ☒ N/A');
+  });
+
+  test('a box glued to its label, and boxes split across runs, are all found', () => {
+    const body = parseDocumentBody(
+      para(
+        '<w:r><w:t>☑Compliant</w:t></w:r>',
+        '<w:r><w:t xml:space="preserve"> or </w:t></w:r>',
+        '<w:r><w:t>☐</w:t></w:r>'
+      )
+    );
+    expect(findGlyphCheckboxes(body).map((g) => [g.runIndex, g.offset, g.checked])).toEqual([
+      [0, 0, true],
+      [2, 0, false],
+    ]);
+  });
+
+  test('several w:sym boxes in one run are reported individually', () => {
+    const body = parseDocumentBody(
+      para(
+        '<w:r><w:sym w:font="Wingdings" w:char="F06F"/><w:t xml:space="preserve"> Yes </w:t>' +
+          '<w:sym w:font="Wingdings" w:char="F0FE"/><w:t xml:space="preserve"> No</w:t></w:r>'
+      )
+    );
+    expect(findGlyphCheckboxes(body).map((g) => [g.encoding, g.offset, g.checked])).toEqual([
+      ['sym', 0, false],
+      ['sym', 6, true],
+    ]);
+  });
+
+  test('a paragraph with no box yields nothing', () => {
+    expect(findGlyphCheckboxes(parseDocumentBody(para('<w:r><w:t>Yes / No</w:t></w:r>')))).toEqual(
+      []
+    );
   });
 });

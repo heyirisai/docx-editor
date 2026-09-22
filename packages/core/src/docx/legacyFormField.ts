@@ -355,35 +355,64 @@ export function buildLegacyFormFieldSdt(seq: LegacyFormFieldSequence): InlineSdt
 // w:ffData PATCHING (targeted string edits, like the raw w:sdtPr contract)
 // ============================================================================
 
-/** `<prefix:local …/>` or `<prefix:local …>` matcher for a known-safe local name. */
-function elementOpenTag(xml: string, element: string): RegExpExecArray | null {
-  return new RegExp(`<${element}\\b[^>]*?(/?)>`).exec(xml);
+/** Escape a qualified XML name (an NCName, possibly prefixed) for use in a RegExp. */
+const escapeRe = (s: string): string => s.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+
+/**
+ * The qualified names a captured `ffData` uses, read from its own bytes so a
+ * patch speaks the file's dialect. The parser accepts the elements by *local*
+ * name, so a file binding the WordprocessingML namespace to another prefix (or
+ * to the default namespace) projects exactly like a `w:` one — patching with
+ * literal `w:*` names would then silently miss, leaving the modeled state and
+ * the replayed bytes disagreeing after save.
+ */
+interface FfDataNames {
+  /** `local` → the element's qualified name in this ffData (`w:local`, `x:local`, `local`). */
+  el: (local: string) => string;
+  /** Qualified name of the `val` attribute as this ffData writes it (`w:val` normally). */
+  val: string;
+}
+
+function ffDataNames(ffDataXml: string): FfDataNames {
+  const prefix = /^<(?:([^\s<>/:]+):)?ffData\b/.exec(ffDataXml)?.[1] ?? '';
+  const el = (local: string): string => (prefix ? `${prefix}:${local}` : local);
+  // Attributes carry their own prefix (or none); follow the one already in
+  // use — `w:name w:val` is all but universal — and fall back to the element's.
+  const val = /\s((?:[^\s<>/:=]+:)?val)=/.exec(ffDataXml)?.[1] ?? el('val');
+  return { el, val };
+}
+
+/** `<qname …/>` or `<qname …>` matcher for a known-safe qualified name. */
+function elementOpenTag(xml: string, qname: string): RegExpExecArray | null {
+  return new RegExp(`<${escapeRe(qname)}\\b[^>]*?(/?)>`).exec(xml);
 }
 
 /**
- * Set `w:val` on the first `<element>` inside `xml`, inserting the element at
- * `insertAt` (a byte offset produced by the caller) when it is absent.
+ * Set the `val` attribute on the first `<local>` element inside `xml`, or
+ * insert the element (via `insert`) when it is absent.
  */
 function setDecimalOrOnOff(
   xml: string,
-  element: string,
+  names: FfDataNames,
+  local: string,
   value: string,
   insert: (x: string) => string
 ): string {
-  const m = elementOpenTag(xml, element);
+  const m = elementOpenTag(xml, names.el(local));
   if (!m) return insert(xml);
   const open = m[0];
   const selfClose = m[1] === '/';
   const body = open.slice(1, selfClose ? -2 : -1);
-  const next = /\bw:val="[^"]*"/.test(body)
-    ? body.replace(/\bw:val="[^"]*"/, () => `w:val="${value}"`)
-    : `${body} w:val="${value}"`;
+  const valAttr = new RegExp(`(^|\\s)${escapeRe(names.val)}="[^"]*"`);
+  const next = valAttr.test(body)
+    ? body.replace(valAttr, (_, lead: string) => `${lead}${names.val}="${value}"`)
+    : `${body} ${names.val}="${value}"`;
   return xml.replace(open, () => `<${next}${selfClose ? '/>' : '>'}`);
 }
 
 /** Insert `fragment` immediately after the opening tag of `container`. */
 function insertAfterOpenTag(xml: string, container: string, fragment: string): string {
-  const m = new RegExp(`<${container}\\b[^>]*>`).exec(xml);
+  const m = new RegExp(`<${escapeRe(container)}\\b[^>]*>`).exec(xml);
   if (!m || m[0].endsWith('/>')) return xml;
   return xml.slice(0, m.index + m[0].length) + fragment + xml.slice(m.index + m[0].length);
 }
@@ -414,8 +443,9 @@ function withFfData(field: LegacyFormField, nextFfDataXml: string): LegacyFormFi
  * inserted directly after the `<w:ddList>` open tag to stay sequence-valid.
  */
 export function setLegacyDropdownIndex(field: LegacyFormField, index: number): LegacyFormField {
-  const ff = setDecimalOrOnOff(field.ffDataXml, 'w:result', String(index), (xml) =>
-    insertAfterOpenTag(xml, 'w:ddList', `<w:result w:val="${index}"/>`)
+  const n = ffDataNames(field.ffDataXml);
+  const ff = setDecimalOrOnOff(field.ffDataXml, n, 'result', String(index), (xml) =>
+    insertAfterOpenTag(xml, n.el('ddList'), `<${n.el('result')} ${n.val}="${index}"/>`)
   );
   return {
     ...withFfData(field, ff),
@@ -435,12 +465,13 @@ export function setLegacyDropdownIndex(field: LegacyFormField, index: number): L
  * element is appended at the end of `w:checkBox`.
  */
 export function setLegacyCheckbox(field: LegacyFormField, checked: boolean): LegacyFormField {
+  const n = ffDataNames(field.ffDataXml);
   const val = checked ? '1' : '0';
-  let ff = setDecimalOrOnOff(field.ffDataXml, 'w:default', val, (xml) =>
-    insertBeforeCloseTag(xml, 'w:checkBox', `<w:default w:val="${val}"/>`)
+  let ff = setDecimalOrOnOff(field.ffDataXml, n, 'default', val, (xml) =>
+    insertBeforeCloseTag(xml, n.el('checkBox'), `<${n.el('default')} ${n.val}="${val}"/>`)
   );
-  ff = setDecimalOrOnOff(ff, 'w:checked', val, (xml) =>
-    insertBeforeCloseTag(xml, 'w:checkBox', `<w:checked w:val="${val}"/>`)
+  ff = setDecimalOrOnOff(ff, n, 'checked', val, (xml) =>
+    insertBeforeCloseTag(xml, n.el('checkBox'), `<${n.el('checked')} ${n.val}="${val}"/>`)
   );
   return { ...withFfData(field, ff), checked };
 }
@@ -448,6 +479,44 @@ export function setLegacyCheckbox(field: LegacyFormField, checked: boolean): Leg
 /** Set the displayed text of a legacy `FORMTEXT` field (`w:ffData` is untouched). */
 export function setLegacyText(field: LegacyFormField, text: string): LegacyFormField {
   return { ...field, value: text, hasResult: true };
+}
+
+/**
+ * Bring a legacy `FORMTEXT` descriptor into step with content written through
+ * the *generic* paths — `setContentControlContent`, or typing into the field in
+ * the editor — which replace the control's runs without calling
+ * {@link setLegacyText}. `value` mirrors the new text and `hasResult` flips on
+ * once the text is no longer the parser-synthesized display, so
+ * `findContentControls` reports the same answer the saved file will carry.
+ *
+ * Every other case returns `field` itself: dropdown and checkbox state lives in
+ * `w:ffData` and moves only through the typed setters, and a display that is
+ * still the synthesized default is not an answer (leaving `hasResult` false is
+ * what keeps an untouched field byte-identical on save).
+ */
+export function syncLegacyTextField(field: LegacyFormField, text: string): LegacyFormField {
+  if (field.fieldType !== 'text') return field;
+  const unchanged = field.hasResult
+    ? field.value === text
+    : text === legacyFormFieldDisplayText(field);
+  return unchanged ? field : setLegacyText(field, text);
+}
+
+/**
+ * {@link syncLegacyTextField} over an inline control's content model. Content
+ * that is not plain runs (a hyperlink, a nested field or control) is left
+ * alone — it is not a text answer the descriptor could mirror.
+ */
+export function syncLegacyFormFieldContent(
+  props: SdtProperties,
+  content: InlineSdt['content']
+): SdtProperties {
+  const field = props.legacyFormField;
+  if (!field || field.fieldType !== 'text') return props;
+  const text = inlineRunsText(content);
+  if (text === null) return props;
+  const next = syncLegacyTextField(field, text);
+  return next === field ? props : { ...props, legacyFormField: next };
 }
 
 // ============================================================================

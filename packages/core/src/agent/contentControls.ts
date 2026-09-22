@@ -35,6 +35,7 @@ import type {
   LegacyFormField,
 } from '../types/document';
 import { getParagraphText, getTableText, getRunText, getHyperlinkText } from './text-utils';
+import { syncLegacyFormFieldContent } from '../docx/legacyFormField';
 
 /** Filter for {@link findContentControls}. All provided fields must match (AND). */
 export interface ContentControlFilter {
@@ -880,11 +881,14 @@ export function setContentControlContent(
   };
   const inlineOp: InlineControlOp = (control) => {
     assertContentWritable(control.properties, options.force);
+    const content = toInline(replacement, control);
     return [
       {
         ...control,
-        properties: propsAfterContentWrite(control.properties),
-        content: toInline(replacement, control),
+        // A projected legacy FORMTEXT keeps its descriptor (`value`,
+        // `hasResult`) in step with the runs written here.
+        properties: syncLegacyFormFieldContent(propsAfterContentWrite(control.properties), content),
+        content,
       },
     ];
   };

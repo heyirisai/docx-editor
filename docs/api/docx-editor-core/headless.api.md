@@ -750,6 +750,7 @@ export interface GlyphCheckboxCandidate {
     font?: string;
     kind: 'glyph';
     location: ContentControlLocation;
+    offset: number;
     paragraphText: string;
     path: number[];
     runIndex: number;

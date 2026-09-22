@@ -32,25 +32,25 @@ const CHECKBOX_SYMBOL_FONTS = /^(wingdings( ?2)?|symbol|webdings)$/i;
 /**
  * Private-use code points (as `w:sym@w:char` hex) that draw a box in those
  * fonts: Wingdings `F06F` empty / `F0FE` ticked / `F0FD` crossed, and the
- * Wingdings-2 `F0A3`/`F0A8` pair. Stored lowercase for lookup.
+ * Wingdings-2 `F0A3`/`F0A8` pair. Keyed lowercase; the value is the drawn state.
  */
-const CHECKBOX_SYMBOL_CHARS: Record<string, boolean> = {
-  f06f: false, // ❑ empty box
-  f071: false, // ❑ empty box (Wingdings 2)
-  f0a8: false, // ❑ empty box (Wingdings 2)
-  f0fe: true, // ☑ ticked box
-  f0fd: true, // ☒ crossed box
-  f0a3: true, // ☑ ticked box (Wingdings 2)
-};
+const CHECKBOX_SYMBOL_CHARS: ReadonlyMap<string, boolean> = new Map([
+  ['f06f', false], // ❑ empty box
+  ['f071', false], // ❑ empty box (Wingdings 2)
+  ['f0a8', false], // ❑ empty box (Wingdings 2)
+  ['f0fe', true], // ☑ ticked box
+  ['f0fd', true], // ☒ crossed box
+  ['f0a3', true], // ☑ ticked box (Wingdings 2)
+]);
 
-/** Unicode ballot/box characters authored as ordinary `w:t` text. */
-const CHECKBOX_TEXT_CHARS: Record<string, boolean> = {
-  '☐': false, // ☐ BALLOT BOX
-  '☑': true, // ☑ BALLOT BOX WITH CHECK
-  '☒': true, // ☒ BALLOT BOX WITH X
-  '□': false, // □ WHITE SQUARE
-  '❑': false, // ❑ LOWER RIGHT SHADOWED WHITE SQUARE
-};
+/** Unicode ballot/box characters authored as ordinary `w:t` text → drawn state. */
+const CHECKBOX_TEXT_CHARS: ReadonlyMap<string, boolean> = new Map([
+  ['☐', false], // ☐ BALLOT BOX
+  ['☑', true], // ☑ BALLOT BOX WITH CHECK
+  ['☒', true], // ☒ BALLOT BOX WITH X
+  ['□', false], // □ WHITE SQUARE
+  ['❑', false], // ❑ LOWER RIGHT SHADOWED WHITE SQUARE
+]);
 
 /** A checkbox drawn as a character, with no structured state behind it. */
 export interface GlyphCheckboxCandidate {
@@ -68,6 +68,12 @@ export interface GlyphCheckboxCandidate {
   path: number[];
   /** Index of the run within that paragraph's `content`. */
   runIndex: number;
+  /**
+   * Character offset of the glyph within that run's text (`w:t` characters,
+   * with a `w:sym` or tab counting as one), so several boxes in one run —
+   * `☐ Yes ☐ No` — are addressable individually.
+   */
+  offset: number;
   /** Plain text of the enclosing paragraph, as context for the caller. */
   paragraphText: string;
   /** Where the glyph lives (body vs a header/footer part). */
@@ -85,37 +91,42 @@ function bodyOf(input: Document | DocumentBody): DocumentBody {
   return 'package' in input ? input.package.document : input;
 }
 
+/** A checkbox glyph found in a run, before it is located in the document. */
+type GlyphHit = Pick<GlyphCheckboxCandidate, 'encoding' | 'checked' | 'char' | 'font' | 'offset'>;
+
 /**
- * Classify a run as a checkbox glyph, or `null`. A text run only qualifies when
- * its *entire* text is one box character — a paragraph that merely mentions "☐"
- * mid-sentence is prose, not an answerable cell.
+ * Every checkbox glyph in a run, in order, each with its character offset.
+ * Requirements matrices routinely put a whole answer line in one run — `☐ Yes
+ * ☐ No`, or a box glued to its label — so text is scanned character by
+ * character (and each `w:sym` item on its own) rather than accepting only a run
+ * that *is* a lone box. `paragraphText` gives the caller the context to tell an
+ * answer cell from prose that merely mentions a box.
  */
-function glyphOf(
-  run: Run
-): { encoding: 'sym' | 'text'; checked: boolean; char: string; font?: string } | null {
-  const symbols = run.content.filter((c) => c.type === 'symbol');
-  if (symbols.length === 1 && run.content.length === 1) {
-    const sym = symbols[0];
-    if (sym.type !== 'symbol') return null;
-    const hex = sym.char.replace(/^0x/i, '').toLowerCase();
-    if (CHECKBOX_SYMBOL_FONTS.test(sym.font) && hex in CHECKBOX_SYMBOL_CHARS) {
-      return {
-        encoding: 'sym',
-        checked: CHECKBOX_SYMBOL_CHARS[hex],
-        char: sym.char,
-        font: sym.font,
-      };
+function glyphsOf(run: Run): GlyphHit[] {
+  const hits: GlyphHit[] = [];
+  let offset = 0;
+  for (const item of run.content) {
+    if (item.type === 'symbol') {
+      const checked = CHECKBOX_SYMBOL_FONTS.test(item.font)
+        ? CHECKBOX_SYMBOL_CHARS.get(item.char.replace(/^0x/i, '').toLowerCase())
+        : undefined;
+      if (checked !== undefined) {
+        hits.push({ encoding: 'sym', checked, char: item.char, font: item.font, offset });
+      }
+      offset += 1;
+    } else if (item.type === 'text') {
+      for (let i = 0; i < item.text.length; i++) {
+        const char = item.text[i];
+        const checked = CHECKBOX_TEXT_CHARS.get(char);
+        if (checked !== undefined)
+          hits.push({ encoding: 'text', checked, char, offset: offset + i });
+      }
+      offset += item.text.length;
+    } else if (item.type === 'tab') {
+      offset += 1;
     }
-    return null;
   }
-  const text = run.content
-    .map((c) => (c.type === 'text' ? c.text : ''))
-    .join('')
-    .trim();
-  if (text.length === 1 && text in CHECKBOX_TEXT_CHARS) {
-    return { encoding: 'text', checked: CHECKBOX_TEXT_CHARS[text], char: text };
-  }
-  return null;
+  return hits;
 }
 
 /**
@@ -140,18 +151,13 @@ export function findGlyphCheckboxes(
     location: ContentControlLocation,
     path: number[]
   ): void => {
+    let paragraphText: string | undefined;
     para.content.forEach((node, runIndex) => {
       if (node.type !== 'run') return;
-      const glyph = glyphOf(node);
-      if (!glyph) return;
-      out.push({
-        kind: 'glyph',
-        ...glyph,
-        path,
-        runIndex,
-        paragraphText: getParagraphText(para),
-        location,
-      });
+      for (const glyph of glyphsOf(node)) {
+        paragraphText ??= getParagraphText(para);
+        out.push({ kind: 'glyph', ...glyph, path, runIndex, paragraphText, location });
+      }
     });
   };
 
