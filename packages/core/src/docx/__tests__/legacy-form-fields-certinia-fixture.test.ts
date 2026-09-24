@@ -14,29 +14,12 @@
  * character — wrapping is irrelevant, every code is a single two-letter line).
  */
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import JSZip from 'jszip';
-
-if (typeof document === 'undefined') {
-  (globalThis as Record<string, unknown>).document = {
-    createElement: () => ({
-      getContext: () => ({
-        font: '',
-        measureText(text: string) {
-          const m = /([\d.]+)px/.exec(this.font as string);
-          const px = m ? parseFloat(m[1]) : 16;
-          return { width: text.length * px * 0.5 };
-        },
-      }),
-    }),
-    documentElement: { style: {} },
-    head: { appendChild() {} },
-    fonts: { check: () => true, load: async () => [] },
-  };
-}
+import { installCanvasDocumentStub } from '../../layout-engine/integration/helpers';
 
 const CANDIDATES = [
   process.env.DOCX_CERTINIA_FIXTURE,
@@ -99,6 +82,14 @@ function dropdownParagraphIds(body: { content: unknown[] }): string[] {
 }
 
 describe('legacy FORMDROPDOWN display parity — 6sense / Certinia RFP fixture', () => {
+  // Canvas stub for the headless layout check, scoped to this suite (see
+  // installCanvasDocumentStub for why it must not live at module scope).
+  let restoreDocument: () => void = () => {};
+  beforeAll(() => {
+    if (FIXTURE) restoreDocument = installCanvasDocumentStub();
+  });
+  afterAll(() => restoreDocument());
+
   run('parses 93 result-less dropdowns and reports the current entry as their text', async () => {
     const { findContentControls } = await import('../../agent/contentControls');
     const { doc } = await loadFixture();

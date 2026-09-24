@@ -30,39 +30,7 @@
 
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import fs from 'node:fs';
-
-/**
- * Minimal headless `document` for computeLayout's canvas measurement.
- *
- * Installed only for this suite's lifetime (beforeAll/afterAll) and only when
- * the fixture is present. bun runs every test file in one process, so a stub
- * assigned at module scope would leak into every later file — and a defined
- * `document` makes parseDocx's default `preloadFonts` step go to the network
- * (Google Fonts), which stalls unrelated parse/round-trip tests past their 5s
- * timeout.
- */
-function installDocumentStub(): () => void {
-  const g = globalThis as Record<string, unknown>;
-  if (typeof g.document !== 'undefined') return () => {};
-  g.document = {
-    createElement: () => ({
-      getContext: () => ({
-        font: '',
-        measureText(text: string) {
-          const m = /([\d.]+)px/.exec(this.font as string);
-          const px = m ? parseFloat(m[1]) : 16;
-          return { width: text.length * px * 0.5 };
-        },
-      }),
-    }),
-    documentElement: { style: {} },
-    head: { appendChild() {} },
-    fonts: { check: () => true, load: async () => [] },
-  };
-  return () => {
-    delete g.document;
-  };
-}
+import { installCanvasDocumentStub } from './helpers';
 
 const FIXTURE = process.env.DOCX_TPRM_FIXTURE;
 const available = !!FIXTURE && fs.existsSync(FIXTURE);
@@ -164,7 +132,7 @@ function paragraphText(b: ParagraphLike): string {
 describe('TPRM questionnaire paginates like Word', () => {
   let restoreDocument: () => void = () => {};
   beforeAll(() => {
-    if (available) restoreDocument = installDocumentStub();
+    if (available) restoreDocument = installCanvasDocumentStub();
   });
   afterAll(() => restoreDocument());
 
