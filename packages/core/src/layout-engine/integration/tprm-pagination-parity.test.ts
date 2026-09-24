@@ -28,11 +28,23 @@
  * come from the OS/2 ratio table, as in the browser.
  */
 
-import { describe, test, expect } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import fs from 'node:fs';
 
-if (typeof document === 'undefined') {
-  (globalThis as Record<string, unknown>).document = {
+/**
+ * Minimal headless `document` for computeLayout's canvas measurement.
+ *
+ * Installed only for this suite's lifetime (beforeAll/afterAll) and only when
+ * the fixture is present. bun runs every test file in one process, so a stub
+ * assigned at module scope would leak into every later file — and a defined
+ * `document` makes parseDocx's default `preloadFonts` step go to the network
+ * (Google Fonts), which stalls unrelated parse/round-trip tests past their 5s
+ * timeout.
+ */
+function installDocumentStub(): () => void {
+  const g = globalThis as Record<string, unknown>;
+  if (typeof g.document !== 'undefined') return () => {};
+  g.document = {
     createElement: () => ({
       getContext: () => ({
         font: '',
@@ -46,6 +58,9 @@ if (typeof document === 'undefined') {
     documentElement: { style: {} },
     head: { appendChild() {} },
     fonts: { check: () => true, load: async () => [] },
+  };
+  return () => {
+    delete g.document;
   };
 }
 
@@ -147,6 +162,12 @@ function paragraphText(b: ParagraphLike): string {
 }
 
 describe('TPRM questionnaire paginates like Word', () => {
+  let restoreDocument: () => void = () => {};
+  beforeAll(() => {
+    if (available) restoreDocument = installDocumentStub();
+  });
+  afterAll(() => restoreDocument());
+
   run(
     '"Table of Contents" opens page 2 and "Introduction" is on page 3',
     async () => {
