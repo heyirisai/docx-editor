@@ -6,6 +6,11 @@
  */
 
 import { createNodeExtension } from '../create';
+import {
+  trustedPastedLegacyFormField,
+  trustedPastedLock,
+  trustedPastedSdtPropertiesXml,
+} from '../../../docx/pastedSdtTrust';
 
 export const SdtExtension = createNodeExtension({
   name: 'sdt',
@@ -62,7 +67,7 @@ export const SdtExtension = createNodeExtension({
             id: Number.isNaN(idNum) ? null : idNum,
             alias: el.dataset.alias || null,
             tag: el.dataset.tag || null,
-            lock: el.dataset.lock || null,
+            lock: trustedPastedLock(el.dataset.lock),
             placeholder: el.dataset.placeholder || null,
             showingPlaceholder: el.dataset.showingPlaceholder === 'true',
             dateFormat: el.dataset.dateFormat || null,
@@ -70,9 +75,17 @@ export const SdtExtension = createNodeExtension({
             checked:
               el.dataset.checked === 'true' ? true : el.dataset.checked === 'false' ? false : null,
             dataBinding: el.dataset.dataBinding || null,
-            rawPropertiesXml: el.dataset.rawPropertiesXml || null,
-            rawEndPropertiesXml: el.dataset.rawEndPropertiesXml || null,
-            legacyFormField: el.dataset.legacyFormField || null,
+            // Trust boundary: these are written into document.xml verbatim on
+            // save, and on paste they are whatever the clipboard HTML says.
+            // Internal copy/paste needs them (PM's clipboard is toDOM →
+            // parseDOM), so each is kept only if it is exactly the shape the
+            // parser produces — see docx/pastedSdtTrust.ts.
+            rawPropertiesXml: trustedPastedSdtPropertiesXml(el.dataset.rawPropertiesXml, 'sdtPr'),
+            rawEndPropertiesXml: trustedPastedSdtPropertiesXml(
+              el.dataset.rawEndPropertiesXml,
+              'sdtEndPr'
+            ),
+            legacyFormField: trustedPastedLegacyFormField(el.dataset.legacyFormField),
           };
         },
       },

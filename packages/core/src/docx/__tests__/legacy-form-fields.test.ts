@@ -533,7 +533,10 @@ describe('legacy form fields — display synthesis for result-less fields', () =
     );
     expect(findContentControl(next, { tag: 'T' })!.legacyFormField!.hasResult).toBe(true);
     const out = serializeDocumentBody(next.package.document);
-    expect(out).toContain('<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>Yes</w:t></w:r>');
+    // The answer is written in the field's own run formatting (its w:rPr).
+    expect(out).toContain(
+      `<w:fldChar w:fldCharType="separate"/></w:r><w:r>${RPR}<w:t>Yes</w:t></w:r>`
+    );
     expect(out).not.toContain(LEGACY_TEXT_PLACEHOLDER);
     expect(findContentControl(reparse(out), { tag: 'T' })!.text).toBe('Yes');
   });

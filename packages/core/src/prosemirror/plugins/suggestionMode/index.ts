@@ -37,6 +37,7 @@ import {
   suggestionModeKey,
   SUGGESTION_BYPASS_META,
   SUGGESTION_META,
+  YJS_SYNC_META,
   type SuggestionModeState,
 } from './state';
 
@@ -255,6 +256,10 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
       //   - transactions we've already authored (`SUGGESTION_META`)
       //   - accept/reject command transactions (`SUGGESTION_BYPASS_META`)
       //   - undo/redo (`isHistoryTransaction`)
+      //   - remote collaboration syncs (y-prosemirror's `y-sync$` meta): the
+      //     collaborator's edit is already committed (and already tracked, if
+      //     they were suggesting); stamping it here would turn every incoming
+      //     change into a suggestion authored by the local user.
       // The bypass meta is set by `resolveById` so structural-revision joins
       // (e.g. `pPrIns` reject → `tr.split` + `tr.setNodeMarkup`) aren't
       // re-wrapped as user insertions.
@@ -267,7 +272,8 @@ export function createSuggestionModePlugin(initialActive = false, author = 'User
           tr.docChanged &&
           !tr.getMeta(SUGGESTION_META) &&
           !tr.getMeta(SUGGESTION_BYPASS_META) &&
-          !isHistoryTransaction(tr)
+          !isHistoryTransaction(tr) &&
+          !tr.getMeta(YJS_SYNC_META)
       );
       if (!userTr) return null;
 

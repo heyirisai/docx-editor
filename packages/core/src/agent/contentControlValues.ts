@@ -146,17 +146,34 @@ export function formatSdtDate(iso: string, pattern?: string): string {
 
 // ── value application ───────────────────────────────────────────────────────
 
-/** A one-run paragraph; `font` sets the run's font (for symbol glyphs). */
-function paragraph(text: string, font?: string): BlockContent {
+/**
+ * A one-run paragraph. `font` sets the run's font (for symbol glyphs);
+ * `formatting` is the base run formatting the display run keeps (a legacy
+ * field's own run properties), with `font` layered on top.
+ */
+function paragraph(text: string, font?: string, formatting?: Run['formatting']): BlockContent {
   if (!text) return { type: 'paragraph', content: [] };
+  const merged: Run['formatting'] = font
+    ? { ...formatting, fontFamily: { ascii: font, hAnsi: font, eastAsia: font, cs: font } }
+    : formatting;
   const run: Run = {
     type: 'run',
     content: [{ type: 'text', text }],
-    ...(font
-      ? { formatting: { fontFamily: { ascii: font, hAnsi: font, eastAsia: font, cs: font } } }
-      : {}),
+    ...(merged && Object.keys(merged).length > 0 ? { formatting: merged } : {}),
   };
   return { type: 'paragraph', content: [run] };
+}
+
+/**
+ * Formatting of the first run in an inline control's content — the run a
+ * typed value replaces, whose formatting the new display run inherits (as
+ * Word keeps a form field's result in the field's formatting).
+ */
+function firstRunFormatting(content: InlineSdt['content']): Run['formatting'] | undefined {
+  for (const item of content) {
+    if (item.type === 'run') return item.formatting;
+  }
+  return undefined;
 }
 
 /** Clear a control's placeholder state (real content is being written). */
@@ -180,11 +197,18 @@ function withoutPlaceholder(props: SdtProperties, nextRaw: string): SdtPropertie
  *
  * Everything else inside `w:ffData` (`w:enabled`, `w:calcOnExit`, help text,
  * macros, text-input formats) is replayed verbatim.
+ *
+ * The display run is built in `formatting` — the run formatting of the
+ * content it replaces (the parser gives a result-less field's synthesized run
+ * the field's own run properties). Without it a FORMDROPDOWN styled Arial 9pt
+ * bold would fall back to the document default font once answered, and since
+ * the answer is a real result (`hasResult`), Word would show it that way too.
  */
 function applyLegacyFormFieldValue(
   props: SdtProperties,
   field: LegacyFormField,
-  value: ContentControlValue
+  value: ContentControlValue,
+  formatting: Run['formatting'] | undefined
 ): { properties: SdtProperties; content: BlockContent[] } {
   const done = (next: LegacyFormField, text: string) => ({
     properties: {
@@ -192,7 +216,7 @@ function applyLegacyFormFieldValue(
       ...(next.checked != null ? { checked: next.checked } : {}),
       legacyFormField: next,
     },
-    content: [paragraph(text)],
+    content: [paragraph(text, undefined, formatting)],
   });
 
   switch (value.kind) {
@@ -242,13 +266,17 @@ function applyLegacyFormFieldValue(
  * Legacy Word form fields (`w:fldChar` + `w:ffData`) are routed to their own
  * applier — they carry no `w:sdtPr` to patch — so callers treat legacy fields
  * and `w:sdt` controls identically.
+ *
+ * `currentFormatting` is the run formatting of the control's current content
+ * (see {@link firstRunFormatting}); a legacy field's new display run keeps it.
  */
 export function applyContentControlValue(
   props: SdtProperties,
-  value: ContentControlValue
+  value: ContentControlValue,
+  currentFormatting?: Run['formatting']
 ): { properties: SdtProperties; content: BlockContent[] } {
   if (props.legacyFormField) {
-    return applyLegacyFormFieldValue(props, props.legacyFormField, value);
+    return applyLegacyFormFieldValue(props, props.legacyFormField, value, currentFormatting);
   }
   const raw = props.rawPropertiesXml ?? '';
   switch (value.kind) {
@@ -376,7 +404,11 @@ export function setContentControlValue(
     // The typed setters render their display value as a single paragraph of
     // runs; lift those runs into the inline control's inline content (mirroring
     // how setContentControlContent fills an inline control).
-    const { properties, content } = applyContentControlValue(control.properties, value);
+    const { properties, content } = applyContentControlValue(
+      control.properties,
+      value,
+      firstRunFormatting(control.content)
+    );
     const display = content[0];
     const inlineContent = (
       display && display.type === 'paragraph' ? display.content : []

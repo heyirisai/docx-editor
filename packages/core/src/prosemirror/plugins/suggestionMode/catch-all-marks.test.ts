@@ -34,3 +34,40 @@ describe('suggesting-mode catch-all marks programmatic text insertions', () => {
     expect(insertedMarked, 'pasted text must be marked as a tracked insertion').toBe(true);
   });
 });
+
+describe('suggesting-mode catch-all ignores remote collaboration syncs', () => {
+  const insertedMarks = (state: EditorState, text: string): boolean => {
+    let marked = false;
+    state.doc.descendants((node) => {
+      if (node.isText && node.text?.includes(text)) {
+        marked ||= node.marks.some((m) => m.type.name === 'insertion');
+      }
+    });
+    return marked;
+  };
+
+  test('a y-prosemirror sync transaction (y-sync$ meta) is not marked as an insertion', () => {
+    const plugin = createSuggestionModePlugin(true, 'Jane');
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('hi')])]);
+    let state = EditorState.create({ doc, plugins: [plugin] });
+
+    // What ySyncPlugin dispatches when a collaborator's edit arrives.
+    const tr = state.tr.insertText('REMOTE', 3);
+    tr.setMeta('y-sync$', { isChangeOrigin: true });
+    state = state.apply(tr);
+
+    expect(state.doc.textContent).toBe('hiREMOTE');
+    expect(insertedMarks(state, 'REMOTE'), 'remote edit must not become a suggestion').toBe(false);
+  });
+
+  test('a local edit in the same session is still tracked', () => {
+    const plugin = createSuggestionModePlugin(true, 'Jane');
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('hi')])]);
+    let state = EditorState.create({ doc, plugins: [plugin] });
+    const remote = state.tr.insertText('R', 3);
+    remote.setMeta('y-sync$', { isChangeOrigin: true });
+    state = state.apply(remote);
+    state = state.apply(state.tr.insertText('LOCAL', 4));
+    expect(insertedMarks(state, 'LOCAL')).toBe(true);
+  });
+});

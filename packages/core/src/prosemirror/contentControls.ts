@@ -364,18 +364,44 @@ function blockNodesForValue(
   });
 }
 
+/**
+ * Marks that are not run formatting: tracked changes, comments, hyperlinks and
+ * note references belong to the text they were on, never to a new value.
+ */
+const NON_FORMATTING_MARKS = new Set([
+  'insertion',
+  'deletion',
+  'comment',
+  'hyperlink',
+  'footnoteRef',
+]);
+
+/** The run-formatting marks of the text a typed value replaces. */
+function formattingMarksOf(node: PMNode): readonly Mark[] {
+  return (firstTextMarks(node) ?? []).filter((m) => !NON_FORMATTING_MARKS.has(m.type.name));
+}
+
 function inlineNodesForValue(
   schema: Schema,
-  content: ReturnType<typeof applyContentControlValue>['content']
+  content: ReturnType<typeof applyContentControlValue>['content'],
+  baseMarks: readonly Mark[]
 ): PMNode[] {
   const firstParagraph = content.find((block) => block.type === 'paragraph');
   if (!firstParagraph || firstParagraph.type !== 'paragraph') return [];
   const nodes: PMNode[] = [];
+  const fontMark = schema.marks.fontFamily;
   for (const run of firstParagraph.content) {
     if (run.type !== 'run') continue;
     const text = run.content.map((t) => ('text' in t ? t.text : '')).join('');
-    const node = textNodeForRun(schema, text, run.formatting?.fontFamily);
-    if (node) nodes.push(node);
+    if (!text) continue;
+    // Keep the replaced text's formatting; a glyph font (checkbox symbol
+    // font) from the applier replaces its fontFamily mark.
+    const fontAttrs = fontFamilyAttrs(run.formatting?.fontFamily);
+    let marks: readonly Mark[] = baseMarks;
+    if (fontAttrs && fontMark) {
+      marks = fontMark.create(fontAttrs).addToSet(fontMark.removeFromSet(baseMarks));
+    }
+    nodes.push(schema.text(text, marks.length > 0 ? marks : undefined));
   }
   return nodes;
 }
@@ -397,9 +423,13 @@ function setContentControlValueForTargetTr(
   const { schema } = state;
   const from = target.pos + 1;
   const to = target.pos + 1 + target.node.content.size;
+  // A legacy form field's answer keeps the field's run formatting (the
+  // display run the parser synthesized carries it); `w:sdt` controls keep
+  // their existing behaviour (the glyph font only).
+  const baseMarks = props.legacyFormField ? formattingMarksOf(target.node) : [];
   const replacement =
     target.node.type.name === 'sdt'
-      ? inlineNodesForValue(schema, content)
+      ? inlineNodesForValue(schema, content, baseMarks)
       : blockNodesForValue(schema, content);
   const tr = state.tr.replaceWith(from, to, replacement);
   // Sync structured attrs (checked / rawPropertiesXml); node start is stable.

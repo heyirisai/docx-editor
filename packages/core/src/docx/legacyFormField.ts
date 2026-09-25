@@ -426,6 +426,29 @@ function insertBeforeCloseTag(xml: string, container: string, fragment: string):
 }
 
 /**
+ * Insert `fragment` immediately before the first `<before>` element inside
+ * `container`, or before `</container>` when there is none.
+ */
+function insertBeforeChildOrClose(
+  xml: string,
+  container: string,
+  before: string,
+  fragment: string
+): string {
+  const open = new RegExp(`<${escapeRe(container)}\\b[^>]*>`).exec(xml);
+  const close = xml.lastIndexOf(`</${container}>`);
+  if (open && close > open.index) {
+    const bodyStart = open.index + open[0].length;
+    const child = new RegExp(`<${escapeRe(before)}[\\s/>]`).exec(xml.slice(bodyStart, close));
+    if (child) {
+      const at = bodyStart + child.index;
+      return xml.slice(0, at) + fragment + xml.slice(at);
+    }
+  }
+  return insertBeforeCloseTag(xml, container, fragment);
+}
+
+/**
  * Rewrite a legacy field's `<w:ffData>` and keep the captured prefix XML in
  * step. Only the ffData region changes; every other captured byte is replayed.
  */
@@ -461,14 +484,21 @@ export function setLegacyDropdownIndex(field: LegacyFormField, index: number): L
  * `w:checkBox/w:checked` and the initial state in `w:default`; it writes both
  * when the user ticks a protected form, and a file with only `w:default`
  * re-renders from that on open — so both are written here.
- * `CT_FFCheckBox` is `(size|sizeAuto), default?, checked?`, so an absent
- * element is appended at the end of `w:checkBox`.
+ * `CT_FFCheckBox` is `(size|sizeAuto), default?, checked?`: an absent
+ * `w:default` goes after the size choice and before any existing `w:checked`
+ * (Word writes `w:checked` without `w:default`, and a `default` appended after
+ * it breaks the sequence), and an absent `w:checked` is appended last.
  */
 export function setLegacyCheckbox(field: LegacyFormField, checked: boolean): LegacyFormField {
   const n = ffDataNames(field.ffDataXml);
   const val = checked ? '1' : '0';
   let ff = setDecimalOrOnOff(field.ffDataXml, n, 'default', val, (xml) =>
-    insertBeforeCloseTag(xml, n.el('checkBox'), `<${n.el('default')} ${n.val}="${val}"/>`)
+    insertBeforeChildOrClose(
+      xml,
+      n.el('checkBox'),
+      n.el('checked'),
+      `<${n.el('default')} ${n.val}="${val}"/>`
+    )
   );
   ff = setDecimalOrOnOff(ff, n, 'checked', val, (xml) =>
     insertBeforeCloseTag(xml, n.el('checkBox'), `<${n.el('checked')} ${n.val}="${val}"/>`)

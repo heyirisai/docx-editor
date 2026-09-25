@@ -222,7 +222,8 @@ export function synthesizeSdtPr(props: SdtProperties): string {
   if (props.alias) prParts.push(`<w:alias w:val="${escapeXml(props.alias)}"/>`);
   if (props.tag) prParts.push(`<w:tag w:val="${escapeXml(props.tag)}"/>`);
   if (props.id != null) prParts.push(`<w:id w:val="${props.id}"/>`);
-  if (props.lock && props.lock !== 'unlocked') prParts.push(`<w:lock w:val="${props.lock}"/>`);
+  if (props.lock && props.lock !== 'unlocked')
+    prParts.push(`<w:lock w:val="${escapeXml(props.lock)}"/>`);
   // `placeholder` precedes `showingPlcHdr` in the CT_SdtPr sequence (ECMA-376
   // §17.5.2.38); emit it so a synthesized control keeps a valid element order.
   if (props.placeholder)
