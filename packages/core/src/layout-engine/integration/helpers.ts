@@ -106,3 +106,39 @@ export function makeLayoutOptions(overrides: Partial<LayoutOptions> = {}): Layou
     ...overrides,
   };
 }
+
+/**
+ * Install a minimal headless `document` (a canvas whose `measureText` returns
+ * 0.5em per character) so `computeLayout` can measure text outside a browser.
+ * Returns a function that removes it again.
+ *
+ * Call it from `beforeAll` and call the returned function from `afterAll`,
+ * never at module scope. bun runs every test file in one process, so a stub
+ * left on `globalThis` leaks into every later file. A defined `document` then
+ * makes parseDocx's default `preloadFonts` step go to the network (Google
+ * Fonts), which stalls unrelated parse/round-trip tests past their 5s timeout.
+ * If a `document` already exists (e.g. a DOM registered by another suite), the
+ * stub is not installed and the returned function does nothing.
+ */
+export function installCanvasDocumentStub(): () => void {
+  const g = globalThis as Record<string, unknown>;
+  if (typeof g.document !== 'undefined') return () => {};
+  g.document = {
+    createElement: () => ({
+      getContext: () => ({
+        font: '',
+        measureText(text: string) {
+          const m = /([\d.]+)px/.exec(this.font as string);
+          const px = m ? parseFloat(m[1]) : 16;
+          return { width: text.length * px * 0.5 };
+        },
+      }),
+    }),
+    documentElement: { style: {} },
+    head: { appendChild() {} },
+    fonts: { check: () => true, load: async () => [] },
+  };
+  return () => {
+    delete g.document;
+  };
+}

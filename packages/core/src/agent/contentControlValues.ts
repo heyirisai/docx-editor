@@ -12,7 +12,20 @@
  * same capture-and-replay contract used everywhere else for SDTs.
  */
 
-import type { Document, BlockContent, SdtProperties, Run, InlineSdt } from '../types/document';
+import type {
+  Document,
+  BlockContent,
+  SdtProperties,
+  Run,
+  InlineSdt,
+  LegacyFormField,
+} from '../types/document';
+import {
+  legacyCheckboxGlyph,
+  setLegacyCheckbox,
+  setLegacyDropdownIndex,
+  setLegacyText,
+} from '../docx/legacyFormField';
 import {
   ContentControlLockedError,
   ContentControlBoundError,
@@ -29,7 +42,13 @@ import {
 export type ContentControlValue =
   | { kind: 'dropdown'; value: string }
   | { kind: 'checkbox'; checked: boolean }
-  | { kind: 'date'; date: string };
+  | { kind: 'date'; date: string }
+  /**
+   * Free text. Accepted by legacy `FORMTEXT` fields and by free-form
+   * (`richText` / `plainText`) content controls — the typed controls reject it,
+   * as they do any other mismatched value kind.
+   */
+  | { kind: 'text'; text: string };
 
 /** The control doesn't support the requested value kind, or the value is invalid. */
 export class ContentControlValueError extends Error {
@@ -127,17 +146,34 @@ export function formatSdtDate(iso: string, pattern?: string): string {
 
 // ── value application ───────────────────────────────────────────────────────
 
-/** A one-run paragraph; `font` sets the run's font (for symbol glyphs). */
-function paragraph(text: string, font?: string): BlockContent {
+/**
+ * A one-run paragraph. `font` sets the run's font (for symbol glyphs);
+ * `formatting` is the base run formatting the display run keeps (a legacy
+ * field's own run properties), with `font` layered on top.
+ */
+function paragraph(text: string, font?: string, formatting?: Run['formatting']): BlockContent {
   if (!text) return { type: 'paragraph', content: [] };
+  const merged: Run['formatting'] = font
+    ? { ...formatting, fontFamily: { ascii: font, hAnsi: font, eastAsia: font, cs: font } }
+    : formatting;
   const run: Run = {
     type: 'run',
     content: [{ type: 'text', text }],
-    ...(font
-      ? { formatting: { fontFamily: { ascii: font, hAnsi: font, eastAsia: font, cs: font } } }
-      : {}),
+    ...(merged && Object.keys(merged).length > 0 ? { formatting: merged } : {}),
   };
   return { type: 'paragraph', content: [run] };
+}
+
+/**
+ * Formatting of the first run in an inline control's content — the run a
+ * typed value replaces, whose formatting the new display run inherits (as
+ * Word keeps a form field's result in the field's formatting).
+ */
+function firstRunFormatting(content: InlineSdt['content']): Run['formatting'] | undefined {
+  for (const item of content) {
+    if (item.type === 'run') return item.formatting;
+  }
+  return undefined;
 }
 
 /** Clear a control's placeholder state (real content is being written). */
@@ -151,14 +187,97 @@ function withoutPlaceholder(props: SdtProperties, nextRaw: string): SdtPropertie
 }
 
 /**
+ * Apply a typed value to a **legacy Word form field**. The `w:ffData` state is
+ * patched with the same targeted-string contract used for raw `w:sdtPr`, and
+ * the display content is rebuilt so the painted page matches Word:
+ *
+ * - dropdown → `w:ddList/w:result` index + the selected entry as the result run
+ * - checkbox → `w:checkBox/w:default` **and** `w:checked` + the ☒/☐ glyph
+ * - text     → the result run text (`w:ffData` is left alone)
+ *
+ * Everything else inside `w:ffData` (`w:enabled`, `w:calcOnExit`, help text,
+ * macros, text-input formats) is replayed verbatim.
+ *
+ * The display run is built in `formatting` — the run formatting of the
+ * content it replaces (the parser gives a result-less field's synthesized run
+ * the field's own run properties). Without it a FORMDROPDOWN styled Arial 9pt
+ * bold would fall back to the document default font once answered, and since
+ * the answer is a real result (`hasResult`), Word would show it that way too.
+ */
+function applyLegacyFormFieldValue(
+  props: SdtProperties,
+  field: LegacyFormField,
+  value: ContentControlValue,
+  formatting: Run['formatting'] | undefined
+): { properties: SdtProperties; content: BlockContent[] } {
+  const done = (next: LegacyFormField, text: string) => ({
+    properties: {
+      ...props,
+      ...(next.checked != null ? { checked: next.checked } : {}),
+      legacyFormField: next,
+    },
+    content: [paragraph(text, undefined, formatting)],
+  });
+
+  switch (value.kind) {
+    case 'dropdown': {
+      if (field.fieldType !== 'dropdown') {
+        throw new ContentControlValueError(
+          `Legacy form field is a '${field.fieldType}' field, not a dropdown.`
+        );
+      }
+      const options = field.options ?? [];
+      const index = options.indexOf(value.value);
+      if (index < 0) {
+        throw new ContentControlValueError(
+          `'${value.value}' is not one of the field's list entries.`
+        );
+      }
+      const next = setLegacyDropdownIndex(field, index);
+      return done(next, options[index]);
+    }
+    case 'checkbox': {
+      if (field.fieldType !== 'checkbox') {
+        throw new ContentControlValueError(
+          `Legacy form field is a '${field.fieldType}' field, not a checkbox.`
+        );
+      }
+      const next = setLegacyCheckbox(field, value.checked);
+      return done(next, legacyCheckboxGlyph(value.checked));
+    }
+    case 'text': {
+      if (field.fieldType !== 'text') {
+        throw new ContentControlValueError(
+          `Legacy form field is a '${field.fieldType}' field, not a text field.`
+        );
+      }
+      return done(setLegacyText(field, value.text), value.text);
+    }
+    case 'date':
+      throw new ContentControlValueError('Legacy form fields have no date type.');
+  }
+}
+
+/**
  * Compute the new properties + display blocks for applying a typed value, without
  * touching a document. Shared by the headless setter and the editor (PM) path.
  * Throws {@link ContentControlValueError} on a type/value mismatch.
+ *
+ * Legacy Word form fields (`w:fldChar` + `w:ffData`) are routed to their own
+ * applier — they carry no `w:sdtPr` to patch — so callers treat legacy fields
+ * and `w:sdt` controls identically.
+ *
+ * `currentFormatting` is the run formatting of the control's current content
+ * (see {@link firstRunFormatting}); a legacy field's new display run keeps it.
  */
 export function applyContentControlValue(
   props: SdtProperties,
-  value: ContentControlValue
+  value: ContentControlValue,
+  currentFormatting?: Run['formatting']
 ): { properties: SdtProperties; content: BlockContent[] } {
+  if (props.legacyFormField) {
+    return applyLegacyFormFieldValue(props, props.legacyFormField, value, currentFormatting);
+  }
   const raw = props.rawPropertiesXml ?? '';
   switch (value.kind) {
     case 'dropdown': {
@@ -224,6 +343,23 @@ export function applyContentControlValue(
         content: [paragraph(formatSdtDate(iso, pattern))],
       };
     }
+    case 'text': {
+      // Free text only fits a free-form control; a typed one would desync its
+      // structured state from the visible value.
+      if (
+        props.sdtType !== 'richText' &&
+        props.sdtType !== 'plainText' &&
+        props.sdtType !== 'unknown'
+      ) {
+        throw new ContentControlValueError(
+          `Control is '${props.sdtType}'; free text would desync its typed state.`
+        );
+      }
+      return {
+        properties: withoutPlaceholder(props, raw),
+        content: [paragraph(value.text)],
+      };
+    }
   }
 }
 
@@ -268,7 +404,11 @@ export function setContentControlValue(
     // The typed setters render their display value as a single paragraph of
     // runs; lift those runs into the inline control's inline content (mirroring
     // how setContentControlContent fills an inline control).
-    const { properties, content } = applyContentControlValue(control.properties, value);
+    const { properties, content } = applyContentControlValue(
+      control.properties,
+      value,
+      firstRunFormatting(control.content)
+    );
     const display = content[0];
     const inlineContent = (
       display && display.type === 'paragraph' ? display.content : []

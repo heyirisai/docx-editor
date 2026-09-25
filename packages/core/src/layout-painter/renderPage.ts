@@ -959,19 +959,18 @@ export function renderPage(
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
     footerEl.style.position = 'absolute';
-    // Word anchors the footer band's TOP at the w:footer distance from the
-    // page bottom — content flows DOWN toward the page edge (a one-line
-    // footer with the default 0.5in distance paints ~0.25-0.5in from the
-    // bottom). Only when the content is taller than the distance does the
-    // band shift up so it stays on the page. Pinning the BOTTOM at the
-    // distance (the old behavior) floated every footer a full band-height
-    // too high.
-    // Word puts the footer flow origin at `max(w:footer, in-flow height)` from
-    // the page bottom. The interactive box top can sit ABOVE that when it grows
-    // to cover an upward float, so keep the two separate: the box is the click
-    // target, `footerBandTop` is where content actually starts.
-    const footerBandTop = page.size.h - Math.max(footerDistance, footerFlowHeight);
-    const footerElTop = page.size.h - Math.max(footerDistance, interactiveFooterHeight);
+    // Word anchors the footer band's BOTTOM at the w:footer distance from the
+    // page's bottom edge ("Footer from bottom", ECMA-376 §17.6.11 pgMar) and
+    // the band grows UPWARD from that line — a one-line footer with the
+    // default 0.5in distance paints between ~0.5in and ~0.7in from the
+    // bottom, and a tall footer pushes the body up by distance + height
+    // (see extendMarginsForHeaderFooter). Must stay in lockstep with
+    // calculateHeaderFooterVisualBounds / resolveHeaderFooterVisualTop.
+    // The flow origin (`footerBandTop`, where in-flow content starts) is kept
+    // separate from the interactive box, whose top can sit ABOVE the band when
+    // it grows to cover an upward float (a date box with negative positionV).
+    const footerBandTop = page.size.h - footerDistance - footerFlowHeight;
+    const footerElTop = page.size.h - footerDistance - interactiveFooterHeight;
     footerEl.style.top = `${footerElTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;

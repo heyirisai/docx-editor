@@ -243,8 +243,7 @@ export interface InlineSdtWidget {
     alias?: string;
     checked?: boolean;
     groupId: string;
-    // (undocumented)
-    kind: 'checkbox';
+    kind: 'checkbox' | 'dropdown';
     pos: number;
     tag?: string;
 }

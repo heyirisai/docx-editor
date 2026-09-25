@@ -246,6 +246,7 @@ export class ContentControlCreateError extends Error {
 export interface ContentControlFilter {
     alias?: string;
     id?: number;
+    source?: ContentControlSource;
     tag?: string;
     type?: SdtType;
 }
@@ -259,6 +260,7 @@ export interface ContentControlInfo {
     depth: number;
     id?: number;
     kind: 'block' | 'inline';
+    legacyFormField?: LegacyFormField;
     listItems?: {
         displayText: string;
         value: string;
@@ -269,6 +271,7 @@ export interface ContentControlInfo {
     placeholder?: string;
     sdtType: SdtType;
     showingPlaceholder?: boolean;
+    source: ContentControlSource;
     tag?: string;
     text: string;
 }
@@ -297,6 +300,12 @@ export class ContentControlNotFoundError extends Error {
 }
 
 // @public
+export type ContentControlSource = 'sdt' | 'legacy';
+
+// @public
+export function contentControlSource(props: SdtProperties): ContentControlSource;
+
+// @public
 export class ContentControlTypeError extends Error {
     constructor(sdtType: SdtType);
 }
@@ -311,6 +320,15 @@ export type ContentControlValue = {
 } | {
     kind: 'date';
     date: string;
+}
+/**
+* Free text. Accepted by legacy `FORMTEXT` fields and by free-form
+* (`richText` / `plainText`) content controls — the typed controls reject it,
+* as they do any other mismatched value kind.
+*/
+| {
+    kind: 'text';
+    text: string;
 };
 
 // @public
@@ -597,6 +615,14 @@ export interface FindContentControlsOptions {
 }
 
 // @public
+export function findGlyphCheckboxes(input: Document_2 | DocumentBody, options?: FindGlyphCheckboxesOptions): GlyphCheckboxCandidate[];
+
+// @public
+export interface FindGlyphCheckboxesOptions {
+    includeHeadersFooters?: boolean;
+}
+
+// @public
 export interface Footnote {
     content: BlockContent[];
     id: number;
@@ -717,6 +743,20 @@ export function getTextAfter(paragraphs: Paragraph[], position: Position_2, maxC
 
 // @public
 export function getTextBefore(paragraphs: Paragraph[], position: Position_2, maxChars: number): string;
+
+// @public
+export interface GlyphCheckboxCandidate {
+    char: string;
+    checked: boolean;
+    encoding: 'sym' | 'text';
+    font?: string;
+    kind: 'glyph';
+    location: ContentControlLocation;
+    offset: number;
+    paragraphText: string;
+    path: number[];
+    runIndex: number;
+}
 
 // @public
 export function halfPointsToPixels(halfPoints: number): number;
@@ -930,6 +970,43 @@ export interface JsonSchema {
     // (undocumented)
     type?: string | string[];
 }
+
+// @public
+export const LEGACY_CHECKBOX_GLYPHS: {
+    readonly checked: "☒";
+    readonly unchecked: "☐";
+};
+
+// @public
+export const LEGACY_FIELD_SDT_TYPE: Record<LegacyFormFieldType, SdtType>;
+
+// @public
+export function legacyCheckboxGlyph(checked: boolean | undefined): string;
+
+// @public
+export interface LegacyFormField {
+    checked?: boolean;
+    defaultText?: string;
+    ffDataXml: string;
+    fieldType: LegacyFormFieldType;
+    hasResult: boolean;
+    hasSeparate: boolean;
+    instruction: string;
+    kind: 'legacy';
+    name?: string;
+    options?: string[];
+    rawPrefixXml: string;
+    rawSuffixXml: string;
+    selectedIndex?: number;
+    sizeAuto?: boolean;
+    value?: string;
+}
+
+// @public
+export type LegacyFormFieldType = 'dropdown' | 'checkbox' | 'text';
+
+// @public
+export function legacyFormFieldTypeFor(instruction: string): LegacyFormFieldType | null;
 
 // @public
 export function lightenColor(color: ColorValue | undefined | null, theme: Theme | null | undefined, percent: number): string;
@@ -1533,6 +1610,15 @@ export function setContentControlValue(doc: Document_2, filter: ContentControlFi
 
 // @public
 export function setDocumentWatermark(doc: Document_2, watermark: Watermark | null): Document_2;
+
+// @public
+export function setLegacyCheckbox(field: LegacyFormField, checked: boolean): LegacyFormField;
+
+// @public
+export function setLegacyDropdownIndex(field: LegacyFormField, index: number): LegacyFormField;
+
+// @public
+export function setLegacyText(field: LegacyFormField, text: string): LegacyFormField;
 
 // @public
 export interface SetVariableCommand extends BaseCommand {

@@ -202,11 +202,11 @@ function resolveAnchoredVisualTop(
   const flowTop =
     metrics.section === 'header'
       ? (metrics.margins.header ?? 48)
-      : // Footer band TOP anchors at the w:footer distance (content flows
-        // down toward the page edge); it shifts up only when taller than
-        // the distance. Must stay in lockstep with renderPage's footer
-        // placement.
-        metrics.pageSize.h - Math.max(metrics.margins.footer ?? 48, flowHeight);
+      : // The footer band's BOTTOM sits at the w:footer distance from the
+        // page's bottom edge and the band grows upward (ECMA-376 §17.6.11;
+        // Word's "Footer from bottom"). Must stay in lockstep with
+        // renderPage's footer placement and extendMarginsForHeaderFooter.
+        metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
   const vertical = run.position?.vertical;
 
   if (!vertical) {
@@ -301,11 +301,11 @@ export function calculateHeaderFooterVisualBounds(
   const flowTop =
     metrics.section === 'header'
       ? (metrics.margins.header ?? 48)
-      : // Footer band TOP anchors at the w:footer distance (content flows
-        // down toward the page edge); it shifts up only when taller than
-        // the distance. Must stay in lockstep with renderPage's footer
-        // placement.
-        metrics.pageSize.h - Math.max(metrics.margins.footer ?? 48, flowHeight);
+      : // The footer band's BOTTOM sits at the w:footer distance from the
+        // page's bottom edge and the band grows upward (ECMA-376 §17.6.11;
+        // Word's "Footer from bottom"). Must stay in lockstep with
+        // renderPage's footer placement and extendMarginsForHeaderFooter.
+        metrics.pageSize.h - (metrics.margins.footer ?? 48) - flowHeight;
 
   for (let i = 0; i < blocks.length; i++) {
     const block = blocks[i];

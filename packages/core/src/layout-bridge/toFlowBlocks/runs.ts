@@ -311,12 +311,26 @@ function isContentLocked(lock: unknown): boolean {
   return lock === 'contentLocked' || lock === 'sdtContentLocked';
 }
 
-function inlineCheckboxWidgetFor(child: PMNode, childPos: number): InlineSdtWidget | undefined {
+/** The interactive widget kind an inline SDT node should paint, if any. */
+function inlineWidgetKind(sdtType: unknown): InlineSdtWidget['kind'] | undefined {
+  if (sdtType === 'checkbox') return 'checkbox';
+  if (sdtType === 'dropDownList' || sdtType === 'comboBox') return 'dropdown';
+  return undefined;
+}
+
+/**
+ * Widget metadata for an inline content control — modern `w:sdt` or a legacy
+ * form field, which the parser projects onto the same node. Unlike block
+ * controls this does not require a `w:tag`: legacy fields are addressed by PM
+ * position (`data-sdt-pos`), and Word templates repeat or omit tags anyway.
+ */
+function inlineSdtWidgetFor(child: PMNode, childPos: number): InlineSdtWidget | undefined {
   const attrs = child.attrs as Record<string, unknown>;
-  if (attrs.sdtType !== 'checkbox') return undefined;
+  const kind = inlineWidgetKind(attrs.sdtType);
+  if (!kind) return undefined;
   if (isContentLocked(attrs.lock) || attrs.dataBinding != null) return undefined;
   return {
-    kind: 'checkbox',
+    kind,
     groupId: `sdt@${childPos}`,
     pos: childPos,
     tag: attrs.tag != null ? String(attrs.tag) : undefined,
@@ -470,7 +484,7 @@ export function paragraphToRuns(
         pmEnd: childPos + child.nodeSize,
       });
     } else if (child.type.name === 'sdt') {
-      const inlineWidget = inlineCheckboxWidgetFor(child, childPos) ?? inlineSdtWidget;
+      const inlineWidget = inlineSdtWidgetFor(child, childPos) ?? inlineSdtWidget;
       const sdtInnerOffset = childPos + 1; // +1 for opening tag
       child.forEach((sdtChild, sdtChildOffset) => {
         pushRunsForChild(sdtChild, sdtInnerOffset + sdtChildOffset, inlineWidget);

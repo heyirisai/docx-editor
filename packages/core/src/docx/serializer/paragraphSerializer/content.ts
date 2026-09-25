@@ -26,6 +26,7 @@ import type {
 } from '../../../types/document';
 import { serializeRun, serializeTextFormatting } from '../runSerializer';
 import { escapeXml } from '../xmlUtils';
+import { serializeLegacyFormField } from '../../legacyFormField';
 
 /**
  * Serialize bookmark start (w:bookmarkStart)
@@ -221,7 +222,8 @@ export function synthesizeSdtPr(props: SdtProperties): string {
   if (props.alias) prParts.push(`<w:alias w:val="${escapeXml(props.alias)}"/>`);
   if (props.tag) prParts.push(`<w:tag w:val="${escapeXml(props.tag)}"/>`);
   if (props.id != null) prParts.push(`<w:id w:val="${props.id}"/>`);
-  if (props.lock && props.lock !== 'unlocked') prParts.push(`<w:lock w:val="${props.lock}"/>`);
+  if (props.lock && props.lock !== 'unlocked')
+    prParts.push(`<w:lock w:val="${escapeXml(props.lock)}"/>`);
   // `placeholder` precedes `showingPlcHdr` in the CT_SdtPr sequence (ECMA-376
   // §17.5.2.38); emit it so a synthesized control keeps a valid element order.
   if (props.placeholder)
@@ -318,6 +320,12 @@ export function serializeInlineSdt(sdt: InlineSdt): string {
       }
     })
     .join('');
+
+  // A legacy form field is an inline SDT only in the model — on the wire it is
+  // the captured `w:fldChar` run sequence, replayed verbatim around the result.
+  if (props.legacyFormField) {
+    return serializeLegacyFormField(props.legacyFormField, contentXml, sdt.content);
+  }
 
   const sdtPrXml = props.rawPropertiesXml ?? synthesizeSdtPr(props);
   const sdtEndPrXml = props.rawEndPropertiesXml ?? '';

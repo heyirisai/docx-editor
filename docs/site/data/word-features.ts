@@ -783,12 +783,13 @@ export const wordFeatures: WordFeature[] = [
     id: 'fields.legacy-forms',
     name: 'Legacy form fields (FORMTEXT, FORMCHECKBOX, FORMDROPDOWN)',
     category: 'fields',
-    editing: 'none',
-    rendering: 'partial',
-    roundTrip: 'partial',
+    editing: 'partial',
+    rendering: 'full',
+    roundTrip: 'full',
     tier: 'community',
     notes:
-      'The field result shows as static text; w:ffData (checkbox state, constraints) is dropped and the control is not interactive.',
+      'Parsed from w:ffData and surfaced alongside content controls (source: "legacy"): discover by name, set a dropdown selection or checkbox state from the headless API or the editor, click to toggle/choose in the paged view. A field without a stored result displays what Word shows (current list entry, checkbox glyph, text default or blank). The w:ffData block round-trips verbatim. Text-input constraints (maxLength, format, calculated fields) and form protection are not enforced.',
+    docsLink: '/docs/1.x/guides/content-controls',
   },
 
   // --- Document structure & content controls ---------------------------------

@@ -21,7 +21,7 @@ export interface ResolvedFont {
   originalFont: string;
   /** Whether this font has a Google Fonts equivalent */
   hasGoogleEquivalent: boolean;
-  /** OS/2 single-line ratio: (usWinAscent + usWinDescent) / unitsPerEm (no external leading) */
+  /** Word "single" line pitch ÷ font size: GDI tmHeight + tmExternalLeading, per unitsPerEm. */
   singleLineRatio: number;
 }
 
@@ -37,7 +37,7 @@ interface FontMapping {
   googleFont: string;
   category: FontCategory;
   fallbackStack: string[];
-  /** OS/2 single-line ratio: (usWinAscent + usWinDescent) / unitsPerEm (no external leading) */
+  /** Word "single" line pitch ÷ font size: GDI tmHeight + tmExternalLeading, per unitsPerEm. */
   singleLineRatio: number;
 }
 
@@ -53,11 +53,20 @@ export const DEFAULT_SINGLE_LINE_RATIO = 1.15;
  * These are metrically compatible fonts that preserve document layout.
  * See: https://wiki.archlinux.org/title/Metric-compatible_fonts
  *
- * singleLineRatio values are derived from each font's OS/2 table:
- * (usWinAscent + usWinDescent) / unitsPerEm
- * These define the Windows GDI "single line" height that OOXML lineRule="auto" uses.
- * sTypoLineGap (external leading) is NOT included — Word excludes it from the
- * lineRule="auto" calculation (ECMA-376 §17.3.1.33).
+ * singleLineRatio is Word's "single" line pitch (lineRule="auto", line=240)
+ * expressed as a multiple of the font size. Word takes it from GDI's text
+ * metrics: tmHeight + tmExternalLeading, where
+ *   tmHeight          = usWinAscent + usWinDescent
+ *   tmExternalLeading = max(0, hhea.lineGap − ((usWinAscent + usWinDescent) − (hhea.ascender − hhea.descender)))
+ * so the ratio is (tmHeight + tmExternalLeading) / unitsPerEm. For most fonts
+ * the hhea box already spans the usWin box and the external leading is 0, so
+ * the ratio collapses to the usWin sum. Arial and Times New Roman are the
+ * notable exceptions: their usWin box equals the hhea ascender/descender box,
+ * so the hhea lineGap (67 / 87 units) survives as external leading and Word
+ * lays both out at 1.1499 × size (Arial 11pt → 12.65pt, TNR 12pt → 13.8pt —
+ * the familiar Word single-spacing values). Dropping the gap under-measures
+ * every Arial/TNR line by ~3% and paginates documents too late.
+ * Values below were read from the font files' hhea/OS/2 tables.
  */
 const FONT_MAPPINGS: Record<string, FontMapping> = {
   // Microsoft Office fonts -> Google equivalents (via Croscore)
@@ -77,13 +86,15 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     googleFont: 'Arimo',
     category: 'sans-serif',
     fallbackStack: ['Arial', 'Arimo', 'Helvetica', 'sans-serif'],
-    singleLineRatio: 1.1172, // (1854+434)/2048 — no sTypoLineGap
+    // usWin 1854+434 = 2288, hhea 1854/−434 gap 67 → external leading 67 → 2355/2048
+    singleLineRatio: 1.1499,
   },
   'times new roman': {
     googleFont: 'Tinos',
     category: 'serif',
     fallbackStack: ['Times New Roman', 'Tinos', 'Times', 'serif'],
-    singleLineRatio: 1.1074, // (1825+443)/2048 — no sTypoLineGap
+    // usWin 1825+443 = 2268, hhea 1825/−443 gap 87 → external leading 87 → 2355/2048
+    singleLineRatio: 1.1499,
   },
   'courier new': {
     googleFont: 'Cousine',
@@ -115,7 +126,7 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     googleFont: 'Fira Sans',
     category: 'sans-serif',
     fallbackStack: ['Trebuchet MS', 'Fira Sans', 'Arial', 'sans-serif'],
-    singleLineRatio: 1.1431, // 2341/2048
+    singleLineRatio: 1.1611, // usWin 1923+455 = 2378/2048, hhea gap 0
   },
   'comic sans ms': {
     googleFont: 'Comic Neue',

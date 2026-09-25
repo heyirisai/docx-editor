@@ -74,6 +74,35 @@ A dropdown value must match one of the control's list items (by value or display
 
 In the editor, typed controls also get an interactive trigger at the top-right of their box: it toggles the checkbox, opens the dropdown's item menu, or opens a date picker, each as a normal undoable edit. No wiring required, in both the React and Vue adapters.
 
+## Legacy form fields
+
+Most requirements matrices and RFP grids predate content controls: they use Word's **legacy form fields** — a `w:fldChar` begin/separate/end run sequence carrying `w:ffData`, driven by ` FORMDROPDOWN `, ` FORMCHECKBOX ` or ` FORMTEXT `. These are parsed into the same model, so one API covers both. `ContentControlInfo` and `PMContentControl` carry a `source` discriminator (`"sdt"` or `"legacy"`), and a legacy field also carries its `legacyFormField` state.
+
+```ts
+const field = findContentControl(doc, { tag: "Drop1" })!;
+field.source; // "legacy"
+field.sdtType; // "dropDownList"  (checkbox → "checkbox", FORMTEXT → "plainText")
+field.legacyFormField?.options; // ["Never", "Sometimes", "Always"]
+
+findContentControls(doc, { source: "legacy" }); // filter to one encoding
+```
+
+A field's `w:ffData/w:name` is projected as both `tag` and `alias` — the only stable identifier a legacy field has, and the one Word shows in its form-field dialog — so `{ tag }` addresses them like any other control. The typed setters accept them unchanged:
+
+```ts
+setContentControlValue(doc, { tag: "Drop1" }, { kind: "dropdown", value: "Always" });
+setContentControlValue(doc, { tag: "Check1" }, { kind: "checkbox", checked: true });
+setContentControlValue(doc, { tag: "Notes" }, { kind: "text", text: "Supported since 2019." });
+```
+
+A dropdown writes `w:ddList/w:result` plus the displayed run; a checkbox writes both `w:checkBox/w:default` and `w:checked` and renders the ☒/☐ glyph; `text` replaces the result run. The `date` kind is rejected — legacy fields have no date type. In the editor a legacy checkbox toggles on click and a legacy dropdown opens the same option menu as a `w:dropDownList`, in both adapters.
+
+A field with no stored result displays what Word displays — the list entry at `w:ddList/w:result` (index 0 by default), the checkbox glyph, the `w:textInput/w:default` text or a blank of five en spaces — in the field's run formatting, and `text` reports it. That synthesized run is not written back on save while it is unchanged, so an unanswered field still round-trips byte for byte.
+
+The `begin…separate` runs and the `end` run are captured verbatim and replayed on save, with only `w:ffData` rewritten in place — an untouched field saves byte for byte, and `w:enabled`, `w:calcOnExit`, help text and text-input formats survive edits. A malformed sequence falls back to the existing opaque field passthrough rather than being rewritten.
+
+`findGlyphCheckboxes(doc)` additionally reports checkboxes that are just a typed `☐` or a Wingdings/Symbol `w:sym` run. Read-only: there is no structured state to write.
+
 ## Creating controls
 
 `createContentControl` wraps a text span in a **new** control — the step that turns a placeholder in a template into a fillable, tagged region (including inside a table cell). It is pure (returns a new `Document`) and returns the created control:
@@ -185,6 +214,7 @@ removeContentControl(doc, {}, { all: true, keepContent: true }); // flatten: unw
 - A control inside a hyperlink isn't surfaced.
 - Controls inside tracked changes, footnotes, and endnotes are not searched.
 - `dataBinding` and repeating sections round-trip but have no live behavior (no bound-value resolution, no automatic repeat expansion).
+- For legacy form fields, text-input constraints (`w:maxLength`, `w:format`, calculated fields) and Word's form protection are not enforced.
 
 ## Next steps
 

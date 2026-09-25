@@ -10,6 +10,10 @@ renders their boundary, and round-trips them losslessly on save (including
 unmodeled properties such as `w:dataBinding` and `w15:repeatingSection`, which
 are preserved verbatim). This guide covers the APIs for finding and editing them.
 
+Word's **legacy form fields** (`w:fldChar` + `w:ffData`) — what most
+requirements matrices actually use — are projected onto the same model and
+addressed by the same APIs; see [Legacy form fields](#legacy-form-fields-wffdata).
+
 ## Headless (server-side / AI pipelines)
 
 Operate directly on a parsed `Document` with no editor or DOM. Import from
@@ -120,10 +124,93 @@ and Vue adapters; no wiring required. The trigger is a focusable button and the
 dropdown menu is arrow-key navigable (Enter to choose, Escape to close). Data-
 bound and content-locked controls don't render a trigger.
 
+## Legacy form fields (`w:ffData`)
+
+Most requirements matrices and RFP response grids predate content controls: they
+use Word's **legacy form fields** — a `w:fldChar` begin/separate/end run
+sequence carrying `w:ffData`, driven by `FORMDROPDOWN`, `FORMCHECKBOX` or
+`FORMTEXT`. (The Certinia RFP, for instance, is 93 `FORMDROPDOWN` fields and
+no `w:sdt` at all.)
+
+These are parsed into the same content-control model, so **one API covers
+both**. `ContentControlInfo` and `PMContentControl` carry a `source`
+discriminator, and a legacy field also carries its `legacyFormField` state:
+
+```ts
+const all = findContentControls(doc);
+all[0].source; // 'sdt' | 'legacy'
+
+const field = findContentControl(doc, { tag: 'Drop1' })!;
+field.source; //        'legacy'
+field.sdtType; //       'dropDownList'  (checkbox → 'checkbox', FORMTEXT → 'plainText')
+field.listItems; //     [{ displayText: 'Never', value: 'Never' }, …]
+field.legacyFormField; // { kind: 'legacy', fieldType: 'dropdown', name: 'Drop1',
+//   options, selectedIndex, value, checked, sizeAuto, … }
+
+// Filter to one encoding when it matters
+findContentControls(doc, { source: 'legacy' });
+```
+
+A field's `w:ffData/w:name` is projected as both `tag` and `alias` — it is the
+only stable identifier a legacy field has, and it is what Word shows in its
+form-field dialog — so `{ tag: 'Drop1' }` addresses them like any other control.
+
+The typed setters accept them unchanged:
+
+```ts
+setContentControlValue(doc, { tag: 'Drop1' }, { kind: 'dropdown', value: 'Always' });
+setContentControlValue(doc, { tag: 'Check1' }, { kind: 'checkbox', checked: true });
+setContentControlValue(doc, { tag: 'Notes' }, { kind: 'text', text: 'Supported since 2019.' });
+```
+
+- **dropdown** — writes `w:ddList/w:result` and the displayed result run.
+- **checkbox** — writes both `w:checkBox/w:default` and `w:checked` (Word reads
+  `checked` when present and falls back to `default`), and renders the ☒/☐
+  glyph. Word derives the box from `w:checked` and writes no result run, so
+  none is emitted.
+- **text** — replaces the result run text; `w:ffData` is untouched.
+
+**Display of unanswered fields.** Many generators (and Word itself, for
+checkboxes) write no result run at all. Word still shows something — the
+`w:listEntry` at `w:ddList/w:result` (index 0 by default), the ☒/☐ box, the
+`w:textInput/w:default` text, or a blank of five en spaces — and so does the
+editor: the parser synthesizes that display run in the field's run formatting,
+`ContentControlInfo.text` reports it, and the serializer drops it again on save
+while it is still the synthesized text, so an untouched field round-trips byte
+for byte. Content typed over it in the editor is kept as a real result.
+
+In the paged editor, a legacy checkbox toggles on click and a legacy dropdown
+opens the same option menu as a `w:dropDownList` control — same widgets, same
+undo, no wiring. The `date` value kind is rejected (legacy fields have no date
+type), as is any value kind that doesn't match the field.
+
+**Round-trip.** The `begin…separate` runs and the `end` run are captured
+verbatim at parse time and replayed on save, with only the `w:ffData` region
+rewritten by a targeted string patch — the same capture-and-replay contract used
+for raw `w:sdtPr`. An untouched field saves byte for byte, and `w:enabled`,
+`w:calcOnExit`, help text, macros and `w:textInput` formats survive edits. A
+malformed or contradictory sequence (say `FORMTEXT` over a `w:ddList`) is
+**not** modeled and falls back to the existing opaque field passthrough.
+
+### Glyph checkboxes
+
+A third pattern has no field at all: the author typed `☐`, or inserted a
+Wingdings/Symbol ballot box as a `w:sym` run. `findGlyphCheckboxes` reports
+these read-only so staging can still offer the column, but there is no
+structured state to write and therefore no setter.
+
+```ts
+import { findGlyphCheckboxes } from '@eigenpal/docx-editor-core/headless';
+
+findGlyphCheckboxes(doc);
+// [{ kind: 'glyph', encoding: 'text' | 'sym', checked, char, font,
+//    path, runIndex, paragraphText, location }, …]
+```
+
 ## Reading bound / typed state
 
 Both `ContentControlInfo` (headless) and `PMContentControl` (editor) expose
-`showingPlaceholder`, `checked`, `dateFormat`, `listItems`, and `dataBinding`
+`source`, `showingPlaceholder`, `checked`, `dateFormat`, `listItems`, and `dataBinding`
 (`{ xpath, storeItemID, prefixMappings }`) so automation can inspect a
 control's state before deciding what to write. `dataBinding` and
 `w15:repeatingSection` round-trip verbatim but are **not** modeled as live

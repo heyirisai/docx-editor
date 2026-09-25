@@ -519,6 +519,15 @@ export function measureParagraph(
     };
   }
 
+  // Word sizes a line that carries no text (an anchored drawing on its own, a
+  // bare line break, a paragraph mark alone) from the paragraph mark's run
+  // properties (w:pPr/w:rPr), not from the document default — the same source
+  // the empty-paragraph branches above use.
+  const markFontSize = attrs?.defaultFontSize ?? DEFAULT_FONT_SIZE;
+  const markFontFamily = attrs?.defaultFontFamily ?? DEFAULT_FONT_FAMILY;
+  const markFontMetrics = (): FontMetrics =>
+    getFontMetrics({ fontSize: markFontSize, fontFamily: markFontFamily });
+
   // Initialize line state
   let currentLine: LineState = {
     fromRun: 0,
@@ -526,7 +535,7 @@ export function measureParagraph(
     toRun: 0,
     toChar: 0,
     width: 0,
-    maxFontSize: DEFAULT_FONT_SIZE,
+    maxFontSize: markFontSize,
     maxFontMetrics: null,
     maxImageHeightPx: 0,
     availableWidth: firstLineWidth,
@@ -542,7 +551,7 @@ export function measureParagraph(
     const typography = calculateTypographyMetrics(
       currentLine.maxFontSize,
       spacing,
-      currentLine.maxFontMetrics
+      currentLine.maxFontMetrics ?? markFontMetrics()
     );
 
     // If an inline image is taller than the text-based line height, the line
@@ -692,7 +701,7 @@ export function measureParagraph(
       toRun: runIndex,
       toChar: charIndex,
       width: 0,
-      maxFontSize: DEFAULT_FONT_SIZE,
+      maxFontSize: markFontSize,
       maxFontMetrics: null,
       maxImageHeightPx: 0,
       availableWidth: adjustedWidth,

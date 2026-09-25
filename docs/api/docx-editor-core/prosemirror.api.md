@@ -461,6 +461,7 @@ export interface PMContentControl {
     depth: number;
     // (undocumented)
     id?: number;
+    legacyFormField?: LegacyFormField;
     listItems?: {
         displayText: string;
         value: string;
@@ -471,6 +472,7 @@ export interface PMContentControl {
     // (undocumented)
     sdtType: SdtType;
     showingPlaceholder?: boolean;
+    source: ContentControlSource;
     // (undocumented)
     tag?: string;
     text: string;

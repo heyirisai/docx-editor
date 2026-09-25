@@ -26,3 +26,11 @@ export const SUGGESTION_META = 'suggestionModeApplied';
 
 /** Set by accept/reject commands to bypass suggesting-mode interception. */
 export const SUGGESTION_BYPASS_META = 'suggestionModeBypass';
+
+/**
+ * Meta key y-prosemirror sets on the transactions its sync plugin dispatches
+ * (`new PluginKey('y-sync')` → key string `y-sync$`). Such a transaction
+ * replays a collaborator's already-committed edit; suggesting mode must not
+ * re-wrap it as a tracked insertion by the local author.
+ */
+export const YJS_SYNC_META = 'y-sync$';

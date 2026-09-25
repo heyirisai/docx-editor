@@ -28,6 +28,9 @@ export function sdtPropsToAttrs(props: SdtProperties): Record<string, unknown> {
     dataBinding: props.dataBinding ? JSON.stringify(props.dataBinding) : null,
     rawPropertiesXml: props.rawPropertiesXml ?? null,
     rawEndPropertiesXml: props.rawEndPropertiesXml ?? null,
+    // Legacy form fields ride as JSON: the captured `w:fldChar` run XML must
+    // survive the editor round trip exactly as `rawPropertiesXml` does.
+    legacyFormField: props.legacyFormField ? JSON.stringify(props.legacyFormField) : null,
   };
 }
 
@@ -65,6 +68,15 @@ export function sdtAttrsToProps(attrs: Record<string, unknown>): SdtProperties {
   if (attrs.rawPropertiesXml != null) props.rawPropertiesXml = String(attrs.rawPropertiesXml);
   if (attrs.rawEndPropertiesXml != null) {
     props.rawEndPropertiesXml = String(attrs.rawEndPropertiesXml);
+  }
+  if (typeof attrs.legacyFormField === 'string' && attrs.legacyFormField) {
+    try {
+      props.legacyFormField = JSON.parse(attrs.legacyFormField) as SdtProperties['legacyFormField'];
+    } catch {
+      // Malformed cache — drop it rather than throwing. The field then
+      // serializes as an ordinary (empty) SDT, which is recoverable; a throw
+      // would take the whole save down.
+    }
   }
   return props;
 }

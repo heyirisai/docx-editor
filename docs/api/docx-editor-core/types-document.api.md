@@ -526,6 +526,28 @@ export interface InstrTextContent {
 }
 
 // @public
+export interface LegacyFormField {
+    checked?: boolean;
+    defaultText?: string;
+    ffDataXml: string;
+    fieldType: LegacyFormFieldType;
+    hasResult: boolean;
+    hasSeparate: boolean;
+    instruction: string;
+    kind: 'legacy';
+    name?: string;
+    options?: string[];
+    rawPrefixXml: string;
+    rawSuffixXml: string;
+    selectedIndex?: number;
+    sizeAuto?: boolean;
+    value?: string;
+}
+
+// @public
+export type LegacyFormFieldType = 'dropdown' | 'checkbox' | 'text';
+
+// @public
 export type LevelSuffix = 'tab' | 'space' | 'nothing';
 
 // @public
@@ -856,6 +878,7 @@ export interface SdtProperties {
     dataBinding?: SdtDataBinding;
     dateFormat?: string;
     id?: number;
+    legacyFormField?: LegacyFormField;
     listItems?: {
         displayText: string;
         value: string;

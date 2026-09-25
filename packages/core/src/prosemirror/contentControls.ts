@@ -21,8 +21,10 @@ import {
   isDataBound,
   clearShowingPlaceholderXml,
   type ContentControlFilter,
+  type ContentControlSource,
 } from '../agent/contentControls';
 import { applyContentControlValue, type ContentControlValue } from '../agent/contentControlValues';
+import { syncLegacyTextField } from '../docx/legacyFormField';
 import {
   RepeatingSectionError,
   rawIsRepeatingSectionItem,
@@ -30,7 +32,7 @@ import {
 } from '../agent/repeatingSection';
 import type { FontFamilyAttrs } from './schema/marks';
 import { sdtAttrsToProps, sdtPropsToAttrs } from './conversion/sdtAttrs';
-import type { SdtType, SdtProperties, SdtDataBinding } from '../types/document';
+import type { SdtType, SdtProperties, SdtDataBinding, LegacyFormField } from '../types/document';
 
 /** A control discovered in the PM doc, with its PM position for scroll/edit. */
 export interface PMContentControl {
@@ -53,6 +55,10 @@ export interface PMContentControl {
   dateValue?: string;
   /** Plain text of the control's content. */
   text: string;
+  /** Whether this is a `w:sdt` content control or a legacy Word form field. */
+  source: ContentControlSource;
+  /** Legacy form-field state (`w:ffData`), present iff `source === 'legacy'`. */
+  legacyFormField?: LegacyFormField;
   /** PM position of the `blockSdt` or inline `sdt` node (its `before` position). */
   pos: number;
   /** Nesting depth among content controls (0 = not inside another control). */
@@ -74,7 +80,13 @@ function attrsMatch(attrs: Record<string, unknown>, filter: ContentControlFilter
   if (filter.alias !== undefined && attrs.alias !== filter.alias) return false;
   if (filter.id !== undefined && attrs.id !== filter.id) return false;
   if (filter.type !== undefined && (attrs.sdtType ?? 'richText') !== filter.type) return false;
+  if (filter.source !== undefined && sourceOfAttrs(attrs) !== filter.source) return false;
   return true;
+}
+
+/** `sdt`/`legacy` for a PM SDT node's attrs (legacy fields carry the JSON attr). */
+function sourceOfAttrs(attrs: Record<string, unknown>): ContentControlSource {
+  return attrs.legacyFormField ? 'legacy' : 'sdt';
 }
 
 function isContentControlNode(node: PMNode): boolean {
@@ -83,6 +95,8 @@ function isContentControlNode(node: PMNode): boolean {
 
 function controlInfo(node: PMNode, pos: number, depth: number): PMContentControl {
   const a = node.attrs as Record<string, unknown>;
+  const text = node.textBetween(0, node.content.size, '\n');
+  const legacy = parseAttrJson<LegacyFormField>(a.legacyFormField);
   return {
     tag: a.tag != null ? String(a.tag) : undefined,
     alias: a.alias != null ? String(a.alias) : undefined,
@@ -97,7 +111,12 @@ function controlInfo(node: PMNode, pos: number, depth: number): PMContentControl
     dateValue: /<w:date\b[^>]*\bw:fullDate="(\d{4}-\d{2}-\d{2})/.exec(
       String(a.rawPropertiesXml ?? '')
     )?.[1],
-    text: node.textBetween(0, node.content.size, '\n'),
+    text,
+    source: sourceOfAttrs(a),
+    // The attr is the descriptor as parsed; text typed into a legacy FORMTEXT
+    // since then lives only in the node content, so mirror it (as
+    // fromProseDoc does on save) rather than report the stale value.
+    legacyFormField: legacy ? syncLegacyTextField(legacy, text) : undefined,
     pos,
     depth,
   };
@@ -345,18 +364,44 @@ function blockNodesForValue(
   });
 }
 
+/**
+ * Marks that are not run formatting: tracked changes, comments, hyperlinks and
+ * note references belong to the text they were on, never to a new value.
+ */
+const NON_FORMATTING_MARKS = new Set([
+  'insertion',
+  'deletion',
+  'comment',
+  'hyperlink',
+  'footnoteRef',
+]);
+
+/** The run-formatting marks of the text a typed value replaces. */
+function formattingMarksOf(node: PMNode): readonly Mark[] {
+  return (firstTextMarks(node) ?? []).filter((m) => !NON_FORMATTING_MARKS.has(m.type.name));
+}
+
 function inlineNodesForValue(
   schema: Schema,
-  content: ReturnType<typeof applyContentControlValue>['content']
+  content: ReturnType<typeof applyContentControlValue>['content'],
+  baseMarks: readonly Mark[]
 ): PMNode[] {
   const firstParagraph = content.find((block) => block.type === 'paragraph');
   if (!firstParagraph || firstParagraph.type !== 'paragraph') return [];
   const nodes: PMNode[] = [];
+  const fontMark = schema.marks.fontFamily;
   for (const run of firstParagraph.content) {
     if (run.type !== 'run') continue;
     const text = run.content.map((t) => ('text' in t ? t.text : '')).join('');
-    const node = textNodeForRun(schema, text, run.formatting?.fontFamily);
-    if (node) nodes.push(node);
+    if (!text) continue;
+    // Keep the replaced text's formatting; a glyph font (checkbox symbol
+    // font) from the applier replaces its fontFamily mark.
+    const fontAttrs = fontFamilyAttrs(run.formatting?.fontFamily);
+    let marks: readonly Mark[] = baseMarks;
+    if (fontAttrs && fontMark) {
+      marks = fontMark.create(fontAttrs).addToSet(fontMark.removeFromSet(baseMarks));
+    }
+    nodes.push(schema.text(text, marks.length > 0 ? marks : undefined));
   }
   return nodes;
 }
@@ -378,9 +423,13 @@ function setContentControlValueForTargetTr(
   const { schema } = state;
   const from = target.pos + 1;
   const to = target.pos + 1 + target.node.content.size;
+  // A legacy form field's answer keeps the field's run formatting (the
+  // display run the parser synthesized carries it); `w:sdt` controls keep
+  // their existing behaviour (the glyph font only).
+  const baseMarks = props.legacyFormField ? formattingMarksOf(target.node) : [];
   const replacement =
     target.node.type.name === 'sdt'
-      ? inlineNodesForValue(schema, content)
+      ? inlineNodesForValue(schema, content, baseMarks)
       : blockNodesForValue(schema, content);
   const tr = state.tr.replaceWith(from, to, replacement);
   // Sync structured attrs (checked / rawPropertiesXml); node start is stable.

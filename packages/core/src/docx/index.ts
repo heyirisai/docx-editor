@@ -76,6 +76,22 @@ export type {
   ComplexFieldContext,
 } from './fieldParser';
 
+// Legacy form fields (w:fldChar + w:ffData)
+export {
+  legacyFormFieldTypeFor,
+  findFfDataElement,
+  parseFfData,
+  buildLegacyFormFieldSdt,
+  serializeLegacyFormField,
+  setLegacyDropdownIndex,
+  setLegacyCheckbox,
+  setLegacyText,
+  legacyCheckboxGlyph,
+  LEGACY_FIELD_SDT_TYPE,
+  LEGACY_CHECKBOX_GLYPHS,
+} from './legacyFormField';
+export type { FfDataProjection, LegacyFormFieldSequence } from './legacyFormField';
+
 // Hyperlinks
 export {
   parseHyperlink,

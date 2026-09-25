@@ -548,11 +548,12 @@ function layoutTable(
     // Account for trailing spacing from the previous block that addFragment
     // will consume (only the first fragment butts against prior content).
     const pendingSpacing = isFirstFragment ? state.trailingSpacing : 0;
-    // Word quirk: repeated tblHeader rows appear on a continuation page
-    // only when the break fell BETWEEN rows. When a row split mid-content
-    // (allow-row-to-break), Word suppresses the repeated header above the
-    // row's continuation — `consumed > 0` marks exactly that case.
-    const repeatHeader = !isFirstFragment && headerRowCount > 0 && consumed === 0;
+    // ECMA-376 §17.4.78: a `w:tblHeader` row is repeated "at the top of each
+    // new page on which part of this table is displayed". A page that shows
+    // the remainder of a row broken mid-content (allow-row-to-break) displays
+    // part of the table, so the header repeats there too — the break falling
+    // inside a row rather than between rows makes no difference.
+    const repeatHeader = !isFirstFragment && headerRowCount > 0;
     const headerOverhead = repeatHeader ? headerRowsHeight : 0;
     const availableHeight = paginator.getAvailableHeight() - pendingSpacing - headerOverhead;
 
@@ -585,11 +586,15 @@ function layoutTable(
       // at the deepest whole line that fits (Word's "allow row to break across
       // pages") — this keeps the row's other columns on the page where they
       // start and flows a tall vertically-merged cell across the boundary.
-      // `w:cantSplit` rows (§17.4.6) never break.
+      // `w:cantSplit` rows (§17.4.6) never break, and neither does a repeating
+      // header row: Word renders `w:tblHeader` rows whole on every page they
+      // appear on, so a header that doesn't fit takes the table with it to the
+      // next page (see the orphan rule below) instead of being cut in half.
       const budget = availableHeight - used;
-      const placeable = block.rows[cur]?.cantSplit
-        ? 0
-        : snapRowBreak(breakInfo, cur, startOff, budget);
+      const placeable =
+        cur < headerRowCount || block.rows[cur]?.cantSplit
+          ? 0
+          : snapRowBreak(breakInfo, cur, startOff, budget);
       if (placeable > 0) {
         // Break this row mid-content at a whole-line boundary.
         used += placeable;
@@ -608,16 +613,19 @@ function layoutTable(
     }
 
     // Word never strands a table's header row(s) alone at the bottom of a
-    // page or column: when the FIRST fragment would carry only header rows
-    // while the data rows flow to the next page, start the whole table
-    // there instead. View-time pagination only — the document content
-    // (and therefore the export) is unchanged. Skipped on a fresh column
-    // (cursor at top) so an oversized header still places with overflow
-    // instead of looping.
+    // page or column: the header must be followed by real body content on
+    // the same page. When the FIRST fragment would carry only header rows —
+    // because nothing of the first body row fits (`w:cantSplit`, or not even
+    // one line), or because the header itself doesn't fit — start the whole
+    // table on the next page instead. A body row that contributes at least
+    // its first line (`toRow > headerRowCount`) satisfies Word, so a
+    // mid-content split of the first body row is left alone. View-time
+    // pagination only — the document content (and therefore the export) is
+    // unchanged. Skipped on a fresh column (cursor at top) so an oversized
+    // header still places with overflow instead of looping.
     if (
       isFirstFragment &&
       headerRowCount > 0 &&
-      !lastRowPartial &&
       toRow <= headerRowCount &&
       toRow < rows.length &&
       state.cursorY > state.topMargin
