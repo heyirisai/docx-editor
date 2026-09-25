@@ -1,5 +1,20 @@
 # @eigenpal/docx-editor-core
 
+## 1.14.0
+
+### Minor Changes
+
+- 00c12a3: Support legacy Word form fields (FORMDROPDOWN, FORMCHECKBOX, FORMTEXT) as first-class content controls: they are discovered by `findContentControls` with `source: 'legacy'`, edited with `setContentControlValue`, and clickable in the paged editor. The `w:ffData` block round-trips verbatim. Adds `findGlyphCheckboxes` for read-only detection of typed/Wingdings checkbox glyphs.
+
+### Patch Changes
+
+- 1c9ca44: Pagination parity with Word for Arial / Times New Roman documents and tall footers. Single line spacing for Arial and Times New Roman now uses Word's line pitch (1.1499 × font size — 11pt Arial → 12.65pt) instead of a value ~3% short, so Arial documents no longer paginate a page late; a line holding only an anchored drawing is sized from its paragraph mark like Word; and the footer band is anchored with its bottom at the `w:footer` distance and grows upward, so footers paint where Word paints them and a tall footer shortens the body page by `footer distance + footer height`.
+- 545689d: Legacy form fields keep their run formatting (font, size, bold) when a value is set, a checkbox that gains w:default stays in schema order, pasted HTML can no longer carry arbitrary field or w:sdtPr markup into the saved document, and suggestion mode no longer turns collaborators' incoming Yjs edits into tracked insertions.
+- 1c9ca44: Repeating table header rows (w:tblHeader) now also repeat above the continuation of a body row that broke across a page boundary, matching Word: a header row repeats on every page that shows part of the table, not only when the break falls between rows.
+- 8935af3: Legacy form-field robustness: `w:ffData` patches follow the namespace prefix the file itself uses (a document binding WordprocessingML to another prefix, or the default namespace, no longer loses dropdown/checkbox edits on save); a projected `FORMTEXT` keeps its `legacyFormField.value`/`hasResult` in step when its content is replaced through `setContentControlContent` or by typing in the editor; and `findGlyphCheckboxes` reports every box character in a run — `☐ Yes ☐ No` typed as one run yields two candidates — with a new `offset` for each.
+- 00c12a3: Legacy form fields with no stored result (FORMDROPDOWN, FORMTEXT, FORMCHECKBOX) now display what Word shows - the current list entry, the text default or blank, the checkbox glyph - instead of rendering empty, and findContentControls reports that text. The synthesized display is not written back on save, so an untouched field still round-trips byte for byte.
+- 1c9ca44: A table with repeating header rows (w:tblHeader) no longer strands a clipped header row at the bottom of a page: as in Word, the header row is never split across a page break, and the whole table moves to the next page when the header plus the first body row does not fit.
+
 ## 1.13.1
 
 ### Patch Changes

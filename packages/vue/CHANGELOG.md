@@ -1,5 +1,20 @@
 # @eigenpal/docx-editor-vue
 
+## 1.14.0
+
+### Patch Changes
+
+- Updated dependencies [1c9ca44]
+- Updated dependencies [545689d]
+- Updated dependencies [1c9ca44]
+- Updated dependencies [8935af3]
+- Updated dependencies [00c12a3]
+- Updated dependencies [00c12a3]
+- Updated dependencies [1c9ca44]
+  - @eigenpal/docx-editor-core@1.14.0
+  - @eigenpal/docx-editor-agents@1.14.0
+  - @eigenpal/docx-editor-i18n@1.14.0
+
 ## 1.13.1
 
 ### Patch Changes
