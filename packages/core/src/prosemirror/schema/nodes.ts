@@ -405,4 +405,9 @@ export interface TableCellAttrs {
     | null;
   /** Cell-property change history (`<w:tcPrChange>`). */
   tcPrChange?: import('../../types/document').TableCellPropertyChange[] | null;
+  /**
+   * Row-level `w:sdt` / `w:customXml` wrappers the cell was parsed from
+   * (`TableCell.rowWrappers`), kept so a save re-emits them around the cell.
+   */
+  rowWrappers?: import('../../types/document').TableCellRowWrapper[] | null;
 }

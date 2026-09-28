@@ -282,6 +282,7 @@ export interface TableCellAttrs {
     _originalFormatting?: TableCellFormatting;
     _originalResolvedFill?: string;
     rowspan: number;
+    rowWrappers?: TableCellRowWrapper[] | null;
     tcPrChange?: TableCellPropertyChange[] | null;
     textDirection?: string;
     verticalAlign?: 'top' | 'center' | 'bottom';

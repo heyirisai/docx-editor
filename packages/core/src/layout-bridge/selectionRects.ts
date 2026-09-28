@@ -81,6 +81,8 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     // Propagate w:caps so selection-rect widths match the painted (uppercased)
     // glyphs for allCaps runs (see measureRun / measureTextWidth).
     allCaps: run.allCaps,
+    // w:w — glyph advances scale, so hit-testing/line-breaking must too.
+    horizontalScale: run.horizontalScale,
   };
 }
 

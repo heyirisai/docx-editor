@@ -129,7 +129,7 @@ bound and content-locked controls don't render a trigger.
 Most requirements matrices and RFP response grids predate content controls: they
 use Word's **legacy form fields** — a `w:fldChar` begin/separate/end run
 sequence carrying `w:ffData`, driven by `FORMDROPDOWN`, `FORMCHECKBOX` or
-`FORMTEXT`. (The Certinia RFP, for instance, is 93 `FORMDROPDOWN` fields and
+`FORMTEXT`. (A real RFP matrix can be dozens of `FORMDROPDOWN` fields and
 no `w:sdt` at all.)
 
 These are parsed into the same content-control model, so **one API covers
@@ -226,7 +226,10 @@ this flag before treating `text` as real data.
   as the `{{mustache}}` template variables used by the docxtemplater plugin.
 - Locks: `contentLocked`/`sdtContentLocked` block content edits;
   `sdtLocked`/`sdtContentLocked` block removal.
-- Scope today: **block-level** controls in the **document body**. Inline
+- Scope today: **block-level** controls in the **document body** (including
+  table cells, and row-level controls that wrap a whole cell,
+  `w:tr > w:sdt > w:sdtContent > w:tc`, which surface as the cell's control
+  with the wrapper recorded in `TableCell.rowWrappers`). Inline
   controls parse and round-trip but are not part of this addressing API; typed
   value setters (set a dropdown selection / checkbox / date) and live
   `dataBinding`/`repeatingSection` behavior are roadmap.
@@ -236,6 +239,3 @@ this flag before treating `text` as real data.
   not return them and `setContentControlContent`/`removeContentControl` will
   report "not found" for a control that is plainly visible in the
   header/footer. This is a known limitation, not a bug.
-- **Table cells are not searched.** OOXML permits a block control inside a
-  `w:tc`, but the table parser does not yet surface cell-level controls, so
-  they are not discovered (same silent not-found caveat).

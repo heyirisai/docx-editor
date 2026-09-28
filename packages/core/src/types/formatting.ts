@@ -492,6 +492,20 @@ export interface TableRowFormatting {
   hidden?: boolean;
   /** Conditional format style */
   conditionalFormat?: ConditionalFormatStyle;
+  /**
+   * Grid columns skipped before the row's first cell (`w:gridBefore`,
+   * §17.4.15). Nothing is drawn in them — the row starts further right.
+   */
+  gridBefore?: number;
+  /**
+   * Grid columns left empty after the row's last cell (`w:gridAfter`,
+   * §17.4.14). Nothing is drawn in them — the row ends before the grid does.
+   */
+  gridAfter?: number;
+  /** Preferred width of the `gridBefore` gap (`w:wBefore`, §17.4.87) */
+  widthBefore?: TableMeasurement;
+  /** Preferred width of the `gridAfter` gap (`w:wAfter`, §17.4.86) */
+  widthAfter?: TableMeasurement;
 }
 
 /**

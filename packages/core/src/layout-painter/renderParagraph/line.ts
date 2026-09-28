@@ -23,6 +23,7 @@ import {
   type TabStop as TabCalcStop,
 } from '../../prosemirror/utils/tabCalculator';
 import { resolveFontFamily } from '../../utils/fontResolver';
+import { horizontalScaleFactor } from '../../layout-bridge/measuring/measureContainer';
 import {
   PARAGRAPH_CLASS_NAMES,
   isTextRun,
@@ -216,7 +217,8 @@ function measureFollowingContentWidth(
     bold?: boolean,
     italic?: boolean,
     letterSpacing?: number,
-    allCaps?: boolean
+    allCaps?: boolean,
+    horizontalScale?: number
   ) => number,
   context?: RenderContext
 ): number {
@@ -232,7 +234,8 @@ function measureFollowingContentWidth(
         run.bold,
         run.italic,
         run.letterSpacing,
-        run.allCaps
+        run.allCaps,
+        run.horizontalScale
       );
     } else if (isFieldRun(run)) {
       let fieldText: string;
@@ -274,7 +277,8 @@ function createTextMeasurer(
   bold?: boolean,
   italic?: boolean,
   letterSpacing?: number,
-  allCaps?: boolean
+  allCaps?: boolean,
+  horizontalScale?: number
 ) => number {
   const canvas = doc.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -286,7 +290,8 @@ function createTextMeasurer(
     bold = false,
     italic = false,
     letterSpacing = 0,
-    allCaps = false
+    allCaps = false,
+    horizontalScale?: number
   ) => {
     // `applyRunStyles` paints `text-transform: uppercase` for w:caps and
     // `letter-spacing` for w:spacing. The canvas font string can't express
@@ -310,11 +315,11 @@ function createTextMeasurer(
     if (bold) parts.push('bold');
     parts.push(`${fontSizePx}px`, cssFallback);
     ctx.font = parts.join(' ');
-    let width = ctx.measureText(measured).width;
-    // CSS letter-spacing adds tracking between glyphs. Match measureContainer's
-    // `letterSpacing * (length - 1)` so paint and measure agree.
-    if (letterSpacing && measured.length > 1) {
-      width += letterSpacing * (measured.length - 1);
+    // w:w scales glyph advances; w:spacing follows every character (CSS
+    // letter-spacing does the same). Mirrors measureContainer.measureTextWidth.
+    let width = ctx.measureText(measured).width * horizontalScaleFactor(horizontalScale);
+    if (letterSpacing) {
+      width += letterSpacing * measured.length;
     }
     return width;
   };
@@ -640,7 +645,8 @@ export function renderLine(
         run.bold,
         run.italic,
         run.letterSpacing,
-        run.allCaps
+        run.allCaps,
+        run.horizontalScale
       );
     } else if (isImageRun(run)) {
       // Skip floating images - they're rendered separately at page level.

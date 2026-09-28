@@ -46,6 +46,7 @@ import {
   type TabContext,
 } from '../../prosemirror/utils/tabCalculator';
 import { getListMarkerInlineWidth } from './listMarkerWidth';
+import { findWordBreaks, isBreakChar, measureWordContinuation } from './wordBreaks';
 
 // Default values - match OOXML spec defaults
 const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
@@ -138,6 +139,8 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
     italic: run.italic,
     letterSpacing: run.letterSpacing,
     allCaps: run.allCaps,
+    // w:w — glyph advances scale, so hit-testing/line-breaking must too.
+    horizontalScale: run.horizontalScale,
   };
 }
 
@@ -298,24 +301,6 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
     }
   }
   return width;
-}
-
-/**
- * Find word break points in text
- * Returns array of indices where words end (after space/punctuation)
- */
-function findWordBreaks(text: string): number[] {
-  const breaks: number[] = [];
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    // Break after space or certain punctuation
-    if (char === ' ' || char === '-' || char === '\t') {
-      breaks.push(i + 1);
-    }
-  }
-
-  return breaks;
 }
 
 /**
@@ -725,9 +710,17 @@ export function measureParagraph(
     }
   };
 
+  // True while the text last placed on the line ends mid-word at a run
+  // boundary and was placed together with its continuation in the following
+  // run(s) — the continuation must then stay on the same line (no break
+  // opportunity between runs of one word).
+  let glueToPreviousWord = false;
+
   // Process each run
   for (let runIndex = 0; runIndex < runs.length; runIndex++) {
     const run = runs[runIndex];
+    // Only an adjacent text run continues a word (empty text runs are skipped).
+    if (!isTextRun(run)) glueToPreviousWord = false;
 
     if (isLineBreakRun(run)) {
       // Force line break
@@ -950,11 +943,29 @@ export function measureParagraph(
         const word = text.slice(charIndex, nextBreak);
         const wordWidth = measureTextWidth(word, style);
 
+        // A fragment that starts this run and continues a word placed from the
+        // previous run is glued to it: the fit decision was already made for
+        // the whole word.
+        const gluedToPrevious: boolean = glueToPreviousWord && charIndex === 0;
+        glueToPreviousWord = false;
+
+        // A fragment that ends this run without a break char continues into
+        // the next run: decide the wrap for the whole word, not the fragment.
+        const endsMidWord = nextBreak === text.length && !isBreakChar(text[text.length - 1]);
+        const continuationWidth = endsMidWord
+          ? measureWordContinuation(runs, runIndex, runToFontStyle)
+          : 0;
+        const wholeWordWidth = wordWidth + continuationWidth;
+        // Only glue when the whole word fits on an empty line; an over-long
+        // word hard-breaks by characters anyway.
+        const canGlue: boolean =
+          continuationWidth > 0 && wholeWordWidth <= currentLine.availableWidth + WIDTH_TOLERANCE;
+
         // If the word itself is longer than a line, hard-break by characters.
         // Use substring measurement (not char-by-char accumulation) to preserve
         // kerning accuracy. Char-by-char accumulation overestimates width by
         // ~1-2px per line due to lost kerning, causing extra wraps in narrow cells.
-        if (wordWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
+        if (!gluedToPrevious && wordWidth > currentLine.availableWidth + WIDTH_TOLERANCE) {
           // Long word that needs hard-breaking. DON'T start a new line first —
           // fill the remaining space on the current line with as many characters
           // as possible. This prevents wasting a full line when a small run
@@ -996,9 +1007,11 @@ export function measureParagraph(
         }
 
         // Check if word fits on current line
+        const fitWidth = canGlue ? wholeWordWidth : wordWidth;
         if (
+          !gluedToPrevious &&
           currentLine.width > 0 &&
-          currentLine.width + wordWidth > currentLine.availableWidth + WIDTH_TOLERANCE
+          currentLine.width + fitWidth > currentLine.availableWidth + WIDTH_TOLERANCE
         ) {
           // Word doesn't fit, start new line
           startNewLine(runIndex, charIndex);
@@ -1010,6 +1023,10 @@ export function measureParagraph(
         currentLine.width += wordWidth;
         currentLine.toRun = runIndex;
         currentLine.toChar = nextBreak;
+        // Keep gluing while the word keeps running across run boundaries —
+        // either this fragment started the word and fits whole, or it is
+        // itself a glued middle piece.
+        glueToPreviousWord = endsMidWord && (canGlue || gluedToPrevious);
 
         charIndex = nextBreak;
       }

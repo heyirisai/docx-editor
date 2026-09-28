@@ -14,7 +14,6 @@
 import { chainCommands } from 'prosemirror-commands';
 import {
   columnResizing,
-  tableEditing,
   mergeCells as pmMergeCells,
   splitCell as pmSplitCell,
 } from 'prosemirror-tables';
@@ -51,6 +50,7 @@ import {
 import { setRowHeight, distributeColumns, autoFitContents } from './sizing';
 import { applyTableStyle, setTableProperties, toggleHeaderRow } from './tableStyle';
 import { makeActiveCellPlugin } from './activeCellPlugin';
+import { gridAwareTableEditing } from '../gridAwareTableEditing';
 
 export type { BorderPreset, BorderSpec } from './borders';
 
@@ -70,7 +70,9 @@ export function setupTableRuntime(ctx: ExtensionContext): ExtensionRuntime {
         cellMinWidth: 25,
         lastColumnResizable: true,
       }),
-      tableEditing(),
+      // Upstream tableEditing(), except rows short of the w:tblGrid are kept
+      // short (Word's gridBefore/gridAfter) instead of padded with cells.
+      gridAwareTableEditing(),
       makeActiveCellPlugin(),
     ],
     keyboardShortcuts: {

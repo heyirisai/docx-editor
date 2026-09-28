@@ -809,6 +809,8 @@ export type TableRow = {
     heightRule?: 'auto' | 'atLeast' | 'exact';
     isHeader?: boolean;
     cantSplit?: boolean;
+    gridBefore?: number;
+    gridAfter?: number;
     trackedIns?: RevisionInfo;
     trackedDel?: RevisionInfo;
 };

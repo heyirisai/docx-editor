@@ -19,9 +19,11 @@ import type {
   TableCellFormatting,
   TableBorders,
   Paragraph,
+  BlockSdt,
 } from '../../../types/document';
 import type { TableAttrs, TableRowAttrs, TableCellAttrs } from '../../schema/nodes';
 import { convertPMParagraph } from './paragraph';
+import { sdtAttrsToProps } from '../sdtAttrs';
 
 function inferTableBorders(rows: TableRow[]): TableBorders | undefined {
   for (const row of rows) {
@@ -488,20 +490,33 @@ function tableRowAttrsToFormatting(attrs: TableRowAttrs): TableRowFormatting | u
 }
 
 /**
- * Convert a ProseMirror table cell node to our TableCell type
+ * Cell content (paragraphs, nested tables, and cell-level block content
+ * controls) of a `tableCell`/`tableHeader` — or of a `blockSdt` inside one.
  */
-function convertPMTableCell(node: PMNode): TableCell {
-  const attrs = node.attrs as TableCellAttrs;
-  const content: (Paragraph | Table)[] = [];
-
-  // Extract cell content (paragraphs and nested tables)
+function convertPMCellBlocks(node: PMNode): (Paragraph | Table | BlockSdt)[] {
+  const content: (Paragraph | Table | BlockSdt)[] = [];
   node.forEach((contentNode) => {
     if (contentNode.type.name === 'paragraph') {
       content.push(convertPMParagraph(contentNode));
     } else if (contentNode.type.name === 'table') {
       content.push(convertPMTable(contentNode));
+    } else if (contentNode.type.name === 'blockSdt') {
+      content.push({
+        type: 'blockSdt',
+        properties: sdtAttrsToProps(contentNode.attrs as Record<string, unknown>),
+        content: convertPMCellBlocks(contentNode),
+      });
     }
   });
+  return content;
+}
+
+/**
+ * Convert a ProseMirror table cell node to our TableCell type
+ */
+function convertPMTableCell(node: PMNode): TableCell {
+  const attrs = node.attrs as TableCellAttrs;
+  const content = convertPMCellBlocks(node);
 
   const cell: TableCell = {
     type: 'tableCell',
@@ -530,6 +545,9 @@ function convertPMTableCell(node: PMNode): TableCell {
   }
   if (attrs.tcPrChange && attrs.tcPrChange.length > 0) {
     cell.propertyChanges = attrs.tcPrChange;
+  }
+  if (attrs.rowWrappers && attrs.rowWrappers.length > 0) {
+    cell.rowWrappers = attrs.rowWrappers;
   }
   return cell;
 }

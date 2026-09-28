@@ -4,8 +4,8 @@
  * Phase 1 runs over `e2e/fixtures/multi-column-controls.docx`, which mixes one
  * `FORMDROPDOWN`, two `FORMCHECKBOX`, `w14:checkbox` SDTs, `w:dropDownList`
  * SDTs and hand-typed ☐ glyphs — the exact shape of the requirements matrices
- * Iris has to stage (the Certinia RFP is 93 `FORMDROPDOWN` fields and no
- * content controls at all).
+ * Iris has to stage (a real RFP matrix can be dozens of `FORMDROPDOWN`
+ * fields and no content controls at all).
  *
  * Phase 2 uses a minimal in-test fixture whose dropdown has a preset
  * `w:result` and whose checkbox has `w:default w:val="1"`, covering the
@@ -268,10 +268,10 @@ describe('legacy form fields — pre-set values (minimal generated fixture)', ()
   const PRESET =
     '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
     '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Pre1"/><w:enabled/>' +
-    '<w:ddList><w:result w:val="1"/><w:listEntry w:val="FS"/><w:listEntry w:val="SC"/>' +
-    '<w:listEntry w:val="NS"/></w:ddList></w:ffData></w:fldChar></w:r>' +
+    '<w:ddList><w:result w:val="1"/><w:listEntry w:val="AA"/><w:listEntry w:val="BB"/>' +
+    '<w:listEntry w:val="EE"/></w:ddList></w:ffData></w:fldChar></w:r>' +
     '<w:r><w:instrText xml:space="preserve"> FORMDROPDOWN </w:instrText></w:r>' +
-    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>SC</w:t></w:r>' +
+    '<w:r><w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>BB</w:t></w:r>' +
     '<w:r><w:fldChar w:fldCharType="end"/></w:r></w:p>' +
     '<w:p><w:r><w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="Pre2"/>' +
     '<w:checkBox><w:sizeAuto/><w:default w:val="1"/></w:checkBox></w:ffData></w:fldChar></w:r>' +
@@ -284,7 +284,7 @@ describe('legacy form fields — pre-set values (minimal generated fixture)', ()
     const body = parseDocumentBody(PRESET);
     const drop = findContentControl(body, { tag: 'Pre1' })!;
     expect(drop.legacyFormField!.selectedIndex).toBe(1);
-    expect(drop.legacyFormField!.value).toBe('SC');
+    expect(drop.legacyFormField!.value).toBe('BB');
     // No w:checked yet — w:default is the state Word renders.
     expect(findContentControl(body, { tag: 'Pre2' })!.checked).toBe(true);
     expect(findContentControl(body, { tag: 'Pre2' })!.text).toBe('☒');
@@ -296,13 +296,13 @@ describe('legacy form fields — pre-set values (minimal generated fixture)', ()
       { tag: 'Pre1' },
       {
         kind: 'dropdown',
-        value: 'NS',
+        value: 'EE',
       }
     );
     const out = serializeDocumentBody(next.package.document);
-    expect(out).toContain('<w:ddList><w:result w:val="2"/><w:listEntry w:val="FS"/>');
-    expect(out).toContain('<w:t>NS</w:t>');
-    expect(out).not.toContain('<w:t>SC</w:t>');
+    expect(out).toContain('<w:ddList><w:result w:val="2"/><w:listEntry w:val="AA"/>');
+    expect(out).toContain('<w:t>EE</w:t>');
+    expect(out).not.toContain('<w:t>BB</w:t>');
   });
 
   test('unticking a w:default-only checkbox inserts w:checked in sequence order', () => {
@@ -351,16 +351,16 @@ describe('legacy form fields — pre-set values (minimal generated fixture)', ()
 
 describe('legacy form fields — display synthesis for result-less fields', () => {
   /**
-   * The shape the 6sense / Certinia "PSA Platform Evaluation RFP" writes 93
-   * times in its Response Code column: sized structural runs, an empty code
+   * The shape a real RFP requirements matrix writes in every cell of its
+   * response-code column: sized structural runs, an empty code
    * run, no `w:ddList/w:result`, and `separate` followed straight by `end`.
    * Word displays the current entry (index 0) in every such cell; before the
    * synthesis the cells rendered empty.
    */
   const RPR = '<w:rPr><w:sz w:val="13"/><w:szCs w:val="13"/></w:rPr>';
   const ENTRIES =
-    '<w:listEntry w:val="FS"/><w:listEntry w:val="SC"/><w:listEntry w:val="SX"/>' +
-    '<w:listEntry w:val="TP"/><w:listEntry w:val="NS"/><w:listEntry w:val="RM"/>';
+    '<w:listEntry w:val="AA"/><w:listEntry w:val="BB"/><w:listEntry w:val="CC"/>' +
+    '<w:listEntry w:val="DD"/><w:listEntry w:val="EE"/><w:listEntry w:val="FF"/>';
   const dropdownXml = (ddList: string, result = '', name = 'Dropdown1') =>
     `<w:r>${RPR}<w:fldChar w:fldCharType="begin"><w:ffData><w:name w:val="${name}"/><w:enabled/>` +
     `<w:calcOnExit w:val="0"/><w:ddList>${ddList}</w:ddList></w:ffData></w:fldChar></w:r>` +
@@ -397,10 +397,10 @@ describe('legacy form fields — display synthesis for result-less fields', () =
   test('a FORMDROPDOWN with no w:result and no result run displays entry 0', () => {
     const body = parseDocumentBody(doc(dropdownXml(ENTRIES) + `<w:r>${RPR}<w:t>x</w:t></w:r>`));
     const field = findContentControl(body, { tag: 'Dropdown1' })!;
-    expect(field.text).toBe('FS');
+    expect(field.text).toBe('AA');
     expect(field.legacyFormField).toMatchObject({
       selectedIndex: 0,
-      value: 'FS',
+      value: 'AA',
       hasResult: false,
       hasSeparate: true,
     });
@@ -423,15 +423,15 @@ describe('legacy form fields — display synthesis for result-less fields', () =
         dropdownXml(`<w:result w:val="0"/>${ENTRIES}`, '', 'Zero')
       )
     );
-    expect(findContentControl(body, { tag: 'Two' })!.text).toBe('SX');
-    expect(findContentControl(body, { tag: 'Two' })!.legacyFormField!.value).toBe('SX');
-    expect(findContentControl(body, { tag: 'Zero' })!.text).toBe('FS');
+    expect(findContentControl(body, { tag: 'Two' })!.text).toBe('CC');
+    expect(findContentControl(body, { tag: 'Two' })!.legacyFormField!.value).toBe('CC');
+    expect(findContentControl(body, { tag: 'Zero' })!.text).toBe('AA');
   });
 
   test('an explicit result run is displayed unchanged', () => {
-    const body = parseDocumentBody(doc(dropdownXml(ENTRIES, `<w:r>${RPR}<w:t>TP</w:t></w:r>`)));
+    const body = parseDocumentBody(doc(dropdownXml(ENTRIES, `<w:r>${RPR}<w:t>DD</w:t></w:r>`)));
     const field = findContentControl(body, { tag: 'Dropdown1' })!;
-    expect(field.text).toBe('TP');
+    expect(field.text).toBe('DD');
     expect(field.legacyFormField!.hasResult).toBe(true);
     expect(fieldNode(body).content).toHaveLength(1);
   });
@@ -486,7 +486,7 @@ describe('legacy form fields — display synthesis for result-less fields', () =
     for (const out of [direct, viaEditor]) {
       for (const seq of sequences) expect(out).toContain(seq);
       // The synthesized display never leaks into the saved bytes.
-      expect(out).not.toContain('<w:t>FS</w:t>');
+      expect(out).not.toContain('<w:t>AA</w:t>');
       expect(out).not.toContain('Enter vendor name</w:t>');
       expect(out).not.toContain(LEGACY_TEXT_PLACEHOLDER);
       expect(out).not.toContain('☐');
@@ -498,7 +498,7 @@ describe('legacy form fields — display synthesis for result-less fields', () =
     const seq = dropdownXml(ENTRIES, `<w:r>${RPR}</w:r>`);
     const body = parseDocumentBody(doc(seq));
     const field = findContentControl(body, { tag: 'Dropdown1' })!;
-    expect(field.text).toBe('FS');
+    expect(field.text).toBe('AA');
     expect(field.legacyFormField!.hasResult).toBe(false);
     expect(serializeDocumentBody(body)).toContain(seq);
   });
@@ -507,11 +507,11 @@ describe('legacy form fields — display synthesis for result-less fields', () =
     const next = setContentControlValue(
       asDocument(parseDocumentBody(doc(dropdownXml(ENTRIES)))),
       { tag: 'Dropdown1' },
-      { kind: 'dropdown', value: 'NS' }
+      { kind: 'dropdown', value: 'EE' }
     );
     const info = findContentControl(next, { tag: 'Dropdown1' })!;
-    expect(info.text).toBe('NS');
-    expect(info.legacyFormField).toMatchObject({ selectedIndex: 4, value: 'NS', hasResult: true });
+    expect(info.text).toBe('EE');
+    expect(info.legacyFormField).toMatchObject({ selectedIndex: 4, value: 'EE', hasResult: true });
 
     const out = serializeDocumentBody(next.package.document);
     // `w:result` is inserted first in `w:ddList` (sequence order), the rest of
@@ -520,9 +520,9 @@ describe('legacy form fields — display synthesis for result-less fields', () =
     expect(out).toContain(
       ` FORMDROPDOWN </w:instrText></w:r><w:r>${RPR}</w:r><w:r>${RPR}<w:fldChar w:fldCharType="separate"/></w:r>`
     );
-    expect(out).toContain('<w:t>NS</w:t>');
-    expect(out).not.toContain('<w:t>FS</w:t>');
-    expect(findContentControl(reparse(out), { tag: 'Dropdown1' })!.text).toBe('NS');
+    expect(out).toContain('<w:t>EE</w:t>');
+    expect(out).not.toContain('<w:t>AA</w:t>');
+    expect(findContentControl(reparse(out), { tag: 'Dropdown1' })!.text).toBe('EE');
   });
 
   test('setContentControlValue on a blank FORMTEXT replaces the placeholder with a real result', () => {
@@ -545,9 +545,9 @@ describe('legacy form fields — display synthesis for result-less fields', () =
     const body = parseDocumentBody(doc(dropdownXml(ENTRIES)));
     // Simulate the editor replacing the display run's text without going
     // through the typed setter (so `hasResult` is still false).
-    fieldNode(body).content = [{ type: 'run', content: [{ type: 'text', text: 'RM' }] }];
+    fieldNode(body).content = [{ type: 'run', content: [{ type: 'text', text: 'FF' }] }];
     const out = serializeDocumentBody(body);
-    expect(out).toContain('<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>RM</w:t></w:r>');
+    expect(out).toContain('<w:fldChar w:fldCharType="separate"/></w:r><w:r><w:t>FF</w:t></w:r>');
   });
 });
 

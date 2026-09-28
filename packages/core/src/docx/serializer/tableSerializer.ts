@@ -32,9 +32,12 @@ import type {
   FloatingTableProperties,
   ShadingProperties,
   Paragraph,
+  BlockSdt,
 } from '../../types/document';
 
 import { serializeParagraph } from './paragraphSerializer';
+import { serializeBlockSdt } from './sdtSerializer';
+import { serializeRowCells } from './rowWrapperSerializer';
 import { serializeConditionalFormatStyle } from './conditionalFormatSerializer';
 import { escapeXml, intAttr } from './xmlUtils';
 import { serializeBorder } from './borderSerializer';
@@ -442,6 +445,20 @@ export function serializeTableRowFormatting(
       parts.push(cnfStyleXml);
     }
 
+    // Skipped / trailing grid columns (CT_TrPrBase: gridBefore, gridAfter,
+    // wBefore, wAfter). Dropping these leaves the row short of the grid with
+    // no record of where its gap sits.
+    if (formatting.gridBefore && formatting.gridBefore > 0) {
+      parts.push(`<w:gridBefore w:val="${intAttr(formatting.gridBefore)}"/>`);
+    }
+    if (formatting.gridAfter && formatting.gridAfter > 0) {
+      parts.push(`<w:gridAfter w:val="${intAttr(formatting.gridAfter)}"/>`);
+    }
+    const wBeforeXml = serializeMeasurement(formatting.widthBefore, 'wBefore');
+    if (wBeforeXml) parts.push(wBeforeXml);
+    const wAfterXml = serializeMeasurement(formatting.widthAfter, 'wAfter');
+    if (wAfterXml) parts.push(wAfterXml);
+
     // Can't split
     if (formatting.cantSplit) {
       parts.push('<w:cantSplit/>');
@@ -655,18 +672,23 @@ function serializeTableCellPropertyChange(change: TableCellPropertyChange): stri
 // CELL CONTENT SERIALIZATION
 // ============================================================================
 
+/** One cell-level block: paragraph, nested table, or block content control. */
+function serializeCellBlock(item: Paragraph | Table | BlockSdt): string {
+  if (item.type === 'paragraph') return serializeParagraph(item);
+  if (item.type === 'table') return serializeTable(item);
+  if (item.type === 'blockSdt') return serializeBlockSdt(item, serializeCellBlock);
+  return '';
+}
+
 /**
- * Serialize cell content (paragraphs, nested tables)
+ * Serialize cell content (paragraphs, nested tables, block content controls)
  */
-function serializeCellContent(content: (Paragraph | Table)[]): string {
+function serializeCellContent(content: (Paragraph | Table | BlockSdt)[]): string {
   const parts: string[] = [];
 
   for (const item of content) {
-    if (item.type === 'paragraph') {
-      parts.push(serializeParagraph(item));
-    } else if (item.type === 'table') {
-      parts.push(serializeTable(item));
-    }
+    const xml = serializeCellBlock(item);
+    if (xml) parts.push(xml);
   }
 
   // Ensure at least one empty paragraph (Word requires this)
@@ -724,9 +746,7 @@ export function serializeTableRow(row: TableRow): string {
   }
 
   // Cells
-  for (const cell of row.cells) {
-    parts.push(serializeTableCell(cell));
-  }
+  parts.push(serializeRowCells(row.cells, serializeTableCell));
 
   return `<w:tr>${parts.join('')}</w:tr>`;
 }

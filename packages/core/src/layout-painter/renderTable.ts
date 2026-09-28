@@ -23,7 +23,7 @@ import { renderFloatingImagesLayer } from './floatingImageLayer';
 import { floatingImageIsBehindDoc, floatingImageWrapsText } from './floatingImageFlow';
 import { renderParagraphFragment } from './renderParagraph';
 import { measureParagraph, type FloatingImageZone } from '../layout-bridge/measuring';
-import { resolveCellGrid } from '../layout-bridge/tableWidthUtils';
+import { cellRowEdges, resolveCellGrid } from '../layout-bridge/tableWidthUtils';
 import { extractCellFloatingImages } from './renderTableCellFloating';
 import {
   applyBorder,
@@ -574,6 +574,9 @@ function renderTableRow(
   let x = 0;
   let columnIndex = 0;
 
+  // `w:gridBefore`: skip the row's empty leading grid columns (as resolveCellGrid).
+  for (; columnIndex < (row.gridBefore ?? 0); columnIndex++) x += columnWidths[columnIndex] ?? 0;
+
   // Skip columns occupied by spanning cells
   while (occupiedColumns.has(columnIndex)) {
     x += columnWidths[columnIndex] ?? 0;
@@ -610,9 +613,8 @@ function renderTableRow(
 
     const isFirstRow = rowIndex === 0 || isFirstRowInFragment === true;
     const isLastRow = rowIndex + rowSpan >= totalRows;
-    // In an RTL table the visual first/last columns are the logical last/first.
-    const isFirstCol = bidi ? columnIndex + colSpan >= columnWidths.length : columnIndex === 0;
-    const isLastCol = bidi ? columnIndex === 0 : columnIndex + colSpan >= columnWidths.length;
+    const edges = cellRowEdges(row, columnIndex, colSpan, columnWidths.length, bidi);
+    const { isFirstCol, isLastCol } = edges;
 
     const cellEl = renderTableCell(
       cell,
@@ -874,13 +876,9 @@ export function renderTableFragment(
     });
 
     const isLastRow = g.rowIndex + g.rowSpan >= block.rows.length;
-    // RTL: visual first/last columns are the logical last/first.
-    const isFirstCol = bidi
-      ? g.columnIndex + g.colSpan >= measure.columnWidths.length
-      : g.columnIndex === 0;
-    const isLastCol = bidi
-      ? g.columnIndex === 0
-      : g.columnIndex + g.colSpan >= measure.columnWidths.length;
+    const colCount = measure.columnWidths.length;
+    const edges = cellRowEdges(block.rows[g.rowIndex], g.columnIndex, g.colSpan, colCount, bidi);
+    const { isFirstCol, isLastCol } = edges;
     const cellEl = renderTableCell(
       g.cell,
       cellMeasure,

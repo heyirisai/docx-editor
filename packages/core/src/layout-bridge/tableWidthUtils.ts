@@ -52,7 +52,9 @@ export function resolveCellGrid(tableBlock: TableBlock): ResolvedGridCell[] {
   for (let rowIndex = 0; rowIndex < tableBlock.rows.length; rowIndex++) {
     const cells = tableBlock.rows[rowIndex]?.cells ?? [];
     const occ = occupied.get(rowIndex) ?? new Set<number>();
-    let columnIndex = 0;
+    // `w:gridBefore`: the row's first cell starts after the skipped grid
+    // columns (Word leaves them empty — the row is indented by their width).
+    let columnIndex = tableBlock.rows[rowIndex]?.gridBefore ?? 0;
     while (occ.has(columnIndex)) columnIndex++;
     for (let cellIndex = 0; cellIndex < cells.length; cellIndex++) {
       const cell = cells[cellIndex];
@@ -74,12 +76,40 @@ export function resolveCellGrid(tableBlock: TableBlock): ResolvedGridCell[] {
   return out;
 }
 
-/** Total grid columns, derived from the widest row's accumulated colSpans. */
+/**
+ * Whether a cell sits on its row's visual left (`isFirstCol`) / right
+ * (`isLastCol`) edge. A ragged row (`gridBefore` / `gridAfter`) takes the
+ * table's outer border on its own first/last cell, like Word; in an RTL table
+ * (`w:bidiVisual`) the visual first/last columns are the logical last/first.
+ *
+ * @internal
+ */
+export function cellRowEdges(
+  row: TableBlock['rows'][number] | undefined,
+  columnIndex: number,
+  colSpan: number,
+  colCount: number,
+  bidi: boolean
+): { isFirstCol: boolean; isLastCol: boolean } {
+  const rowStart = columnIndex === (row?.gridBefore ?? 0);
+  const rowEnd = columnIndex + colSpan >= colCount - (row?.gridAfter ?? 0);
+  return bidi
+    ? { isFirstCol: rowEnd, isLastCol: rowStart }
+    : { isFirstCol: rowStart, isLastCol: rowEnd };
+}
+
+/**
+ * Total grid columns: the widest row's accumulated colSpans plus its skipped
+ * `gridBefore` / `gridAfter` columns.
+ */
 export function countTableColumns(tableBlock: TableBlock): number {
   return Math.max(
     1,
-    ...tableBlock.rows.map((row) =>
-      row.cells.reduce((sum, cell) => sum + Math.max(1, cell.colSpan ?? 1), 0)
+    ...tableBlock.rows.map(
+      (row) =>
+        (row.gridBefore ?? 0) +
+        row.cells.reduce((sum, cell) => sum + Math.max(1, cell.colSpan ?? 1), 0) +
+        (row.gridAfter ?? 0)
     )
   );
 }

@@ -373,6 +373,23 @@ function convertParagraph(
   };
 }
 
+/** The painter-facing {@link SdtGroup} for a `blockSdt` node at `pos`. */
+function blockSdtGroup(node: PMNode, pos: number): SdtGroup {
+  const a = node.attrs as Record<string, unknown>;
+  return {
+    id: `sdt@${pos}`,
+    sdtType: typeof a.sdtType === 'string' ? a.sdtType : 'richText',
+    tag: a.tag != null ? String(a.tag) : undefined,
+    alias: a.alias != null ? String(a.alias) : undefined,
+    lock: a.lock != null ? String(a.lock) : undefined,
+    checked: typeof a.checked === 'boolean' ? a.checked : undefined,
+    bound: a.dataBinding != null ? true : undefined,
+    repeatingItem: /<w15:repeatingSectionItem[\s/>]/.test(String(a.rawPropertiesXml ?? ''))
+      ? true
+      : undefined,
+  };
+}
+
 /**
  * Convert a table cell node.
  */
@@ -383,16 +400,28 @@ function convertTableCell(
   tableCellMargins?: { top?: number; bottom?: number; left?: number; right?: number }
 ): TableCell {
   const blocks: FlowBlock[] = [];
-  let offset = startPos + 1; // +1 for opening tag
 
-  node.forEach((child) => {
-    if (child.type.name === 'paragraph') {
-      blocks.push(convertParagraph(child, offset, options));
-    } else if (child.type.name === 'table') {
-      blocks.push(convertTable(child, offset, options));
-    }
-    offset += child.nodeSize;
-  });
+  // A cell-level content control (`blockSdt`) is flattened into the cell's
+  // flow like a body-level one: its children lay out as ordinary cell blocks,
+  // tagged with the enclosing control via `sdtGroups`.
+  const addChildren = (parent: PMNode, contentStart: number, sdtGroups: SdtGroup[]): void => {
+    parent.forEach((child, childOffset) => {
+      const pos = contentStart + childOffset;
+      const startLen = blocks.length;
+      if (child.type.name === 'paragraph') {
+        blocks.push(convertParagraph(child, pos, options));
+      } else if (child.type.name === 'table') {
+        blocks.push(convertTable(child, pos, options));
+      } else if (child.type.name === 'blockSdt') {
+        addChildren(child, pos + 1, [...sdtGroups, blockSdtGroup(child, pos)]);
+        return;
+      }
+      if (sdtGroups.length > 0) {
+        for (let k = startLen; k < blocks.length; k++) blocks[k].sdtGroups = sdtGroups;
+      }
+    });
+  };
+  addChildren(node, startPos + 1, []); // +1 for opening tag
 
   const attrs = node.attrs;
   const widthValue = attrs.width as number | undefined;
@@ -482,7 +511,10 @@ function convertTableRow(
   const attrs = node.attrs;
   // `w:cantSplit` (§17.4.6) is preserved only in _originalFormatting; surface it
   // so the layout engine keeps the row whole across page boundaries.
-  const rowFormatting = attrs._originalFormatting as { cantSplit?: boolean } | null | undefined;
+  const rowFormatting = attrs._originalFormatting as
+    | { cantSplit?: boolean; gridBefore?: number; gridAfter?: number }
+    | null
+    | undefined;
   return {
     id: options.blockIdAllocator.idFor(node, 'tableRow'),
     cells,
@@ -490,6 +522,10 @@ function convertTableRow(
     heightRule: (attrs.heightRule as 'auto' | 'atLeast' | 'exact') ?? undefined,
     isHeader: attrs.isHeader as boolean | undefined,
     cantSplit: rowFormatting?.cantSplit || undefined,
+    // `w:gridBefore` / `w:gridAfter` (§17.4.14-15) also live only in
+    // _originalFormatting: the grid columns this row leaves uncovered.
+    gridBefore: rowFormatting?.gridBefore || undefined,
+    gridAfter: rowFormatting?.gridAfter || undefined,
     trackedIns:
       (attrs.trIns as import('../types/content/trackedChange').RevisionInfo | null) ?? undefined,
     trackedDel:
@@ -758,20 +794,7 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
    */
   const processNode = (node: PMNode, pos: number, sdtGroups: SdtGroup[]): void => {
     if (node.type.name === 'blockSdt') {
-      const a = node.attrs as Record<string, unknown>;
-      const group: SdtGroup = {
-        id: `sdt@${pos}`,
-        sdtType: typeof a.sdtType === 'string' ? a.sdtType : 'richText',
-        tag: a.tag != null ? String(a.tag) : undefined,
-        alias: a.alias != null ? String(a.alias) : undefined,
-        lock: a.lock != null ? String(a.lock) : undefined,
-        checked: typeof a.checked === 'boolean' ? a.checked : undefined,
-        bound: a.dataBinding != null ? true : undefined,
-        repeatingItem: /<w15:repeatingSectionItem[\s/>]/.test(String(a.rawPropertiesXml ?? ''))
-          ? true
-          : undefined,
-      };
-      const childGroups = [...sdtGroups, group];
+      const childGroups = [...sdtGroups, blockSdtGroup(node, pos)];
       // Child PM position = SDT node start + 1 (enter the node) + child offset.
       node.forEach((child, childOffset) => {
         processNode(child, pos + 1 + childOffset, childGroups);

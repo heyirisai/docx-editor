@@ -264,7 +264,7 @@ function buildCellWidthStyles(attrs: TableCellAttrs): string[] {
 }
 
 export const tableCellSpec: NodeSpec = {
-  content: '(paragraph | table)+',
+  content: '(paragraph | table | blockSdt)+',
   tableRole: 'cell',
   isolating: true,
   attrs: {
@@ -287,6 +287,8 @@ export const tableCellSpec: NodeSpec = {
     // is vertical-only (vMerge/vMergeOrig).
     cellMarker: { default: null },
     tcPrChange: { default: null },
+    // Row-level `w:sdt` / `w:customXml` wrappers around this cell (round trip).
+    rowWrappers: { default: null },
   },
   parseDOM: [
     {
@@ -350,7 +352,7 @@ export const tableCellSpec: NodeSpec = {
 };
 
 export const tableHeaderSpec: NodeSpec = {
-  content: '(paragraph | table)+',
+  content: '(paragraph | table | blockSdt)+',
   tableRole: 'header_cell',
   isolating: true,
   attrs: {
@@ -370,6 +372,8 @@ export const tableHeaderSpec: NodeSpec = {
     _originalResolvedFill: { default: null },
     cellMarker: { default: null },
     tcPrChange: { default: null },
+    // Row-level `w:sdt` / `w:customXml` wrappers around this cell (round trip).
+    rowWrappers: { default: null },
   },
   parseDOM: [
     {
