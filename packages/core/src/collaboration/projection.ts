@@ -15,8 +15,10 @@ const PRIVATE_ATTRS_BY_NODE: Readonly<Record<string, readonly string[]>> = {
   paragraph: ['_originalFormatting', '_originalRunBoundaries'],
   table: ['_originalFormatting'],
   tableRow: ['_originalFormatting'],
-  tableCell: ['_originalFormatting', '_originalResolvedFill'],
-  tableHeader: ['_originalFormatting', '_originalResolvedFill'],
+  // `rowWrappers` carries captured `w:customXml` tags that the serializer
+  // replays, so like `rawPropertiesXml` it stays out of the peer-writable doc.
+  tableCell: ['_originalFormatting', '_originalResolvedFill', 'rowWrappers'],
+  tableHeader: ['_originalFormatting', '_originalResolvedFill', 'rowWrappers'],
   blockSdt: ['rawPropertiesXml', 'rawEndPropertiesXml'],
   image: ['rId'],
 };

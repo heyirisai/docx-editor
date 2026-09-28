@@ -33,6 +33,8 @@ import {
 import type { FontFamilyAttrs } from './schema/marks';
 import { sdtAttrsToProps, sdtPropsToAttrs } from './conversion/sdtAttrs';
 import type { SdtType, SdtProperties, SdtDataBinding, LegacyFormField } from '../types/document';
+import { createParaIdPool, type ParaIdPool } from '../agent/paragraphIdentity';
+import { generateHexId } from '../utils/hexId';
 
 /** A control discovered in the PM doc, with its PM position for scroll/edit. */
 export interface PMContentControl {
@@ -208,6 +210,78 @@ function inlineTextNodes(
   return out;
 }
 
+// ── paragraph identity across a content rewrite ─────────────────────────────
+
+/** A pool minting paraIds unique among the PM doc's paragraphs. */
+function pmParaIdPool(doc: PMNode): ParaIdPool {
+  return createParaIdPool(() => {
+    const seen = new Set<string>();
+    doc.descendants((node) => {
+      if (node.type.name !== 'paragraph') return true;
+      if (typeof node.attrs.paraId === 'string' && node.attrs.paraId) seen.add(node.attrs.paraId);
+      return false;
+    });
+    return seen;
+  });
+}
+
+/**
+ * Paragraph attrs bound to the old content: Word's cached page break, the
+ * source run segmentation, and paragraph-anchored bookmarks (the headless
+ * model keeps bookmarks inline, where a rewrite drops them too).
+ */
+const CONTENT_BOUND_PARAGRAPH_ATTRS = {
+  renderedPageBreakBefore: null,
+  _originalRunBoundaries: null,
+  bookmarks: null,
+} as const;
+
+/**
+ * Attrs a following paragraph must not inherit: identity, tracked changes on
+ * the source's paragraph mark, and its section break.
+ */
+const IDENTITY_PARAGRAPH_ATTRS = {
+  paraId: null,
+  textId: null,
+  collaborationId: null,
+  pPrIns: null,
+  pPrDel: null,
+  pPrChange: null,
+  sectionBreakType: null,
+  _sectionProperties: null,
+} as const;
+
+/**
+ * Attrs for the replacement paragraphs of a control whose content was
+ * `control`'s: the PM mirror of `carryParagraphIdentity` — the Nth paragraph
+ * takes over the Nth original one (paraId, textId, paragraph properties), a
+ * paragraph past the original count continues the last one's properties under
+ * a fresh unique paraId.
+ */
+function replacementParagraphAttrs(
+  control: PMNode,
+  count: number,
+  pool: ParaIdPool
+): Array<Record<string, unknown> | null> {
+  const sources: PMNode[] = [];
+  control.forEach((child) => {
+    if (child.type.name === 'paragraph') sources.push(child);
+  });
+  const last = sources[sources.length - 1];
+  return Array.from({ length: count }, (_, i) => {
+    const source = sources[i];
+    if (source) return { ...source.attrs, ...CONTENT_BOUND_PARAGRAPH_ATTRS };
+    if (!last) return { paraId: pool.fresh() };
+    return {
+      ...last.attrs,
+      ...CONTENT_BOUND_PARAGRAPH_ATTRS,
+      ...IDENTITY_PARAGRAPH_ATTRS,
+      paraId: pool.fresh(),
+      textId: last.attrs.textId ? generateHexId() : null,
+    };
+  });
+}
+
 /**
  * Build a transaction that replaces the first matching control's content with
  * `text` — block OR inline. For a block control newlines become paragraphs (a
@@ -242,12 +316,17 @@ export function setContentControlContentTr(
   // Splice the result at the control's own content level: inline runs for an
   // inline `sdt` (never a paragraph — that would corrupt the doc), paragraphs
   // for a block `blockSdt`.
-  const replacement =
-    target.node.type.name === 'sdt'
-      ? inlineTextNodes(schema, text, sdtType, firstTextMarks(target.node))
-      : (sdtType === 'plainText' ? [text] : text.split('\n')).map((line) =>
-          schema.nodes.paragraph.create(null, line ? schema.text(line) : null)
-        );
+  let replacement: PMNode[];
+  if (target.node.type.name === 'sdt') {
+    replacement = inlineTextNodes(schema, text, sdtType, firstTextMarks(target.node));
+  } else {
+    const lines = sdtType === 'plainText' ? [text] : text.split('\n');
+    // The rewritten paragraphs keep the control's paraIds (see paragraphIdentity).
+    const attrs = replacementParagraphAttrs(target.node, lines.length, pmParaIdPool(state.doc));
+    replacement = lines.map((line, i) =>
+      schema.nodes.paragraph.create(attrs[i], line ? schema.text(line) : null)
+    );
+  }
   const from = target.pos + 1;
   const to = target.pos + 1 + target.node.content.size;
   const tr = state.tr.replaceWith(from, to, replacement);
@@ -351,16 +430,17 @@ function textNodeForRun(
 
 function blockNodesForValue(
   schema: Schema,
-  content: ReturnType<typeof applyContentControlValue>['content']
+  content: ReturnType<typeof applyContentControlValue>['content'],
+  attrs: Array<Record<string, unknown> | null>
 ) {
-  return content.map((block) => {
-    if (block.type !== 'paragraph') return schema.nodes.paragraph.create(null, null);
+  return content.map((block, i) => {
+    if (block.type !== 'paragraph') return schema.nodes.paragraph.create(attrs[i], null);
     const run = block.content.find((r) => r.type === 'run');
     const text =
       run?.type === 'run' ? run.content.map((t) => ('text' in t ? t.text : '')).join('') : '';
     // Carry the glyph font (e.g. checkbox symbol font) as a fontFamily mark.
     const font = run?.type === 'run' ? run.formatting?.fontFamily : undefined;
-    return schema.nodes.paragraph.create(null, textNodeForRun(schema, text, font));
+    return schema.nodes.paragraph.create(attrs[i], textNodeForRun(schema, text, font));
   });
 }
 
@@ -430,7 +510,12 @@ function setContentControlValueForTargetTr(
   const replacement =
     target.node.type.name === 'sdt'
       ? inlineNodesForValue(schema, content, baseMarks)
-      : blockNodesForValue(schema, content);
+      : blockNodesForValue(
+          schema,
+          content,
+          // The display paragraphs keep the control's paraIds (see paragraphIdentity).
+          replacementParagraphAttrs(target.node, content.length, pmParaIdPool(state.doc))
+        );
   const tr = state.tr.replaceWith(from, to, replacement);
   // Sync structured attrs (checked / rawPropertiesXml); node start is stable.
   tr.setNodeMarkup(target.pos, undefined, {

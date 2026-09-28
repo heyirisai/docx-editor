@@ -12,8 +12,10 @@
  * controls inside table cells (and nested tables). With
  * `{ includeHeadersFooters: true }` the walk also covers header/footer parts.
  *
- * Not surfaced (model limitations): a block SDT placed directly inside a table
- * cell (`TableCell.content` cannot hold one), an inline SDT inside a hyperlink
+ * Block SDTs placed directly inside a table cell (`w:tc > w:sdt`) are
+ * addressed too.
+ *
+ * Not surfaced (model limitations): an inline SDT inside a hyperlink
  * (`Hyperlink.children` excludes it), and controls inside tracked-change
  * wrappers.
  */
@@ -36,6 +38,7 @@ import type {
 } from '../types/document';
 import { getParagraphText, getTableText, getRunText, getHyperlinkText } from './text-utils';
 import { syncLegacyFormFieldContent } from '../docx/legacyFormField';
+import { carryParagraphIdentity, documentParaIdPool } from './paragraphIdentity';
 
 /** Filter for {@link findContentControls}. All provided fields must match (AND). */
 export interface ContentControlFilter {
@@ -240,10 +243,10 @@ export interface FindContentControlsOptions {
  * and a full {@link Document}, header then footer parts are searched after the
  * body, each sorted by relationship id for deterministic order.
  *
- * Not surfaced (model limitations, documented): a block SDT placed directly
- * inside a table cell (`TableCell.content` is `(Paragraph | Table)[]`), an
- * inline SDT inside a hyperlink (`Hyperlink.children` excludes it), and
- * controls buried inside tracked-change wrappers.
+ * Block SDTs placed directly inside a table cell are found like body-level
+ * ones. Not surfaced (model limitations, documented): an inline SDT inside a
+ * hyperlink (`Hyperlink.children` excludes it), and controls buried inside
+ * tracked-change wrappers.
  */
 export function findContentControls(
   input: Document | DocumentBody,
@@ -482,10 +485,8 @@ export function applyToFirst(
       out.push(block);
       continue;
     }
-    // Controls are searched at body level and inside other controls. Table
-    // cells are not searched: the current model types a cell as
-    // (Paragraph | Table)[], and the table parser does not yet surface a
-    // cell-level w:sdt (which OOXML's CT_Tc does permit) — see CONTENT-CONTROLS.md.
+    // Controls are searched at body level, inside other controls, and inside
+    // table cells (CT_Tc permits a block-level w:sdt).
     if (block.type === 'blockSdt') {
       if (matches(block.properties, filter)) {
         out.push(...op(block));
@@ -493,6 +494,16 @@ export function applyToFirst(
         continue;
       }
       out.push({ ...block, content: applyToFirst(block.content, filter, op, state) });
+    } else if (block.type === 'table') {
+      out.push({
+        ...block,
+        rows: block.rows.map((row) => ({
+          ...row,
+          cells: row.cells.map((cell) =>
+            state.done ? cell : { ...cell, content: applyToFirst(cell.content, filter, op, state) }
+          ),
+        })),
+      });
     } else {
       out.push(block);
     }
@@ -668,12 +679,11 @@ function applyToFirstInTable(
     let rowChanged = false;
     const cells = row.cells.map((cell) => {
       if (walkDone(state)) return cell;
-      const cellContent = cell.content as BlockContent[];
+      const cellContent = cell.content;
       const next = applyToFirstControl(cellContent, filter, blockOp, inlineOp, state);
       if (next !== cellContent) {
         rowChanged = true;
-        // A cell cannot hold a block SDT in the model, so this stays (Paragraph | Table)[].
-        return { ...cell, content: next as typeof cell.content };
+        return { ...cell, content: next };
       }
       return cell;
     });
@@ -867,14 +877,19 @@ export function setContentControlContent(
   replacement: string | BlockContent[],
   options: { force?: boolean; includeHeadersFooters?: boolean; all?: boolean } = {}
 ): Document {
+  const paraIds = documentParaIdPool(doc);
   const blockOp: BlockControlOp = (control) => {
     assertContentWritable(control.properties, options.force);
+    const blocks = toBlocks(replacement, {
+      singleParagraph: control.properties.sdtType === 'plainText',
+    });
     return [
       {
         ...control,
         properties: propsAfterContentWrite(control.properties),
-        content: toBlocks(replacement, {
-          singleParagraph: control.properties.sdtType === 'plainText',
+        // The rewritten paragraphs keep the control's paraIds (see paragraphIdentity).
+        content: carryParagraphIdentity(control.content, blocks, paraIds, {
+          explicit: typeof replacement !== 'string',
         }),
       },
     ];

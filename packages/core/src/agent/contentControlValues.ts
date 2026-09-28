@@ -37,6 +37,7 @@ import {
   type BlockControlOp,
   type InlineControlOp,
 } from './contentControls';
+import { carryParagraphIdentity, documentParaIdPool } from './paragraphIdentity';
 
 /** A typed value to apply to a content control. */
 export type ContentControlValue =
@@ -394,10 +395,18 @@ export function setContentControlValue(
       throw new ContentControlBoundError();
     }
   };
+  const paraIds = documentParaIdPool(doc);
   const blockOp: BlockControlOp = (control) => {
     guard(control.properties);
     const { properties, content } = applyContentControlValue(control.properties, value);
-    return [{ ...control, properties, content }];
+    // The display paragraph keeps the control's paraId (see paragraphIdentity).
+    return [
+      {
+        ...control,
+        properties,
+        content: carryParagraphIdentity(control.content, content, paraIds),
+      },
+    ];
   };
   const inlineOp: InlineControlOp = (control) => {
     guard(control.properties);

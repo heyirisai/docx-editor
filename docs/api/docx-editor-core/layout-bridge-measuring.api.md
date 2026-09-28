@@ -101,6 +101,7 @@ export interface FontStyle {
     fontFamily?: string;
     // (undocumented)
     fontSize?: number;
+    horizontalScale?: number;
     // (undocumented)
     italic?: boolean;
     // (undocumented)

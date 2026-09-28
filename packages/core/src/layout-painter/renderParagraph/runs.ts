@@ -21,6 +21,10 @@ import { isFloatingImageRun } from '../floatingImageFlow';
 import { applyImageVisualAttrs, hasImageVisualAttrs } from '../renderImage';
 import { setImageAssetSource, type LazyImageAssetLoader } from '../imageAssets';
 import { resolveFontFamily } from '../../utils/fontResolver';
+import {
+  horizontalScaleFactor,
+  measureTextWidth,
+} from '../../layout-bridge/measuring/measureContainer';
 import { formatWordDate } from '../../docx/dateFormat';
 import {
   PARAGRAPH_CLASS_NAMES,
@@ -64,9 +68,11 @@ function applyRunStyles(
     element.style.color = run.color;
   }
 
-  // Letter spacing
+  // Letter spacing. With w:w the span is scaleX()-ed (below), which would
+  // scale the tracking too; Word adds w:spacing unscaled, so pre-divide.
   if (run.letterSpacing) {
-    element.style.letterSpacing = `${run.letterSpacing}px`;
+    const tracking = run.letterSpacing / horizontalScaleFactor(run.horizontalScale);
+    element.style.letterSpacing = `${tracking}px`;
   }
 
   // Caps / small-caps. OOXML w:caps = render glyphs uppercase; w:smallCaps =
@@ -85,13 +91,8 @@ function applyRunStyles(
     element.style.verticalAlign = `${run.positionPx}px`;
   }
 
-  // Horizontal scale (OOXML w:w). Stored as a percent (100 = normal). Apply
-  // via scaleX on an inline-block so the transform actually takes effect.
-  if (run.horizontalScale && run.horizontalScale !== 100) {
-    element.style.display = 'inline-block';
-    element.style.transform = `scaleX(${run.horizontalScale / 100})`;
-    element.style.transformOrigin = 'left center';
-  }
+  // Horizontal scale (OOXML w:w) is applied in renderTextRun, which also
+  // sizes the span's layout box to the scaled width (see applyHorizontalScale).
 
   // Kerning gate (OOXML w:kern). Enable font-kerning when the run's font
   // size is at or above the threshold; otherwise leave it at the browser
@@ -349,7 +350,52 @@ export function renderTextRun(
     span.textContent = run.text;
   }
 
+  applyHorizontalScale(span, run);
+
   return span;
+}
+
+/**
+ * OOXML w:w (§17.3.2.43): Word lays the run out with every glyph advance
+ * scaled, so the NEXT run starts after the scaled width.
+ *
+ * CSS `transform: scaleX()` is paint-only — the span's layout box keeps the
+ * unscaled width. Left alone, a 110% run's glyphs overhang into the following
+ * run by 10% of its width, swallowing a following single-space run entirely
+ * ("Business" + " " + "Context" painted as "BusinessContext"), and a <100% run
+ * leaves a gap.
+ *
+ * So with W = the scaled advance the measurer used (glyphs × scale + unscaled
+ * tracking): pin the inline-block to its unscaled width W / scale, scale it
+ * from the left edge (visual box = exactly W, which is also what
+ * getBoundingClientRect / getClientRects report), and reserve the difference
+ * with margin-right so the next run starts at W. The text node stays the
+ * span's direct child, as click/caret mapping expects.
+ */
+function applyHorizontalScale(span: HTMLElement, run: TextRun): void {
+  const scale = horizontalScaleFactor(run.horizontalScale);
+  if (scale === 1) return;
+  span.style.display = 'inline-block';
+  span.style.transform = `scaleX(${scale})`;
+  span.style.transformOrigin = 'left center';
+  let scaledWidth = 0;
+  try {
+    scaledWidth = measureTextWidth(run.text, {
+      fontFamily: run.fontFamily ?? 'Calibri',
+      fontSize: run.fontSize ?? 11,
+      bold: run.bold,
+      italic: run.italic,
+      letterSpacing: run.letterSpacing,
+      allCaps: run.allCaps,
+      horizontalScale: run.horizontalScale,
+    });
+  } catch {
+    // No canvas (headless without a 2D context): keep the natural box.
+  }
+  if (!(scaledWidth > 0)) return;
+  const unscaledWidth = scaledWidth / scale;
+  span.style.width = `${unscaledWidth}px`;
+  span.style.marginRight = `${scaledWidth - unscaledWidth}px`;
 }
 
 /**

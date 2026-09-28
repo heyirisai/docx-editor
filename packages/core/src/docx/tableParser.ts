@@ -39,6 +39,7 @@ import type {
   TableStructuralChangeInfo,
   ConditionalFormatStyle,
   Paragraph,
+  BlockSdt,
   Theme,
   RelationshipMap,
   MediaFile,
@@ -46,10 +47,13 @@ import type {
 import type { StyleMap } from './styleParser';
 import type { NumberingMap } from './numberingParser';
 import { parseParagraph } from './paragraphParser';
+import { parseSdtProperties } from './sdtProperties';
 import {
   findChild,
   findChildren,
   getAttribute,
+  getLocalName,
+  elementToXml,
   parseNumericAttribute,
   parseBooleanElement,
   type XmlElement,
@@ -312,6 +316,19 @@ function parseTableCellStructuralChange(
  * @param trPrElement - The w:trPr element
  * @returns Parsed row formatting
  */
+/**
+ * Word caps a table at 63 grid columns; clamp file-supplied skip counts so a
+ * hostile value can't drive allocation or loop bounds downstream.
+ */
+const MAX_GRID_SKIP = 63;
+
+function parseGridSkip(element: XmlElement | null): number | undefined {
+  if (!element) return undefined;
+  const value = parseNumericAttribute(element, 'w', 'val');
+  if (value === undefined || !Number.isFinite(value) || value <= 0) return undefined;
+  return Math.min(MAX_GRID_SKIP, Math.floor(value));
+}
+
 export function parseTableRowProperties(
   trPrElement: XmlElement | null
 ): TableRowFormatting | undefined {
@@ -358,6 +375,19 @@ export function parseTableRowProperties(
   // Conditional format style (w:cnfStyle)
   const conditionalFormat = parseConditionalFormatStyle(findChild(trPrElement, 'w', 'cnfStyle'));
   if (conditionalFormat) formatting.conditionalFormat = conditionalFormat;
+
+  // Grid columns skipped before / left empty after the row's cells
+  // (w:gridBefore §17.4.15, w:gridAfter §17.4.14) and their preferred widths
+  // (w:wBefore / w:wAfter). A row whose cells don't cover the whole tblGrid is
+  // legal: Word draws nothing in the uncovered grid columns.
+  const gridBefore = parseGridSkip(findChild(trPrElement, 'w', 'gridBefore'));
+  if (gridBefore) formatting.gridBefore = gridBefore;
+  const gridAfter = parseGridSkip(findChild(trPrElement, 'w', 'gridAfter'));
+  if (gridAfter) formatting.gridAfter = gridAfter;
+  const widthBefore = parseWidth(findChild(trPrElement, 'w', 'wBefore'));
+  if (widthBefore) formatting.widthBefore = widthBefore;
+  const widthAfter = parseWidth(findChild(trPrElement, 'w', 'wAfter'));
+  if (widthAfter) formatting.widthAfter = widthAfter;
 
   if (Object.keys(formatting).length === 0) return undefined;
 
@@ -537,7 +567,8 @@ export function parseTableCellProperties(
 // ============================================================================
 
 /**
- * Parse table cell content (paragraphs, nested tables)
+ * Parse table cell content (paragraphs, nested tables, block-level content
+ * controls — `CT_Tc` holds `EG_BlockLevelElts`)
  *
  * @param tcElement - The w:tc element
  * @param styles - Style definitions
@@ -555,11 +586,42 @@ function parseCellContent(
   rels: RelationshipMap | null,
   media: Map<string, MediaFile> | null,
   options?: { inHeaderFooter?: boolean }
-): (Paragraph | Table)[] {
-  const content: (Paragraph | Table)[] = [];
+): (Paragraph | Table | BlockSdt)[] {
+  const content = parseCellBlocks(tcElement, styles, theme, numbering, rels, media, options);
+
+  // Ensure at least one empty paragraph (Word requires this)
+  if (content.length === 0) {
+    content.push({
+      type: 'paragraph',
+      content: [],
+    });
+  }
+
+  return content;
+}
+
+/**
+ * The block-level children of a `w:tc` or of a cell-level `w:sdtContent`.
+ *
+ * A `w:sdt` directly inside a cell (Word's drop-down / rich-text answer
+ * controls in questionnaire grids) is kept as a {@link BlockSdt}: its
+ * `w:sdtPr` is captured verbatim for the round trip and its content recursed,
+ * mirroring `parseBlockSdt` for body-level controls. Dropping it lost both the
+ * control and the paragraphs it wraps.
+ */
+function parseCellBlocks(
+  container: XmlElement,
+  styles: StyleMap | null,
+  theme: Theme | null,
+  numbering: NumberingMap | null,
+  rels: RelationshipMap | null,
+  media: Map<string, MediaFile> | null,
+  options?: { inHeaderFooter?: boolean }
+): (Paragraph | Table | BlockSdt)[] {
+  const content: (Paragraph | Table | BlockSdt)[] = [];
 
   // Get all child elements
-  const elements = tcElement.elements || [];
+  const elements = container.elements || [];
 
   for (const child of elements) {
     if (!child.name) continue;
@@ -574,16 +636,20 @@ function parseCellContent(
       // Parse nested table (recursive)
       const table = parseTable(child, styles, theme, numbering, rels, media, options);
       content.push(table);
+    } else if (localName === 'sdt') {
+      const sdtContent = findChild(child, 'w', 'sdtContent');
+      content.push({
+        type: 'blockSdt',
+        properties: parseSdtProperties(
+          findChild(child, 'w', 'sdtPr'),
+          findChild(child, 'w', 'sdtEndPr')
+        ),
+        content: sdtContent
+          ? parseCellBlocks(sdtContent, styles, theme, numbering, rels, media, options)
+          : [],
+      });
     }
     // Other content types in cells are rare but could be added
-  }
-
-  // Ensure at least one empty paragraph (Word requires this)
-  if (content.length === 0) {
-    content.push({
-      type: 'paragraph',
-      content: [],
-    });
   }
 
   return content;
@@ -671,14 +737,115 @@ export function parseTableRow(
   row.propertyChanges = parseTableRowPropertyChanges(trPrElement, formatting);
   row.structuralChange = parseTableRowStructuralChange(trPrElement);
 
-  // Parse cells
-  const cells = findChildren(trElement, 'w', 'tc');
-  for (const cellElement of cells) {
-    const cell = parseTableCell(cellElement, styles, theme, numbering, rels, media, options);
+  // Parse cells — direct `w:tc` children and cells wrapped in a row-level
+  // `w:sdt` / `w:customXml` (CT_Row content: tc | customXml | sdt).
+  for (const { element, wrappers } of collectRowCells(trElement)) {
+    const cell = parseTableCell(element, styles, theme, numbering, rels, media, options);
+    if (wrappers.length > 0) {
+      // Innermost first, so the outermost control ends up outermost in content.
+      for (let i = wrappers.length - 1; i >= 0; i--) {
+        const w = wrappers[i]!;
+        if (w.kind !== 'sdt' || !w.leading) continue;
+        cell.content = [
+          {
+            type: 'blockSdt',
+            properties: parseSdtProperties(w.sdtPr, w.sdtEndPr),
+            content: cell.content,
+          },
+        ];
+      }
+      cell.rowWrappers = wrappers.map((w) =>
+        w.kind === 'sdt'
+          ? { kind: 'sdt', id: w.id, leading: w.leading }
+          : { kind: 'customXml', id: w.id, startXml: w.startXml, endXml: w.endXml }
+      );
+    }
     row.cells.push(cell);
   }
 
   return row;
+}
+
+type CollectedRowWrapper =
+  | {
+      kind: 'sdt';
+      id: number;
+      leading: boolean;
+      sdtPr: XmlElement | null;
+      sdtEndPr: XmlElement | null;
+    }
+  | { kind: 'customXml'; id: number; startXml: string; endXml: string };
+
+/** Deepest row-level wrapper nesting honoured (guards hostile input). */
+const MAX_ROW_WRAPPER_DEPTH = 16;
+
+/**
+ * The `w:tc` elements of a row in document order, with the row-level wrappers
+ * (`w:sdt` → `w:sdtContent`, `w:customXml`) each one sits inside.
+ *
+ * Word writes `w:tr > w:sdt > w:sdtContent > w:tc` for a content control that
+ * wraps a whole cell (questionnaire answer cells). Collecting only direct
+ * `w:tc` children dropped those cells and every paragraph in them, leaving a
+ * short row.
+ */
+function collectRowCells(
+  trElement: XmlElement
+): { element: XmlElement; wrappers: CollectedRowWrapper[] }[] {
+  const out: { element: XmlElement; wrappers: CollectedRowWrapper[] }[] = [];
+  let nextId = 0;
+
+  const walk = (container: XmlElement, wrappers: CollectedRowWrapper[]): void => {
+    for (const child of container.elements ?? []) {
+      if (child.type !== 'element' || !child.name) continue;
+      const localName = getLocalName(child.name);
+      if (localName === 'tc') {
+        // Snapshot the chain: only the first cell of a control carries it, so
+        // the shared wrapper's `leading` flag flips for the cells after it.
+        out.push({ element: child, wrappers: wrappers.map((w) => ({ ...w })) });
+        for (const w of wrappers) if (w.kind === 'sdt') w.leading = false;
+        continue;
+      }
+      if (wrappers.length >= MAX_ROW_WRAPPER_DEPTH) continue;
+      if (localName === 'sdt') {
+        const sdtContent = findChild(child, 'w', 'sdtContent');
+        if (!sdtContent) continue;
+        const wrapper: CollectedRowWrapper = {
+          kind: 'sdt',
+          id: nextId++,
+          leading: true,
+          sdtPr: findChild(child, 'w', 'sdtPr'),
+          sdtEndPr: findChild(child, 'w', 'sdtEndPr'),
+        };
+        walk(sdtContent, [...wrappers, wrapper]);
+      } else if (localName === 'customXml') {
+        const { startXml, endXml } = captureCustomXmlTags(child);
+        walk(child, [...wrappers, { kind: 'customXml', id: nextId++, startXml, endXml }]);
+      }
+    }
+  };
+
+  walk(trElement, []);
+  return out;
+}
+
+/**
+ * Verbatim start tag (with its `w:customXmlPr`) and end tag of a row-level
+ * `w:customXml`, so the wrapper is re-emitted unchanged around its cells.
+ */
+function captureCustomXmlTags(element: XmlElement): { startXml: string; endXml: string } {
+  const marker = '\u0000CELLS\u0000';
+  const shell: XmlElement = {
+    ...element,
+    elements: [
+      ...(element.elements ?? []).filter(
+        (el) => el.type === 'element' && getLocalName(el.name ?? '') === 'customXmlPr'
+      ),
+      { type: 'text', text: marker },
+    ],
+  };
+  const xml = elementToXml(shell);
+  const at = xml.indexOf(marker);
+  return { startXml: xml.slice(0, at), endXml: xml.slice(at + marker.length) };
 }
 
 // ============================================================================
@@ -710,7 +877,11 @@ export function parseTableGrid(tblGridElement: XmlElement | null): number[] | un
 }
 
 function getRowGridSpan(row: TableRow): number {
-  return row.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0);
+  return (
+    (row.formatting?.gridBefore ?? 0) +
+    row.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0) +
+    (row.formatting?.gridAfter ?? 0)
+  );
 }
 
 function inferImplicitSingleCellRowSpans(table: Table): void {
@@ -722,6 +893,8 @@ function inferImplicitSingleCellRowSpans(table: Table): void {
 
   for (const row of table.rows) {
     if (row.cells.length !== 1) continue;
+    // A row that declares skipped grid columns is deliberately short.
+    if (row.formatting?.gridBefore || row.formatting?.gridAfter) continue;
 
     const cell = row.cells[0];
     const currentSpan = cell.formatting?.gridSpan ?? 1;

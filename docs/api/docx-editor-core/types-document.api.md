@@ -1165,9 +1165,10 @@ export interface TableBorders {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: (Paragraph | Table | BlockSdt)[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
+    rowWrappers?: TableCellRowWrapper[];
     structuralChange?: TableStructuralChangeInfo;
     // (undocumented)
     type: 'tableCell';
@@ -1197,6 +1198,18 @@ export interface TableCellPropertyChange {
     // (undocumented)
     type: 'tableCellPropertyChange';
 }
+
+// @public
+export type TableCellRowWrapper = {
+    kind: 'sdt';
+    id: number;
+    leading: boolean;
+} | {
+    kind: 'customXml';
+    id: number;
+    startXml: string;
+    endXml: string;
+};
 
 // @public
 export interface TableFormatting {
@@ -1260,11 +1273,15 @@ export interface TableRow {
 export interface TableRowFormatting {
     cantSplit?: boolean;
     conditionalFormat?: ConditionalFormatStyle;
+    gridAfter?: number;
+    gridBefore?: number;
     header?: boolean;
     height?: TableMeasurement;
     heightRule?: 'auto' | 'atLeast' | 'exact';
     hidden?: boolean;
     justification?: 'left' | 'center' | 'right';
+    widthAfter?: TableMeasurement;
+    widthBefore?: TableMeasurement;
 }
 
 // @public

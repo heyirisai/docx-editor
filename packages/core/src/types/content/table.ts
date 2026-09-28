@@ -4,6 +4,7 @@
 
 import type { TableFormatting, TableRowFormatting, TableCellFormatting } from '../formatting';
 import type { Paragraph } from './paragraph';
+import type { BlockSdt } from './sdt';
 import type {
   TablePropertyChange,
   TableRowPropertyChange,
@@ -25,9 +26,52 @@ export interface TableCell {
   propertyChanges?: TableCellPropertyChange[];
   /** Tracked structural changes (cell insert/delete/merge) */
   structuralChange?: TableStructuralChangeInfo;
-  /** Cell content (paragraphs, tables, etc.) */
-  content: (Paragraph | Table)[];
+  /**
+   * Cell content (`EG_BlockLevelElts`): paragraphs, nested tables, and
+   * block-level content controls (`w:sdt` directly inside `w:tc`, e.g. a
+   * Yes/No drop-down wrapping the answer paragraph).
+   */
+  content: (Paragraph | Table | BlockSdt)[];
+  /**
+   * Row-level wrappers this cell sat inside, outermost first. `CT_Row` lets a
+   * cell appear inside a `w:sdt` (`w:tr > w:sdt > w:sdtContent > w:tc`, a
+   * content control wrapping a whole cell) or a `w:customXml`
+   * (`w:tr > w:customXml > w:tc`) instead of directly under the row.
+   *
+   * For each `sdt` wrapper whose `leading` cell this is, `content` is one
+   * {@link BlockSdt} carrying that control's properties and holding the cell's
+   * real blocks (so the control is found and answered like any cell-level
+   * control); the serializer peels it back off and re-emits the wrapper around
+   * the `w:tc`. Absent for ordinary cells.
+   */
+  rowWrappers?: TableCellRowWrapper[];
 }
+
+/**
+ * One row-level wrapper around a table cell (see {@link TableCell.rowWrappers}).
+ * `id` is unique within the row; consecutive cells sharing an `id` sat in the
+ * same wrapper (`CT_SdtContentCell` / `CT_CustomXmlCell` can hold several
+ * `w:tc`).
+ */
+export type TableCellRowWrapper =
+  | {
+      kind: 'sdt';
+      id: number;
+      /**
+       * True for the first cell inside the control: its `content` holds the
+       * control's {@link BlockSdt}. Later cells of the same control carry
+       * `leading: false` and their plain content.
+       */
+      leading: boolean;
+    }
+  | {
+      kind: 'customXml';
+      id: number;
+      /** Verbatim start tag plus `w:customXmlPr`, e.g. `<w:customXml w:element="x"><w:customXmlPr/>`. */
+      startXml: string;
+      /** Verbatim end tag, e.g. `</w:customXml>`. */
+      endXml: string;
+    };
 
 /**
  * Table row (`w:tr`) — an ordered list of `TableCell` plus row-level

@@ -36,6 +36,17 @@ export interface FontStyle {
   letterSpacing?: number; // in pixels
   /** w:caps — glyphs paint uppercase, so measure the uppercased text. */
   allCaps?: boolean;
+  /**
+   * w:w (§17.3.2.43) horizontal glyph scale in percent (100 = normal). Word
+   * widens/narrows every glyph advance by this factor; character spacing
+   * (w:spacing) is added on top, unscaled.
+   */
+  horizontalScale?: number;
+}
+
+/** The w:w factor as a multiplier (1 when unset / invalid). */
+export function horizontalScaleFactor(scale: number | undefined): number {
+  return scale && scale > 0 && scale !== 100 ? scale / 100 : 1;
 }
 
 /**
@@ -244,11 +255,15 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   // Use advance width for line breaking — this is the standard metric for text flow.
   // Painted width (actualBoundingBox) includes glyph overhang which is visual only
   // and should not affect line breaking decisions.
-  let width = metrics.width;
+  // w:w scales the glyph advances (Word lays the run out at the scaled width).
+  let width = metrics.width * horizontalScaleFactor(style.horizontalScale);
 
-  // Apply letter spacing if specified
-  if (style.letterSpacing && measured.length > 1) {
-    width += style.letterSpacing * (measured.length - 1);
+  // w:spacing (§17.3.2.35) is "added or removed after each character in this
+  // run" — including the last one, so a single-space run authored as
+  // `<w:spacing w:val="37"/><w:t> </w:t>` is 37 twips wider. CSS letter-spacing
+  // (the painter) also applies after every character.
+  if (style.letterSpacing) {
+    width += style.letterSpacing * measured.length;
   }
 
   return width;
@@ -291,6 +306,7 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   ctx.font = buildFontString(style);
 
   const letterSpacing = style.letterSpacing ?? 0;
+  const scale = horizontalScaleFactor(style.horizontalScale);
   const charWidths: number[] = [];
   let totalWidth = 0;
 
@@ -306,10 +322,11 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
     const charMetrics = ctx.measureText(measuredChar);
 
     // Use advance width for individual characters
-    let charWidth = charMetrics.width;
+    let charWidth = charMetrics.width * scale;
 
-    // Add letter spacing after each character except the last
-    if (letterSpacing && i < text.length - 1) {
+    // Letter spacing follows every character (§17.3.2.35), matching
+    // measureTextWidth and the painter's CSS letter-spacing.
+    if (letterSpacing) {
       charWidth += letterSpacing;
     }
 

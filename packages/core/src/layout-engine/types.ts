@@ -444,6 +444,10 @@ export type TableRow = {
    * page rather than splitting its content.
    */
   cantSplit?: boolean;
+  /** `w:gridBefore` (§17.4.15): empty grid columns before the first cell. */
+  gridBefore?: number;
+  /** `w:gridAfter` (§17.4.14): empty grid columns after the last cell. */
+  gridAfter?: number;
   /** Tracked row ins / del (`<w:trPr><w:ins/>` / `<w:del/>`). */
   trackedIns?: import('../types/content/trackedChange').RevisionInfo;
   /** see trackedIns */ trackedDel?: import('../types/content/trackedChange').RevisionInfo;

@@ -91,6 +91,7 @@ export type {
   Shape,
   TextBox,
   TableCell,
+  TableCellRowWrapper,
   TableRow,
   Table,
   Comment,

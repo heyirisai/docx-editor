@@ -28,6 +28,7 @@ import type { StyleResolver } from '../../styles';
 import { resolveTextFormatting } from './marks';
 import { convertParagraph } from './paragraph';
 import { registerTableConverter } from '../tableConverterRegistry';
+import { sdtPropsToAttrs } from '../sdtAttrs';
 
 /**
  * Resolve table style conditional formatting
@@ -119,7 +120,9 @@ function calculateRowSpans(table: Table): Map<string, RowSpanInfo> {
   // Process each row
   for (let rowIndex = 0; rowIndex < numRows; rowIndex++) {
     const row = table.rows[rowIndex];
-    let colIndex = 0;
+    // Word aligns vertical merges by GRID column, so a row's cells start after
+    // its skipped `w:gridBefore` columns.
+    let colIndex = row.formatting?.gridBefore ?? 0;
     const rowCells = row.cells.map((cell) => {
       const colspan = cell.formatting?.gridSpan ?? 1;
       const startCol = colIndex;
@@ -278,8 +281,11 @@ export function convertTable(
     columnWidths?.length ??
     Math.max(
       0,
-      ...table.rows.map((row) =>
-        row.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0)
+      ...table.rows.map(
+        (row) =>
+          (row.formatting?.gridBefore ?? 0) +
+          row.cells.reduce((sum, cell) => sum + (cell.formatting?.gridSpan ?? 1), 0) +
+          (row.formatting?.gridAfter ?? 0)
       )
     );
   const rows = table.rows.map((row, rowIndex) => {
@@ -390,8 +396,13 @@ function convertTableRow(
   const rowIsLastRow = rowCnf?.lastRow ?? isLastRow;
   const totalCols = totalColumns ?? numCells;
 
-  // Track column index for mapping to columnWidths (accounting for colspan)
-  let colIndex = 0;
+  // Track column index for mapping to columnWidths (accounting for colspan).
+  // Cells start after the row's skipped `w:gridBefore` grid columns, and the
+  // row's outer edge is its own first/last cell (Word draws the table's outer
+  // border around a ragged row's actual extent).
+  const gridBefore = row.formatting?.gridBefore ?? 0;
+  const gridAfter = row.formatting?.gridAfter ?? 0;
+  let colIndex = gridBefore;
   const cells: PMNode[] = [];
 
   for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex++) {
@@ -423,8 +434,8 @@ function convertTableRow(
     }
 
     // Determine cell position for table border application
-    const isFirstCol = colIndex - colspan === 0;
-    const isLastCol = colIndex === totalCols;
+    const isFirstCol = colIndex - colspan === gridBefore;
+    const isLastCol = colIndex === totalCols - gridAfter;
     const cellCnf = cell.formatting?.conditionalFormat;
     const cellIsFirstRow = cellCnf?.firstRow ?? rowIsFirstRow;
     const cellIsLastRow = cellCnf?.lastRow ?? rowIsLastRow;
@@ -746,17 +757,37 @@ function convertTableCell(
   if (cell.propertyChanges && cell.propertyChanges.length > 0) {
     attrs.tcPrChange = cell.propertyChanges;
   }
-
-  // Convert cell content (paragraphs and nested tables)
-  const contentNodes: PMNode[] = [];
-  for (const content of cell.content) {
-    if (content.type === 'paragraph') {
-      contentNodes.push(convertParagraph(content, styleResolver, undefined, conditionalStyle?.rPr));
-    } else if (content.type === 'table') {
-      // Nested tables - recursively convert
-      contentNodes.push(convertTable(content, styleResolver));
-    }
+  // Row-level control / customXml wrappers (`w:tr > w:sdt > w:sdtContent > w:tc`).
+  if (cell.rowWrappers && cell.rowWrappers.length > 0) {
+    attrs.rowWrappers = cell.rowWrappers;
   }
+
+  // Convert cell content (paragraphs, nested tables, block content controls)
+  const convertCellBlocks = (blocks: TableCell['content']): PMNode[] => {
+    const nodes: PMNode[] = [];
+    for (const content of blocks) {
+      if (content.type === 'paragraph') {
+        nodes.push(convertParagraph(content, styleResolver, undefined, conditionalStyle?.rPr));
+      } else if (content.type === 'table') {
+        // Nested tables - recursively convert
+        nodes.push(convertTable(content, styleResolver));
+      } else if (content.type === 'blockSdt') {
+        // A cell-level content control (e.g. a Yes/No drop-down wrapping the
+        // answer paragraph) stays a real `blockSdt` node so the content-control
+        // APIs can find and fill it, and it round-trips on save.
+        const inner = convertCellBlocks(content.content as TableCell['content']);
+        nodes.push(
+          schema.node(
+            'blockSdt',
+            sdtPropsToAttrs(content.properties),
+            inner.length > 0 ? inner : [schema.node('paragraph', {}, [])]
+          )
+        );
+      }
+    }
+    return nodes;
+  };
+  const contentNodes = convertCellBlocks(cell.content);
 
   // Ensure cell has at least one paragraph
   if (contentNodes.length === 0) {

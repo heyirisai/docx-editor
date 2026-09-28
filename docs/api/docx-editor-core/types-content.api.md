@@ -771,9 +771,10 @@ export interface Table {
 
 // @public
 export interface TableCell {
-    content: (Paragraph | Table)[];
+    content: (Paragraph | Table | BlockSdt)[];
     formatting?: TableCellFormatting;
     propertyChanges?: TableCellPropertyChange[];
+    rowWrappers?: TableCellRowWrapper[];
     structuralChange?: TableStructuralChangeInfo;
     // (undocumented)
     type: 'tableCell';
@@ -787,6 +788,18 @@ export interface TableCellPropertyChange {
     // (undocumented)
     type: 'tableCellPropertyChange';
 }
+
+// @public
+export type TableCellRowWrapper = {
+    kind: 'sdt';
+    id: number;
+    leading: boolean;
+} | {
+    kind: 'customXml';
+    id: number;
+    startXml: string;
+    endXml: string;
+};
 
 // @public
 export interface TablePropertyChange {
