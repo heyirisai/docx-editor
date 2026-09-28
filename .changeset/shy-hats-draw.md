@@ -1,6 +1,8 @@
 ---
-'@eigenpal/docx-editor-core': patch
+'@eigenpal/docx-editor-core': minor
 ---
+
+API: `TableCell.content` is now `(Paragraph | Table | BlockSdt)[]` and `TableCell` gains an optional `rowWrappers`. Code that walks cell content as "not a paragraph, so a table" must handle `BlockSdt` (a block-level content control) too.
 
 Fix fixed-layout tables whose rows cover different grid columns (w:gridBefore / w:gridAfter): header cells no longer shift onto hairline spacer columns and collapse after the first edit, and gridBefore/gridAfter/wBefore/wAfter now survive a save.
 

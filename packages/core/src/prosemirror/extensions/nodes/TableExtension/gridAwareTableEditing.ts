@@ -19,8 +19,11 @@
  * mismatches, zero-sized tables, and short rows in grid-less tables) is fixed
  * exactly as upstream does.
  *
- * `fixTableRespectingGrid` is a port of prosemirror-tables' `fixTable`
- * (MIT, © Marijn Haverbeke and others); keep it in sync on upgrade.
+ * `fixTableRespectingGrid` and `changedDescendants` are ports of
+ * prosemirror-tables 1.8.5 internals (MIT, © Marijn Haverbeke and others).
+ * `gridAwareTableEditing.test.ts` checks them against upstream `fixTables` on
+ * grid-less tables and fails when the installed prosemirror-tables version
+ * changes, so an upgrade has to re-read this port.
  */
 
 import { Plugin, type EditorState, type Transaction } from 'prosemirror-state';
