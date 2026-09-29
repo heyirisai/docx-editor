@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
+import type { Node as PMNode } from 'prosemirror-model';
 import { tableCellSpec } from '../../prosemirror/extensions/nodes/TableExtension/specs';
+import type { Document, Table, TableCell } from '../../types/document';
+import { toProseDoc } from '../../prosemirror/conversion/toProseDoc';
 import { parseTableMeasurement } from '../tableParser/properties';
 import { parseXml, type XmlElement } from '../xmlParser';
 
@@ -40,5 +43,37 @@ describe('pct table width', () => {
       attrs: { width: 2500, widthType: 'pct', colspan: 1, rowspan: 1, noWrap: false },
     } as never) as [string, { style: string }, number];
     expect(dom[1].style).toContain('width: 50%');
+  });
+
+  test('a grid-derived cell width uses fiftieths, so an 80/20 grid stays 80/20', () => {
+    const cell = (text: string): TableCell => ({
+      type: 'tableCell',
+      content: [
+        { type: 'paragraph', content: [{ type: 'run', content: [{ type: 'text', text }] }] },
+      ],
+    });
+    const table: Table = {
+      type: 'table',
+      columnWidths: [8000, 2000],
+      rows: [{ type: 'tableRow', cells: [cell('Wide'), cell('Narrow')] }],
+    };
+    const doc: Document = { package: { document: { content: [table] } } };
+    let pmTable: PMNode | undefined;
+    toProseDoc(doc).descendants((node) => {
+      if (node.type.name === 'table') {
+        pmTable = node;
+        return false;
+      }
+      return true;
+    });
+    if (!pmTable) throw new Error('expected a table');
+    const wide = pmTable.child(0).child(0);
+    const narrow = pmTable.child(0).child(1);
+    expect(wide.attrs.width).toBe(4000);
+    expect(narrow.attrs.width).toBe(1000);
+    const wideStyle = (tableCellSpec.toDOM?.(wide) as [string, { style: string }])[1].style;
+    const narrowStyle = (tableCellSpec.toDOM?.(narrow) as [string, { style: string }])[1].style;
+    expect(wideStyle).toContain('width: 80%');
+    expect(narrowStyle).toContain('width: 20%');
   });
 });
