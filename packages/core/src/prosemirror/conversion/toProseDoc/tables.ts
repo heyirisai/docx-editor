@@ -423,8 +423,8 @@ function convertTableRow(
       for (let i = 0; i < colspan && colIndex + i < columnWidths.length; i++) {
         cellWidthTwips += columnWidths[colIndex + i];
       }
-      // Convert to percentage of total table width
-      gridWidth = Math.round((cellWidthTwips / totalWidth) * 100);
+      // Fiftieths of a percent (ECMA-376: 5000 = 100%), same scale as w:tcW.
+      gridWidth = Math.round((cellWidthTwips / totalWidth) * 5000);
     }
     colIndex += colspan;
 
@@ -584,7 +584,7 @@ function convertTableRow(
         fallbackCell,
         styleResolver,
         isHeaderRow,
-        totalWidth && totalWidth > 0 ? 100 : undefined,
+        totalWidth && totalWidth > 0 ? 5000 : undefined,
         fallbackConditionalStyle,
         tableBorders,
         isFirstRow,

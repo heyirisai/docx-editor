@@ -26,11 +26,49 @@ import type {
   TableRowPropertyChange,
   TableCellPropertyChange,
 } from '../../types/document';
-import { findChild, getAttribute, parseNumericAttribute, type XmlElement } from '../xmlParser';
+import {
+  findChild,
+  getAttribute,
+  getLocalName,
+  parseNumericAttribute,
+  type XmlElement,
+} from '../xmlParser';
 
 // ============================================================================
 // TABLE MEASUREMENT PARSING
 // ============================================================================
+
+/**
+ * OOXML `pct` is fiftieths of a percent (ECMA-376: 5000 = 100%). Word also
+ * writes a literal percent (`w:w="100%"`). `parseInt` keeps the leading
+ * digits, so "100%" becomes 100 and layout treats it as 2% of the text
+ * column. A trailing `%` is a real percentage; a bare number stays fiftieths.
+ */
+export function pctAttributeToFiftieths(raw: string, parsed: number): number {
+  const trimmed = raw.trim();
+  if (!trimmed.endsWith('%')) return parsed;
+  const percent = Number.parseFloat(trimmed);
+  if (!Number.isFinite(percent)) return parsed;
+  return Math.round(percent * 50);
+}
+
+/**
+ * Literal percents are only rewritten on table and cell widths. Those keep
+ * `widthType` and are resolved as fiftieths. Margins, spacing, indent, and
+ * row height drop the type and are read as twips, so scaling a `10%` margin
+ * would turn 10 twips into 500.
+ */
+export function pctWidthValue(
+  element: XmlElement,
+  raw: string | null,
+  parsed: number,
+  type: string
+): number {
+  if (type !== 'pct' || raw == null) return parsed;
+  const local = getLocalName(element.name ?? '');
+  if (local !== 'tblW' && local !== 'tcW') return parsed;
+  return pctAttributeToFiftieths(raw, parsed);
+}
 
 /**
  * Parse a table measurement (width, height, etc.)
@@ -41,13 +79,16 @@ import { findChild, getAttribute, parseNumericAttribute, type XmlElement } from 
 export function parseTableMeasurement(element: XmlElement | null): TableMeasurement | undefined {
   if (!element) return undefined;
 
-  const value = parseNumericAttribute(element, 'w', 'w') ?? 0;
+  const raw = getAttribute(element, 'w', 'w');
+  const parsed = parseNumericAttribute(element, 'w', 'w') ?? 0;
   const typeStr = getAttribute(element, 'w', 'type') ?? 'dxa';
 
   let type: TableWidthType = 'dxa';
   if (typeStr === 'auto' || typeStr === 'dxa' || typeStr === 'nil' || typeStr === 'pct') {
     type = typeStr;
   }
+
+  const value = pctWidthValue(element, raw, parsed, type);
 
   return { value, type };
 }

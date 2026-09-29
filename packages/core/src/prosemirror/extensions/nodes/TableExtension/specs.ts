@@ -254,7 +254,8 @@ function buildCellWidthStyles(attrs: TableCellAttrs): string[] {
     const totalWidth = attrs.colwidth.reduce((sum, w) => sum + w, 0);
     styles.push(`width: ${totalWidth}px`);
   } else if (attrs.width && attrs.widthType === 'pct') {
-    styles.push(`width: ${attrs.width}%`);
+    // Same fiftieths scale as the table node: 5000 = 100%.
+    styles.push(`width: ${attrs.width / 50}%`);
   } else if (attrs.width) {
     const widthPx = Math.round((attrs.width / 20) * 1.333);
     styles.push(`width: ${widthPx}px`);
