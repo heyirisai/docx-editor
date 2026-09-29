@@ -33,6 +33,20 @@ import { findChild, getAttribute, parseNumericAttribute, type XmlElement } from 
 // ============================================================================
 
 /**
+ * OOXML `pct` is fiftieths of a percent (ECMA-376: 5000 = 100%). Word also
+ * writes a literal percent (`w:w="100%"`). `parseInt` keeps the leading
+ * digits, so "100%" becomes 100 and layout treats it as 2% of the text
+ * column. A trailing `%` is a real percentage; a bare number stays fiftieths.
+ */
+export function pctAttributeToFiftieths(raw: string, parsed: number): number {
+  const trimmed = raw.trim();
+  if (!trimmed.endsWith('%')) return parsed;
+  const percent = Number.parseFloat(trimmed);
+  if (!Number.isFinite(percent)) return parsed;
+  return Math.round(percent * 50);
+}
+
+/**
  * Parse a table measurement (width, height, etc.)
  *
  * @param element - Element with w:w and w:type attributes
@@ -41,13 +55,16 @@ import { findChild, getAttribute, parseNumericAttribute, type XmlElement } from 
 export function parseTableMeasurement(element: XmlElement | null): TableMeasurement | undefined {
   if (!element) return undefined;
 
-  const value = parseNumericAttribute(element, 'w', 'w') ?? 0;
+  const raw = getAttribute(element, 'w', 'w');
+  const parsed = parseNumericAttribute(element, 'w', 'w') ?? 0;
   const typeStr = getAttribute(element, 'w', 'type') ?? 'dxa';
 
   let type: TableWidthType = 'dxa';
   if (typeStr === 'auto' || typeStr === 'dxa' || typeStr === 'nil' || typeStr === 'pct') {
     type = typeStr;
   }
+
+  const value = type === 'pct' && raw != null ? pctAttributeToFiftieths(raw, parsed) : parsed;
 
   return { value, type };
 }

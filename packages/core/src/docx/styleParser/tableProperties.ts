@@ -25,6 +25,7 @@ import {
 } from '../xmlParser';
 import { parseShadingProperties } from './runProperties';
 import { parseTableBorders } from '../borderParser';
+import { pctAttributeToFiftieths } from '../tableParser/properties';
 
 /**
  * Parse table measurement (width/height with type)
@@ -32,12 +33,13 @@ import { parseTableBorders } from '../borderParser';
 function parseTableMeasurement(element: XmlElement | null): TableMeasurement | undefined {
   if (!element) return undefined;
 
+  const raw = getAttribute(element, 'w', 'w');
   const w = parseNumericAttribute(element, 'w', 'w');
   const type = getAttribute(element, 'w', 'type');
 
   if (w !== undefined && type) {
     return {
-      value: w,
+      value: type === 'pct' && raw != null ? pctAttributeToFiftieths(raw, w) : w,
       type: type as TableMeasurement['type'],
     };
   }
