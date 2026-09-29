@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test';
+import { tableCellSpec } from '../../prosemirror/extensions/nodes/TableExtension/specs';
 import { parseTableMeasurement } from '../tableParser/properties';
 import { parseXml, type XmlElement } from '../xmlParser';
 
@@ -22,5 +23,22 @@ describe('pct table width', () => {
 
   test('dxa widths are twips, even when the attribute looks like a percent', () => {
     expect(measurement('w:w="2800" w:type="dxa"')).toEqual({ value: 2800, type: 'dxa' });
+  });
+
+  test('a literal percent on a cell margin stays the parsed number', () => {
+    const doc = parseXml(
+      `<w:top xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" w:w="10%" w:type="pct"/>`
+    );
+    expect(parseTableMeasurement((doc.elements as XmlElement[])[0])).toEqual({
+      value: 10,
+      type: 'pct',
+    });
+  });
+
+  test('a cell width in fiftieths is a CSS percent', () => {
+    const dom = tableCellSpec.toDOM?.({
+      attrs: { width: 2500, widthType: 'pct', colspan: 1, rowspan: 1, noWrap: false },
+    } as never) as [string, { style: string }, number];
+    expect(dom[1].style).toContain('width: 50%');
   });
 });

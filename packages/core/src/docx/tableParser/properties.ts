@@ -26,7 +26,13 @@ import type {
   TableRowPropertyChange,
   TableCellPropertyChange,
 } from '../../types/document';
-import { findChild, getAttribute, parseNumericAttribute, type XmlElement } from '../xmlParser';
+import {
+  findChild,
+  getAttribute,
+  getLocalName,
+  parseNumericAttribute,
+  type XmlElement,
+} from '../xmlParser';
 
 // ============================================================================
 // TABLE MEASUREMENT PARSING
@@ -47,6 +53,24 @@ export function pctAttributeToFiftieths(raw: string, parsed: number): number {
 }
 
 /**
+ * Literal percents are only rewritten on table and cell widths. Those keep
+ * `widthType` and are resolved as fiftieths. Margins, spacing, indent, and
+ * row height drop the type and are read as twips, so scaling a `10%` margin
+ * would turn 10 twips into 500.
+ */
+export function pctWidthValue(
+  element: XmlElement,
+  raw: string | null,
+  parsed: number,
+  type: string
+): number {
+  if (type !== 'pct' || raw == null) return parsed;
+  const local = getLocalName(element.name ?? '');
+  if (local !== 'tblW' && local !== 'tcW') return parsed;
+  return pctAttributeToFiftieths(raw, parsed);
+}
+
+/**
  * Parse a table measurement (width, height, etc.)
  *
  * @param element - Element with w:w and w:type attributes
@@ -64,7 +88,7 @@ export function parseTableMeasurement(element: XmlElement | null): TableMeasurem
     type = typeStr;
   }
 
-  const value = type === 'pct' && raw != null ? pctAttributeToFiftieths(raw, parsed) : parsed;
+  const value = pctWidthValue(element, raw, parsed, type);
 
   return { value, type };
 }
