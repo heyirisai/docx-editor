@@ -165,6 +165,15 @@ export function computeListMarker(
     }
   }
 
+  // A shallower level with no number yet (unused so far in this list, or
+  // restarted by an even shallower level) takes its start value and counts as
+  // used, as in Word. A list that opens with sub-items numbers them "1.1.",
+  // "1.2." and its first top-level item "2.". A skipped level prints "1.1.1."
+  // (not "1.1."), and the next item at that level is "1.2.".
+  for (let i = 0; i < level; i += 1) {
+    if ((counters[i] ?? 0) === 0) counters[i] = 1;
+  }
+
   counters[level] = (counters[level] ?? 0) + 1;
   for (let i = level + 1; i < counters.length; i += 1) {
     counters[i] = 0;
