@@ -21,8 +21,11 @@ const MIN_BODY_HEIGHT_PX = 24;
  * Move a page's body area `[top, bottom]` clear of full-width exclusion bands.
  * A band covering the top edge moves the top to the band's bottom (chained, so
  * overlapping bands are cleared together); a band covering the bottom edge
- * moves the bottom to the band's top. Bands wholly inside the area are left
- * alone. Returns the area unchanged when the bands would leave less than
+ * moves the bottom to the band's top. A band that starts (or ends) less than
+ * {@link MIN_BODY_HEIGHT_PX} inside an edge covers that edge too: the sliver
+ * it leaves cannot hold a line of text, and Word moves a line that would run
+ * into a wrapping float past it. Bands deeper inside the area are left alone.
+ * Returns the area unchanged when the bands would leave less than
  * {@link MIN_BODY_HEIGHT_PX}.
  *
  * @internal
@@ -40,11 +43,13 @@ export function resolveBodyArea(
 
   let bodyTop = top;
   for (const band of [...valid].sort((a, b) => a.top - b.top)) {
-    if (band.top <= bodyTop && band.bottom > bodyTop) bodyTop = band.bottom;
+    if (band.top < bodyTop + MIN_BODY_HEIGHT_PX && band.bottom > bodyTop) bodyTop = band.bottom;
   }
   let bodyBottom = bottom;
   for (const band of [...valid].sort((a, b) => b.bottom - a.bottom)) {
-    if (band.bottom >= bodyBottom && band.top < bodyBottom) bodyBottom = band.top;
+    if (band.bottom > bodyBottom - MIN_BODY_HEIGHT_PX && band.top < bodyBottom) {
+      bodyBottom = band.top;
+    }
   }
 
   if (bodyBottom - bodyTop < MIN_BODY_HEIGHT_PX) return { top, bottom };

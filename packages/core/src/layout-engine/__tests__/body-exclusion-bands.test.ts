@@ -61,6 +61,24 @@ describe('resolveBodyArea', () => {
     });
   });
 
+  test('a band starting less than a line inside an edge still covers it', () => {
+    // A page-wide wrapping picture 4px below the top margin: the 4px above it
+    // cannot hold a line, so the body starts below the picture.
+    expect(resolveBodyArea(96, 960, [{ top: 100, bottom: 244 }])).toEqual({
+      top: 244,
+      bottom: 960,
+    });
+    expect(resolveBodyArea(96, 960, [{ top: 800, bottom: 950 }])).toEqual({
+      top: 96,
+      bottom: 800,
+    });
+    // A gap of a line or more is left to the body.
+    expect(resolveBodyArea(96, 960, [{ top: 120, bottom: 244 }])).toEqual({
+      top: 96,
+      bottom: 960,
+    });
+  });
+
   test('bands wholly above, below or inside the body are ignored', () => {
     const bands = [
       { top: 0, bottom: 60 },
