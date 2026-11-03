@@ -68,6 +68,44 @@ describe('header/footer paint behind the body', () => {
     expect(img.style.zIndex).toBe('');
   });
 
+  test('an empty header/footer click strip stays in the margin, clear of the body', () => {
+    // Word's "Narrow" preset: 0.5in margins and 0.5in header/footer distance.
+    // The strip at the distance would lie under the body (painted above the
+    // bands), making "Double-click to add header" unreachable.
+    const narrow: Page = {
+      ...makePage(),
+      margins: { top: 48, right: 48, bottom: 48, left: 48, header: 48, footer: 48 },
+    };
+    const pageEl = renderPage(
+      narrow,
+      { pageNumber: 1, totalPages: 1, section: 'body' },
+      { document }
+    );
+    const header = pageEl.querySelector(`.${PAGE_CLASS_NAMES.header}`) as HTMLElement;
+    const footer = pageEl.querySelector(`.${PAGE_CLASS_NAMES.footer}`) as HTMLElement;
+    const box = (el: HTMLElement) => ({
+      top: parseFloat(el.style.top),
+      bottom: parseFloat(el.style.top) + parseFloat(el.style.height),
+    });
+    expect(box(header)).toEqual({ top: 24, bottom: 48 });
+    expect(box(footer)).toEqual({ top: 1123 - 48, bottom: 1123 - 24 });
+
+    // Default margins leave room at the distance: the strip stays there.
+    const roomy = renderPage(
+      makePage(),
+      { pageNumber: 1, totalPages: 1, section: 'body' },
+      { document }
+    );
+    expect(box(roomy.querySelector(`.${PAGE_CLASS_NAMES.header}`) as HTMLElement)).toEqual({
+      top: 48,
+      bottom: 72,
+    });
+    expect(box(roomy.querySelector(`.${PAGE_CLASS_NAMES.footer}`) as HTMLElement)).toEqual({
+      top: 1123 - 72,
+      bottom: 1123 - 48,
+    });
+  });
+
   test('bands render even without header/footer content (double-click targets)', () => {
     const pageEl = renderPage(
       makePage(),

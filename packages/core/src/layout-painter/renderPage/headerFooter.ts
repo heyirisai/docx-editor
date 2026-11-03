@@ -70,6 +70,52 @@ export interface HeaderFooterLayoutInfo {
   };
 }
 
+/** Smallest height of a header/footer element, its double-click target. */
+const MIN_HEADER_FOOTER_HIT_HEIGHT = 24;
+
+/**
+ * Vertical box (page px) of the header/footer element, which is also the
+ * double-click target for editing it.
+ *
+ * With content, the box tracks the in-flow band (`flowHeight`), NOT the
+ * float-inclusive `visualBottom`: a page/margin-anchored shape (e.g. a
+ * full-page letterhead in a header) overflows the band visually but must not
+ * inflate the box, or it covers the body and swallows clicks meant for the
+ * document text (#856). The box grows to cover content anchored above the band
+ * (negative `visualTop`). A header box starts at the header distance; a footer
+ * box is bottom-anchored at the footer distance and grows upward.
+ *
+ * Without content the box is only a click strip. Header/footer bands paint
+ * under the body, so the strip stays inside the page margin: where the distance
+ * leaves less than the strip height before the body edge (Word's "Narrow"
+ * margins put the distance on the margin itself), it moves into the margin
+ * instead of lying unreachable under the first body line.
+ */
+export function headerFooterBox(
+  section: 'header' | 'footer',
+  content: HeaderFooterContent | undefined,
+  page: { size: { h: number }; margins: { top: number; bottom: number } },
+  distance: number
+): { top: number; height: number } {
+  const min = MIN_HEADER_FOOTER_HIT_HEIGHT;
+  const pageHeight = page.size.h;
+  if (content && content.blocks.length > 0) {
+    const visualTop = content.visualTop ?? 0;
+    const flowHeight = content.flowHeight ?? content.height ?? 0;
+    const height = Math.max(flowHeight - Math.min(0, visualTop), min);
+    const top = section === 'header' ? distance + visualTop : pageHeight - distance - height;
+    return { top, height };
+  }
+  if (section === 'header') {
+    const bottom = Math.min(distance + min, page.margins.top);
+    const top = Math.max(0, Math.min(distance, bottom - min));
+    return { top, height: Math.max(0, bottom - top) };
+  }
+  const top = Math.max(pageHeight - distance - min, pageHeight - page.margins.bottom);
+  const bottom = Math.min(pageHeight, Math.max(pageHeight - distance, top + min));
+  return { top, height: Math.max(0, bottom - top) };
+}
+
 function getPositionAlignment(
   position: { align?: string; alignment?: string } | undefined
 ): string | undefined {

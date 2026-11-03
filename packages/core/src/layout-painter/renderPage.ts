@@ -70,6 +70,7 @@ import {
 } from './anchoredObjectPosition';
 import { renderFloatingImagesLayer } from './floatingImageLayer';
 import {
+  headerFooterBox,
   renderHeaderFooterContent,
   type HeaderFooterContent,
   type HeaderFooterLayoutInfo,
@@ -881,16 +882,10 @@ export function renderPage(
     const headerVisualTop = options.headerContent?.visualTop ?? 0;
     const headerVisualBottom =
       options.headerContent?.visualBottom ?? options.headerContent?.height ?? 0;
-    // The interactive box height tracks the in-flow band (`flowHeight`), NOT the
-    // float-inclusive `visualBottom`. A page/margin-anchored shape (e.g. a
-    // full-page letterhead in a header) overflows the band visually but must not
-    // inflate the header element's box — otherwise it covers the body and
-    // swallows clicks meant for the document text (#856). Floating content still
-    // renders (overflow stays visible below) and is made non-interactive in
-    // normal mode via CSS so it never intercepts body clicks.
-    const headerFlowHeight =
-      options.headerContent?.flowHeight ?? options.headerContent?.height ?? 0;
-    const interactiveHeaderHeight = Math.max(headerFlowHeight - Math.min(0, headerVisualTop), 24);
+    // The element box is the in-flow band (floating content overflows it,
+    // visible, and is non-interactive in normal mode via CSS) or, when empty, a
+    // double-click strip kept in the margin — see `headerFooterBox`.
+    const headerBox = headerFooterBox('header', options.headerContent, page, headerDistance);
     // If header content fits in the original space, clip overflow; otherwise
     // margins.top was already expanded so let content show fully.
     const headerOverflows = headerVisualBottom > availableHeaderHeight;
@@ -898,12 +893,12 @@ export function renderPage(
     const headerEl = doc.createElement('div');
     headerEl.className = PAGE_CLASS_NAMES.header;
     headerEl.style.position = 'absolute';
-    headerEl.style.top = `${headerDistance + headerVisualTop}px`;
+    headerEl.style.top = `${headerBox.top}px`;
     headerEl.style.left = `${page.margins.left}px`;
     headerEl.style.right = `${page.margins.right}px`;
     headerEl.style.width = `${headerContentWidth}px`;
-    headerEl.style.height = `${interactiveHeaderHeight}px`;
-    headerEl.style.minHeight = `${interactiveHeaderHeight}px`;
+    headerEl.style.height = `${headerBox.height}px`;
+    headerEl.style.minHeight = `${headerBox.height}px`;
 
     let shouldClipHeader = !headerOverflows;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
@@ -948,14 +943,11 @@ export function renderPage(
       options.footerContent?.visualBottom ?? options.footerContent?.height ?? 0;
     const actualFooterHeight = Math.max(footerVisualBottom - footerVisualTop, 24);
     const footerOverflows = actualFooterHeight > availableFooterHeight;
-    // Same as the header: the interactive box tracks the in-flow band, not a
-    // floating shape's extent, so a tall anchored footer object can't cover the
-    // body and swallow clicks (#856). The box stays bottom-anchored at the
-    // footer line; floating content overflows upward (visible) and is made
-    // non-interactive in normal mode via CSS.
+    // Same as the header: the box is the in-flow band, bottom-anchored at the
+    // footer line (floating content overflows upward), or an empty strip.
     const footerFlowHeight =
       options.footerContent?.flowHeight ?? options.footerContent?.height ?? 0;
-    const interactiveFooterHeight = Math.max(footerFlowHeight - Math.min(0, footerVisualTop), 24);
+    const footerBox = headerFooterBox('footer', options.footerContent, page, footerDistance);
 
     const footerEl = doc.createElement('div');
     footerEl.className = PAGE_CLASS_NAMES.footer;
@@ -971,13 +963,13 @@ export function renderPage(
     // separate from the interactive box, whose top can sit ABOVE the band when
     // it grows to cover an upward float (a date box with negative positionV).
     const footerBandTop = page.size.h - footerDistance - footerFlowHeight;
-    const footerElTop = page.size.h - footerDistance - interactiveFooterHeight;
+    const footerElTop = footerBox.top;
     footerEl.style.top = `${footerElTop}px`;
     footerEl.style.left = `${page.margins.left}px`;
     footerEl.style.right = `${page.margins.right}px`;
     footerEl.style.width = `${footerContentWidth}px`;
-    footerEl.style.height = `${interactiveFooterHeight}px`;
-    footerEl.style.minHeight = `${interactiveFooterHeight}px`;
+    footerEl.style.height = `${footerBox.height}px`;
+    footerEl.style.minHeight = `${footerBox.height}px`;
 
     // Content anchored above the band (negative visualTop) paints outside the
     // box; clipping would cut it off, so only clip when everything sits inside.
