@@ -550,7 +550,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Same editing model as the body: tracked changes, fields, images and tables work inside headers/footers. Header/footer content paints behind the body, and a header/footer picture that wraps text across the full text width pushes the body clear of it on every page; a narrower wrapping picture does not yet narrow the body lines beside it.',
+      'Same editing model as the body: tracked changes, fields, images and tables work inside headers/footers. Header/footer pictures and shapes paint behind the body (floating text boxes keep their stacking), and a header/footer picture that wraps text across the full text width pushes the body clear of it on every page; a narrower wrapping picture does not yet narrow the body lines beside it.',
     docsLink: '/docs/1.x/guides/headers-footers',
   },
   {

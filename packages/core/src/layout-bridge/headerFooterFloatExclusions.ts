@@ -14,7 +14,7 @@
  * page-wide banner, or a `topAndBottom` object. A narrower float that text
  * could wrap beside does not narrow body lines yet (body lines are measured
  * before pagination decides which lines start a page), so it stays out of the
- * body's way only through z-order: header/footer content paints behind the
+ * body's way only through z-order: header/footer pictures paint behind the
  * body.
  *
  * Positions come from the painter's own resolvers

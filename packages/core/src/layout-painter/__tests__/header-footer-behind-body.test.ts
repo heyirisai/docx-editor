@@ -1,9 +1,10 @@
 /**
- * Header/footer content paints behind the body, as in Word: a header picture
+ * Header/footer pictures paint behind the body, as in Word: a header picture
  * that reaches into the body area (e.g. a page-wide logo with a white
  * background) must not cover body text. The header and footer bands are
  * inserted before the body content area, so DOM order — not a z-index the
- * float could escape with — puts them underneath it.
+ * float could escape with — puts them underneath it. (Floating text boxes keep
+ * their own front z-index.)
  */
 import { GlobalRegistrator } from '@happy-dom/global-registrator';
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';

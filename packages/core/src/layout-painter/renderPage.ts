@@ -928,7 +928,8 @@ export function renderPage(
       headerEl.style.maxHeight = `${availableHeaderHeight}px`;
       headerEl.style.overflow = 'hidden';
     }
-    // Word paints header/footer behind the body: DOM order puts both bands under it.
+    // Word paints header/footer behind the body: DOM order puts both bands under
+    // it. Floating text boxes still stack above it through their own z-index.
     pageEl.insertBefore(headerEl, contentEl);
   }
 
