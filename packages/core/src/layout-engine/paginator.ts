@@ -204,6 +204,8 @@ export function createPaginator(options: PaginatorOptions) {
       options.pageBodyExclusions?.(page)
     );
     const topMargin = bodyArea.top;
+    // The painter hangs the footnote area from the same bottom.
+    if (bodyArea.bottom < getContentBottom()) page.bodyBottom = bodyArea.bottom;
     // Reduce content bottom by footnote reserved height for this page
     const pageContentBottom = bodyArea.bottom - footnoteHeight;
 

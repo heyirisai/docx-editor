@@ -216,12 +216,13 @@ export default [
   // layout model — single file by design (cross-referencing types). Bumped
   // modestly above the default to accommodate new revision-tracking,
   // table-pagination, anchored-object z-order/crop, and field-picture fields
-  // and the per-page body-exclusion option (its types live in
-  // bodyExclusions.ts) without forcing a split that would obscure the schema.
+  // and the per-page body-exclusion option and resolved body bottom (the
+  // option's types live in bodyExclusions.ts) without forcing a split that
+  // would obscure the schema.
   {
     files: ['packages/core/src/layout-engine/types.ts'],
     rules: {
-      'max-lines': ['error', { max: 1108, skipBlankLines: false, skipComments: false }],
+      'max-lines': ['error', { max: 1110, skipBlankLines: false, skipComments: false }],
     },
   },
 

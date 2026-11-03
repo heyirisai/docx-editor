@@ -467,6 +467,7 @@ export type Page = {
     };
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
+    bodyBottom?: number;
     footnoteColumns?: number;
     columns?: ColumnLayout;
 };

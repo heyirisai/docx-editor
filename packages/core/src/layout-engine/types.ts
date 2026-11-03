@@ -971,6 +971,8 @@ export type Page = {
   footnoteIds?: number[];
   /** Height reserved for the footnote area at page bottom (pixels). */
   footnoteReservedHeight?: number;
+  /** Body-area bottom (px from page top) when a footer float band raised it above the margin. */
+  bodyBottom?: number;
   /** Footnote-area columns (`w15:footnoteColumns`); absent/1 = single column. */
   footnoteColumns?: number;
   /** Column layout for this page (if multi-column). */

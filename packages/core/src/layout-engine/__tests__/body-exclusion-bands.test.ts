@@ -163,6 +163,22 @@ describe('layoutDocument with pageBodyExclusions', () => {
     expect(bottom).toBeLessThanOrEqual(900);
   });
 
+  test('a page records the raised body bottom so footnotes hang from it', () => {
+    const { blocks, measures } = paragraphs(10);
+    const layout = layoutDocument(
+      blocks,
+      measures,
+      makeLayoutOptions({
+        pageBodyExclusions: () => [{ top: 900, bottom: 1056 }],
+        footnoteReservedHeights: new Map([[1, 60]]),
+      })
+    );
+    expect(layout.pages[0]!.bodyBottom).toBe(900);
+    // Without a band the page keeps the margin-derived bottom (no field).
+    const plain = layoutDocument(blocks, measures, makeLayoutOptions());
+    expect(plain.pages[0]!.bodyBottom).toBeUndefined();
+  });
+
   test('bands apply only to the pages that report them', () => {
     const { blocks, measures } = paragraphs(80);
     const layout = layoutDocument(

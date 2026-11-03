@@ -855,15 +855,15 @@ export function renderPage(
       footnoteColumns
     );
     fnAreaEl.style.position = 'absolute';
-    // Position at page bottom minus bottom margin (bottom of content area).
-    // The reserved height includes the separator + the tallest footnote column
-    // (multi-column footnotes sit side by side, so the area is as tall as the
-    // tallest column, not the sum of every footnote).
+    // Hang the area from the body bottom the paginator reserved it at (above
+    // any footer float band). Its height is the separator + the tallest
+    // footnote column (multi-column footnotes sit side by side, not stacked).
     const reservedHeight = Math.max(
       page.footnoteReservedHeight ?? 0,
       calculateFootnoteAreaRenderHeight(options.footnoteArea, footnoteColumns)
     );
-    const contentAreaBottom = page.size.h - page.margins.bottom - page.margins.top;
+    const bodyBottom = page.bodyBottom ?? page.size.h - page.margins.bottom;
+    const contentAreaBottom = bodyBottom - page.margins.top;
     fnAreaEl.style.top = `${Math.max(-page.margins.top, contentAreaBottom - reservedHeight)}px`;
     fnAreaEl.style.left = '0';
     fnAreaEl.style.right = '0';
