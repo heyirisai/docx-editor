@@ -11,7 +11,7 @@
 import type { NumberFormat } from '../../types/document';
 import type { ParagraphAttrs as PMParagraphAttrs } from '../../prosemirror/schema/nodes';
 import { convertBulletToUnicode } from '../../docx/blockContentParser';
-import { padDecimal } from '../../docx/numberingParser';
+import { clampListStart, padDecimal } from '../../docx/numberingParser';
 
 /**
  * Counter slot of a level with no number yet: unused so far, or restarted by a
@@ -145,14 +145,16 @@ function resolveTemplate(
  * Start value of `ilvl` for this paragraph's numId: the parsed per-level start
  * (lvlOverride startOverride, else `w:start`, else 0), falling back for
  * paragraphs without it (editor-created lists) to the paragraph's own
- * startOverride, then 1.
+ * startOverride, then 1. Clamped to 0–32767 whatever the attrs carry, so the
+ * counters (and the roman formatter's work) stay bounded by the cap plus the
+ * list's length.
  */
 function levelStart(pmAttrs: PMParagraphAttrs, ilvl: number, paraLevel: number): number {
   const start =
     pmAttrs.listLevelStarts?.[ilvl] ??
     (ilvl === paraLevel ? pmAttrs.listStartOverride : undefined) ??
     1;
-  return Math.max(0, start);
+  return clampListStart(start);
 }
 
 /**

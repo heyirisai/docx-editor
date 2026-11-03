@@ -103,14 +103,20 @@ describe('toFlowBlocks — shallower list levels with no number yet', () => {
 /**
  * The same paragraphs resolved through a parsed numbering part, so level start
  * values (`w:start`, `w:lvlOverride`/`w:startOverride`) reach the markers the
- * way they do for a loaded document. Three decimal levels; `level0Start` is
- * level 0's `w:start` (omitted when null). numId 1 is the plain list; numIds
- * 2.. carry the given level-0 startOverride.
+ * way they do for a loaded document. Three levels, decimal unless `level0Fmt`
+ * says otherwise for level 0; `level0Start` is level 0's `w:start` (omitted
+ * when null). numId 1 is the plain list; numIds 2.. carry the given level-0
+ * startOverride.
  */
-function numberingXml(level0Start: number | null, overrides: Record<number, number> = {}): string {
+function numberingXml(
+  level0Start: number | null,
+  overrides: Record<number, number> = {},
+  level0Fmt = 'decimal'
+): string {
   const lvl = (ilvl: number, start: number | null) =>
     `<w:lvl w:ilvl="${ilvl}">${start === null ? '' : `<w:start w:val="${start}"/>`}` +
-    `<w:numFmt w:val="decimal"/><w:lvlText w:val="${TEMPLATES[ilvl]}"/></w:lvl>`;
+    `<w:numFmt w:val="${ilvl === 0 ? level0Fmt : 'decimal'}"/>` +
+    `<w:lvlText w:val="${TEMPLATES[ilvl]}"/></w:lvl>`;
   const nums = Object.entries(overrides).map(
     ([numId, start]) =>
       `<w:num w:numId="${numId}"><w:abstractNumId w:val="7"/>` +
@@ -207,5 +213,38 @@ describe('toFlowBlocks — shallower list levels take their start value', () => 
         [1, 0],
       ])
     ).toEqual(['0.1.', '1.']);
+  });
+});
+
+describe('toFlowBlocks — huge list start values', () => {
+  // Word documents no upper bound for a list start, so the layout caps it at
+  // 32767. Uncapped, a start of 2147483647 made the roman formatter build a
+  // marker of over two million characters per paragraph.
+  const HUGE = 2147483647;
+  const ROMAN_32767 = `${'M'.repeat(32)}DCCLXVII`;
+
+  test('a huge w:start renders a short roman marker quickly', () => {
+    const begin = performance.now();
+    const out = parsedMarkers(numberingXml(HUGE, {}, 'upperRoman'), [
+      [1, 0],
+      [1, 0],
+      [1, 1],
+    ]);
+    const elapsed = performance.now() - begin;
+    expect(out).toEqual([
+      `${ROMAN_32767}.`,
+      `${'M'.repeat(32)}DCCLXVIII.`,
+      `${'M'.repeat(32)}DCCLXVIII.1.`,
+    ]);
+    expect(elapsed).toBeLessThan(500);
+  });
+
+  test('a huge startOverride is capped the same way', () => {
+    expect(
+      parsedMarkers(numberingXml(1, { 2: HUGE }), [
+        [2, 0],
+        [2, 0],
+      ])
+    ).toEqual(['32767.', '32768.']);
   });
 });
