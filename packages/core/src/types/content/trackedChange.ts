@@ -171,6 +171,16 @@ export interface ParagraphPropertyChange {
   previousFormatting?: ParagraphFormatting;
   /** Paragraph properties after the tracked change (editor model convenience) */
   currentFormatting?: ParagraphFormatting;
+  /**
+   * The paragraph's list start values (`ListRendering.levelStarts` /
+   * `startOverrideLevels`) before a list switch cleared them, so Reject gives
+   * the restored list its own numbering back (editor model convenience; not
+   * written to DOCX).
+   */
+  previousListStarts?: {
+    levelStarts: number[] | null;
+    startOverrideLevels: number[] | null;
+  };
 }
 
 /**

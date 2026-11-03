@@ -11,7 +11,7 @@ import { Priority } from '../types';
 import type { ExtensionRuntime } from '../types';
 import { makeRevisionInfo } from '../../plugins/revisionIds';
 import { SUGGESTION_META } from '../../plugins/suggestionMode/state';
-import type { RevisionInfo } from '../../../types/content/trackedChange';
+import type { ParagraphPropertyChange, RevisionInfo } from '../../../types/content/trackedChange';
 
 // ============================================================================
 // CHAIN COMMANDS HELPER
@@ -41,7 +41,8 @@ function chainCommands(...commands: Command[]): Command {
  * `previousFormatting` carries only the fields the edit changed (reject merges
  * them back — see `applyPriorParagraphFormattingToAttrs`). Generic on purpose
  * so other suggesting-mode property edits (alignment, indent, …) can reuse it;
- * today only the list toggle does, capturing `{ numPr }` (issue #634).
+ * today only the list toggle does, capturing `{ numPr }` (issue #634), plus
+ * `previousListStarts` when it switches lists (reject restores those too).
  *
  * All paragraphs touched by one edit share `rev` (one id = one change), and
  * later Enter-splits copy the entry onto new paragraphs via PM's attr
@@ -50,7 +51,8 @@ function chainCommands(...commands: Command[]): Command {
 function appendParagraphPropertyChange(
   attrs: Record<string, unknown>,
   previousFormatting: Record<string, unknown>,
-  rev: RevisionInfo
+  rev: RevisionInfo,
+  previousListStarts?: ParagraphPropertyChange['previousListStarts']
 ): Record<string, unknown> {
   const existing = Array.isArray(attrs.pPrChange) ? attrs.pPrChange : [];
   return {
@@ -61,6 +63,7 @@ function appendParagraphPropertyChange(
         type: 'paragraphPropertyChange',
         info: { id: rev.revisionId, author: rev.author, date: rev.date ?? undefined },
         previousFormatting,
+        ...(previousListStarts ? { previousListStarts } : {}),
       },
     ],
   };
@@ -95,6 +98,7 @@ function toggleList(numId: number): Command {
         seen.add(pos);
 
         const priorNumPr = node.attrs.numPr;
+        let previousListStarts: ParagraphPropertyChange['previousListStarts'];
         let nextAttrs: Record<string, unknown>;
         if (isInSameList) {
           nextAttrs = {
@@ -116,9 +120,18 @@ function toggleList(numId: number): Command {
             listLevelStarts: null,
             listStartOverrideLevels: null,
           };
+          previousListStarts = {
+            levelStarts: node.attrs.listLevelStarts ?? null,
+            startOverrideLevels: node.attrs.listStartOverrideLevels ?? null,
+          };
         }
         if (rev) {
-          nextAttrs = appendParagraphPropertyChange(nextAttrs, { numPr: priorNumPr ?? null }, rev);
+          nextAttrs = appendParagraphPropertyChange(
+            nextAttrs,
+            { numPr: priorNumPr ?? null },
+            rev,
+            previousListStarts
+          );
         }
         tr = tr.setNodeMarkup(pos, undefined, nextAttrs);
       }

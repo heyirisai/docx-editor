@@ -318,6 +318,8 @@ interface ParagraphPropertyChangeSite {
   prior: import('../../types/document').ParagraphFormatting | undefined;
   /** The post-change snapshot, when present — used to detect numbering the change added. */
   current: import('../../types/document').ParagraphFormatting | undefined;
+  /** List start values a list switch cleared, restored on reject. */
+  listStarts: import('../../types/document').ParagraphPropertyChange['previousListStarts'];
 }
 
 interface TableRowSite {
@@ -368,6 +370,7 @@ function findParagraphPropertyChangeSites(
       info: { id: number };
       previousFormatting?: unknown;
       currentFormatting?: unknown;
+      previousListStarts?: import('../../types/document').ParagraphPropertyChange['previousListStarts'];
     }> | null;
     if (!Array.isArray(changes)) return;
     changes.forEach((entry, idx) => {
@@ -385,6 +388,7 @@ function findParagraphPropertyChangeSites(
           current: entry.currentFormatting as
             | import('../../types/document').ParagraphFormatting
             | undefined,
+          listStarts: entry.previousListStarts,
         });
       }
     });
@@ -497,7 +501,8 @@ function clearParagraphPropertyChangeEntry(
 function applyPriorParagraphFormattingToAttrs(
   attrs: Record<string, unknown>,
   prior: import('../../types/document').ParagraphFormatting,
-  current?: import('../../types/document').ParagraphFormatting
+  current?: import('../../types/document').ParagraphFormatting,
+  listStarts?: import('../../types/document').ParagraphPropertyChange['previousListStarts']
 ): Record<string, unknown> {
   const next: Record<string, unknown> = { ...attrs };
   // Only fields whose PM-attr shape matches the model `ParagraphFormatting`
@@ -565,6 +570,10 @@ function applyPriorParagraphFormattingToAttrs(
     next.listIsBullet = null;
     next.listNumFmt = null;
     next.listMarker = null;
+  } else if (listStarts) {
+    // A list switch cleared the old numId's start values; they come back with it.
+    next.listLevelStarts = listStarts.levelStarts;
+    next.listStartOverrideLevels = listStarts.startOverrideLevels;
   }
   return next;
 }
@@ -710,7 +719,8 @@ function resolveById(revisionId: number, mode: 'accept' | 'reject'): Command {
         const restored = applyPriorParagraphFormattingToAttrs(
           liveNode.attrs,
           site.prior,
-          site.current
+          site.current,
+          site.listStarts
         );
         const nextChanges = liveChanges.slice();
         nextChanges.splice(liveIndex, 1);
