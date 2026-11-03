@@ -161,7 +161,7 @@ function placeWrappingFloats(content: HeaderFooterContent, layout: HeaderFooterL
  * the given geometry. `distance` is the `w:header` / `w:footer` distance the
  * painter uses (defaults to the page margins' value, then 0.5in).
  *
- * @public
+ * @internal
  */
 export function headerFooterBodyExclusions(
   content: HeaderFooterContent | undefined,
@@ -200,7 +200,11 @@ export function headerFooterBodyExclusions(
   return bands;
 }
 
-/** Header/footer stories in play for a layout, as the painter receives them. */
+/**
+ * Header/footer stories in play for a layout, as the painter receives them.
+ *
+ * @internal
+ */
 export interface HeaderFooterExclusionSources {
   header?: HeaderFooterContent;
   footer?: HeaderFooterContent;
@@ -222,7 +226,7 @@ export interface HeaderFooterExclusionSources {
  * Returns `undefined` when no header/footer float displaces the body, so
  * pagination takes its usual path.
  *
- * @public
+ * @internal
  */
 export function createHeaderFooterBodyExclusions(
   sources: HeaderFooterExclusionSources
