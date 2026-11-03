@@ -76,7 +76,13 @@ function getPositionAlignment(
   return position?.align ?? position?.alignment;
 }
 
-function resolveHeaderFooterFloatTop(
+/**
+ * Resolve the top (px, relative to the HF flow origin `layout.flowTop`) of an
+ * anchored object in a header/footer, honoring `wp:positionV`. Shared by the
+ * painter and by `headerFooterBodyExclusions`, so the body is kept clear of a
+ * float exactly where the float is painted.
+ */
+export function resolveHeaderFooterFloatTop(
   floatImg: {
     height: number;
     paragraphY: number;
@@ -145,23 +151,38 @@ export function resolveHeaderFooterFloatLeft(
   h: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string } | undefined,
   layout: HeaderFooterLayoutInfo
 ): string {
-  if (!h) return '0';
+  const left = resolveHeaderFooterFloatLeftPx(width, h, layout);
+  return left === undefined ? '0' : `${left}px`;
+}
+
+/**
+ * Numeric form of {@link resolveHeaderFooterFloatLeft}: the object's left edge
+ * in px relative to the HF flow origin (`layout.flowLeft`), or `undefined` when
+ * the anchor carries no usable horizontal position (the object sits at the
+ * flow origin, i.e. 0).
+ */
+export function resolveHeaderFooterFloatLeftPx(
+  width: number,
+  h: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string } | undefined,
+  layout: HeaderFooterLayoutInfo
+): number | undefined {
+  if (!h) return undefined;
   const align = getPositionAlignment(h);
 
   if (h.relativeTo === 'page') {
-    if (h.posOffset !== undefined) return `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
-    if (align === 'right') return `${layout.pageWidth - width - layout.flowLeft}px`;
-    if (align === 'center') return `${(layout.pageWidth - width) / 2 - layout.flowLeft}px`;
-    if (align === 'left') return `${-layout.flowLeft}px`;
+    if (h.posOffset !== undefined) return emuToPixels(h.posOffset) - layout.flowLeft;
+    if (align === 'right') return layout.pageWidth - width - layout.flowLeft;
+    if (align === 'center') return (layout.pageWidth - width) / 2 - layout.flowLeft;
+    if (align === 'left') return -layout.flowLeft;
   }
 
   // `relativeTo: margin` falls through here intentionally: the HF content width
   // IS the margin box, so the content-relative branch is already margin-correct.
-  if (h.posOffset !== undefined) return `${emuToPixels(h.posOffset)}px`;
-  if (align === 'right') return `${layout.contentWidth - width}px`;
-  if (align === 'center') return `${(layout.contentWidth - width) / 2}px`;
+  if (h.posOffset !== undefined) return emuToPixels(h.posOffset);
+  if (align === 'right') return layout.contentWidth - width;
+  if (align === 'center') return (layout.contentWidth - width) / 2;
 
-  return '0';
+  return undefined;
 }
 
 function applyHeaderFooterFloatHorizontalPosition(

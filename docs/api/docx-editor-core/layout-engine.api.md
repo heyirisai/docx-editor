@@ -14,6 +14,12 @@ export function assertExhaustiveFlowBlock(block: never, site: string): never;
 export type BlockId = string | number;
 
 // @public
+export type BodyExclusionBand = {
+    top: number;
+    bottom: number;
+};
+
+// @public
 export type BorderStyle = {
     style?: string;
     width?: number;
@@ -394,6 +400,7 @@ export type LayoutOptions = {
     evenAndOddHeaders?: boolean;
     footnoteReservedHeights?: Map<number, number>;
     bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
+    pageBodyExclusions?: PageBodyExclusions;
 };
 
 // @public
@@ -465,6 +472,9 @@ export type Page = {
 };
 
 // @public
+export type PageBodyExclusions = (page: Readonly<Pick<Page, 'number' | 'size' | 'margins'>>) => readonly BodyExclusionBand[] | undefined;
+
+// @public
 export type PageBreakBlock = {
     sdtGroups?: SdtGroup[];
     kind: 'pageBreak';
@@ -510,6 +520,7 @@ export type PaginatorOptions = {
     margins: PageMargins;
     columns?: ColumnLayout;
     footnoteReservedHeights?: Map<number, number>;
+    pageBodyExclusions?: PageBodyExclusions;
     onNewPage?: (state: PageState) => void;
 };
 

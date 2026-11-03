@@ -6,6 +6,50 @@
  */
 
 import type { Page, PageMargins, Fragment, ColumnLayout } from './types';
+import type { BodyExclusionBand, PageBodyExclusions } from './bodyExclusions';
+
+/**
+ * Smallest body height a page keeps once exclusion bands are applied. Bands
+ * that would leave less (a wrapping float covering the whole page) are
+ * ignored for that page, so pagination still places content instead of
+ * producing an endless run of near-empty pages. ~one line at the default
+ * body font, the same floor `extendMarginsForHeaderFooter` uses.
+ */
+const MIN_BODY_HEIGHT_PX = 24;
+
+/**
+ * Move a page's body area `[top, bottom]` clear of full-width exclusion bands.
+ * A band covering the top edge moves the top to the band's bottom (chained, so
+ * overlapping bands are cleared together); a band covering the bottom edge
+ * moves the bottom to the band's top. Bands wholly inside the area are left
+ * alone. Returns the area unchanged when the bands would leave less than
+ * {@link MIN_BODY_HEIGHT_PX}.
+ *
+ * @internal
+ */
+export function resolveBodyArea(
+  top: number,
+  bottom: number,
+  bands: readonly BodyExclusionBand[] | undefined
+): { top: number; bottom: number } {
+  if (!bands || bands.length === 0) return { top, bottom };
+  const valid = bands.filter(
+    (b) => Number.isFinite(b.top) && Number.isFinite(b.bottom) && b.bottom > b.top
+  );
+  if (valid.length === 0) return { top, bottom };
+
+  let bodyTop = top;
+  for (const band of [...valid].sort((a, b) => a.top - b.top)) {
+    if (band.top <= bodyTop && band.bottom > bodyTop) bodyTop = band.bottom;
+  }
+  let bodyBottom = bottom;
+  for (const band of [...valid].sort((a, b) => b.bottom - a.bottom)) {
+    if (band.bottom >= bodyBottom && band.top < bodyBottom) bodyBottom = band.top;
+  }
+
+  if (bodyBottom - bodyTop < MIN_BODY_HEIGHT_PX) return { top, bottom };
+  return { top: bodyTop, bottom: bodyBottom };
+}
 
 /**
  * Current state of a page being laid out.
@@ -17,9 +61,15 @@ export type PageState = {
   cursorY: number;
   /** Current column index (0-based). */
   columnIndex: number;
-  /** Top margin of content area. */
+  /**
+   * Top of the body area: the top margin, moved below any exclusion band that
+   * covers it (see `PaginatorOptions.pageBodyExclusions`).
+   */
   topMargin: number;
-  /** Bottom boundary of content area (page height - bottom margin). */
+  /**
+   * Bottom boundary of the body area (page height - bottom margin, moved above
+   * any exclusion band covering it, minus the page's footnote reservation).
+   */
   contentBottom: number;
   /** Accumulated trailing spacing (space after previous block). */
   trailingSpacing: number;
@@ -37,6 +87,8 @@ export type PaginatorOptions = {
   columns?: ColumnLayout;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
   footnoteReservedHeights?: Map<number, number>;
+  /** Full-width bands each new page's body must stay clear of (see LayoutOptions). */
+  pageBodyExclusions?: PageBodyExclusions;
   /** Callback when a new page is created. */
   onNewPage?: (state: PageState) => void;
 };
@@ -124,12 +176,7 @@ export function createPaginator(options: PaginatorOptions) {
       columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
     }
     const pageNumber = pages.length + 1;
-    const topMargin = margins.top;
-    const contentBottom = getContentBottom();
-
-    // Reduce content bottom by footnote reserved height for this page
     const footnoteHeight = options.footnoteReservedHeights?.get(pageNumber) ?? 0;
-    const pageContentBottom = contentBottom - footnoteHeight;
 
     const page: Page = {
       number: pageNumber,
@@ -140,6 +187,20 @@ export function createPaginator(options: PaginatorOptions) {
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
       columns: columns.count > 1 ? { ...columns } : undefined,
     };
+
+    // The body area: margins first, then any full-width exclusion bands (e.g. a
+    // header picture that wraps text and spans the text column — Word starts
+    // the body below it). `page.margins` stays the authored geometry: the
+    // painter positions fragments by their own y, and the header/footer anchor
+    // against the real margins.
+    const bodyArea = resolveBodyArea(
+      margins.top,
+      getContentBottom(),
+      options.pageBodyExclusions?.(page)
+    );
+    const topMargin = bodyArea.top;
+    // Reduce content bottom by footnote reserved height for this page
+    const pageContentBottom = bodyArea.bottom - footnoteHeight;
 
     const state: PageState = {
       page,

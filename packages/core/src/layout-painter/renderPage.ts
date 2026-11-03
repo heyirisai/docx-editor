@@ -933,7 +933,8 @@ export function renderPage(
       headerEl.style.maxHeight = `${availableHeaderHeight}px`;
       headerEl.style.overflow = 'hidden';
     }
-    pageEl.appendChild(headerEl);
+    // Word paints header/footer behind the body: DOM order puts both bands under it.
+    pageEl.insertBefore(headerEl, contentEl);
   }
 
   // Render footer area (always rendered for hover hint / double-click target)
@@ -1015,7 +1016,7 @@ export function renderPage(
       footerEl.style.maxHeight = `${availableFooterHeight}px`;
       footerEl.style.overflow = 'hidden';
     }
-    pageEl.appendChild(footerEl);
+    pageEl.insertBefore(footerEl, contentEl);
   }
   if (pageBorderEl && options.pageBorders?.zOrder !== 'back') {
     pageEl.appendChild(pageBorderEl);
