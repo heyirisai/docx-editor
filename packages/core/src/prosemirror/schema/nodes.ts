@@ -96,6 +96,10 @@ export interface ParagraphAttrs {
   listAbstractNumId?: number;
   /** See ListRendering.startOverride. */
   listStartOverride?: number;
+  /** See ListRendering.levelStarts. */
+  listLevelStarts?: number[];
+  /** See ListRendering.startOverrideLevels. */
+  listStartOverrideLevels?: number[];
 
   // Style reference
   styleId?: string;

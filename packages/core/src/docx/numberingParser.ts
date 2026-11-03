@@ -733,6 +733,18 @@ export function computeListRendering(
   const instance = numbering.getInstance(numId);
   const overrideForLevel = instance?.levelOverrides?.find((o) => o.ilvl === ilvl);
 
+  // Each level's start for this numId (see ListRendering.levelStarts). The
+  // override's startOverride wins over a level it redefines with `w:lvl`.
+  const levelStarts: number[] = [];
+  for (let i = 0; i < 9; i += 1) {
+    const override = instance?.levelOverrides?.find((o) => o.ilvl === i);
+    const defined = numbering.getLevel(numId, i);
+    levelStarts.push(override?.startOverride ?? defined?.start ?? (defined ? 0 : 1));
+  }
+  const startOverrideLevels = (instance?.levelOverrides ?? [])
+    .filter((o) => o.startOverride !== undefined)
+    .map((o) => o.ilvl);
+
   return {
     level: ilvl,
     numId,
@@ -747,6 +759,8 @@ export function computeListRendering(
     levelNumFmts,
     abstractNumId: instance?.abstractNumId,
     startOverride: overrideForLevel?.startOverride,
+    levelStarts,
+    startOverrideLevels: startOverrideLevels.length > 0 ? startOverrideLevels : undefined,
   };
 }
 

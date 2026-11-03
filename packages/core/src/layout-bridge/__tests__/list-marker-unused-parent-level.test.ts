@@ -10,6 +10,7 @@
 import { describe, test, expect } from 'bun:test';
 import { toProseDoc } from '../../prosemirror/conversion/toProseDoc';
 import { toFlowBlocks } from '../toFlowBlocks';
+import { computeListRendering, parseNumbering } from '../../docx/numberingParser';
 import type { Document, Paragraph } from '../../types/document';
 
 const TEMPLATES = ['%1.', '%1.%2.', '%1.%2.%3.'];
@@ -96,5 +97,115 @@ describe('toFlowBlocks — shallower list levels with no number yet', () => {
       '1.8.',
       '2.',
     ]);
+  });
+});
+
+/**
+ * The same paragraphs resolved through a parsed numbering part, so level start
+ * values (`w:start`, `w:lvlOverride`/`w:startOverride`) reach the markers the
+ * way they do for a loaded document. Three decimal levels; `level0Start` is
+ * level 0's `w:start` (omitted when null). numId 1 is the plain list; numIds
+ * 2.. carry the given level-0 startOverride.
+ */
+function numberingXml(level0Start: number | null, overrides: Record<number, number> = {}): string {
+  const lvl = (ilvl: number, start: number | null) =>
+    `<w:lvl w:ilvl="${ilvl}">${start === null ? '' : `<w:start w:val="${start}"/>`}` +
+    `<w:numFmt w:val="decimal"/><w:lvlText w:val="${TEMPLATES[ilvl]}"/></w:lvl>`;
+  const nums = Object.entries(overrides).map(
+    ([numId, start]) =>
+      `<w:num w:numId="${numId}"><w:abstractNumId w:val="7"/>` +
+      `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${start}"/></w:lvlOverride></w:num>`
+  );
+  return (
+    `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+    `<w:abstractNum w:abstractNumId="7">${lvl(0, level0Start)}${lvl(1, 1)}${lvl(2, 1)}</w:abstractNum>` +
+    `<w:num w:numId="1"><w:abstractNumId w:val="7"/></w:num>${nums.join('')}</w:numbering>`
+  );
+}
+
+function parsedMarkers(xml: string, paras: Array<[numId: number, ilvl: number]>): string[] {
+  const numbering = parseNumbering(xml);
+  return markers(
+    paras.map(([numId, ilvl]) => {
+      const listRendering = computeListRendering({ numId, ilvl }, numbering);
+      if (!listRendering) throw new Error(`no list rendering for ${numId}/${ilvl}`);
+      return { ...item(numId, ilvl), listRendering };
+    })
+  );
+}
+
+describe('toFlowBlocks — shallower list levels take their start value', () => {
+  test('a restarted list that opens with sub-items does not repeat its first number', () => {
+    // Word's "Restart at 1": a new numId on the same abstractNum with a
+    // level-0 startOverride. Before the fix the override fired only when level
+    // 0 itself first appeared, resetting the filled-in 1 and printing "1." again.
+    const xml = numberingXml(1, { 2: 1 });
+    expect(
+      parsedMarkers(xml, [
+        [2, 1],
+        [2, 1],
+        [2, 0],
+      ])
+    ).toEqual(['1.1.', '1.2.', '2.']);
+    expect(
+      parsedMarkers(xml, [
+        [1, 0],
+        [1, 0],
+        [2, 1],
+        [2, 1],
+        [2, 0],
+        [2, 1],
+      ])
+    ).toEqual(['1.', '2.', '1.1.', '1.2.', '2.', '2.1.']);
+  });
+
+  test('a level-0 start of 5 numbers the opening sub-items 5.1., 5.2. and the parent 6.', () => {
+    expect(
+      parsedMarkers(numberingXml(5), [
+        [1, 1],
+        [1, 1],
+        [1, 0],
+        [1, 1],
+      ])
+    ).toEqual(['5.1.', '5.2.', '6.', '6.1.']);
+  });
+
+  test('a level-0 startOverride of 5 does the same', () => {
+    const xml = numberingXml(1, { 3: 5 });
+    expect(
+      parsedMarkers(xml, [
+        [3, 1],
+        [3, 1],
+        [3, 0],
+        [3, 1],
+      ])
+    ).toEqual(['5.1.', '5.2.', '6.', '6.1.']);
+  });
+
+  test('a skipped level starts at its own start value', () => {
+    expect(
+      parsedMarkers(numberingXml(5), [
+        [1, 0],
+        [1, 2],
+        [1, 1],
+      ])
+    ).toEqual(['5.', '5.1.1.', '5.2.']);
+  });
+
+  test('a level without w:start starts at 0, as in Word', () => {
+    // ECMA-376 §17.9.26: an omitted w:start means 0.
+    expect(
+      parsedMarkers(numberingXml(null), [
+        [1, 0],
+        [1, 1],
+        [1, 0],
+      ])
+    ).toEqual(['0.', '0.1.', '1.']);
+    expect(
+      parsedMarkers(numberingXml(null), [
+        [1, 1],
+        [1, 0],
+      ])
+    ).toEqual(['0.1.', '1.']);
   });
 });

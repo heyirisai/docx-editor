@@ -399,6 +399,7 @@ export interface ParagraphAttrs {
     listAbstractNumId?: number;
     listIsBullet?: boolean;
     listLevelNumFmts?: NumberFormat[];
+    listLevelStarts?: number[];
     listMarker?: string;
     listMarkerFontFamily?: string;
     listMarkerFontSize?: number;
@@ -406,6 +407,7 @@ export interface ParagraphAttrs {
     listMarkerSuffix?: 'tab' | 'space' | 'nothing';
     listNumFmt?: NumberFormat;
     listStartOverride?: number;
+    listStartOverrideLevels?: number[];
     // (undocumented)
     numPr?: {
         numId?: number;

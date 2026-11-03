@@ -31,10 +31,9 @@ export type ToFlowBlocksOptions = {
    */
   listCounters?: Map<number, number[]>;
   /**
-   * @internal Tracks `${numId}:${ilvl}` pairs whose startOverride has already
-   * been applied. Per ECMA-376 §17.9.27 the override fires the first time
-   * each level of a numId is encountered, so a numId with overrides on
-   * multiple ilvls fires each one independently.
+   * @internal Tracks the numIds (as strings) that have numbered a paragraph.
+   * Per ECMA-376 §17.9.27 a numId's first paragraph restarts every level its
+   * lvlOverride/startOverride names; later paragraphs keep counting.
    */
   listSeenNumIds?: Set<string>;
 };

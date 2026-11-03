@@ -88,6 +88,8 @@ export function listAttrsFromResolvedStyle(
     listLevelNumFmts: rendering?.levelNumFmts ?? null,
     listAbstractNumId: rendering?.abstractNumId ?? null,
     listStartOverride: rendering?.startOverride ?? null,
+    listLevelStarts: rendering?.levelStarts ?? null,
+    listStartOverrideLevels: rendering?.startOverrideLevels ?? null,
   };
 
   // The numbering level's own indents apply beneath the style's (ECMA-376

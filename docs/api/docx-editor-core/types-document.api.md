@@ -581,6 +581,7 @@ export interface ListRendering {
     isBullet: boolean;
     level: number;
     levelNumFmts?: NumberFormat[];
+    levelStarts?: number[];
     marker: string;
     markerFontFamily?: string;
     markerFontSize?: number;
@@ -589,6 +590,7 @@ export interface ListRendering {
     numFmt?: NumberFormat;
     numId: number;
     startOverride?: number;
+    startOverrideLevels?: number[];
 }
 
 // @public

@@ -112,6 +112,9 @@ function toggleList(numId: number): Command {
             listIsBullet: isBullet,
             listNumFmt: isBullet ? null : 'decimal',
             listMarker: null,
+            // Start values belong to the previous list's numId.
+            listLevelStarts: null,
+            listStartOverrideLevels: null,
           };
         }
         if (rev) {
