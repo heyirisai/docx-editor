@@ -194,7 +194,7 @@ export function layoutDocument(
   // Use document margins directly for WYSIWYG fidelity. In-flow header/footer
   // growth is already folded into the margins by the caller
   // (`extendMarginsForHeaderFooter`), and wrapping header/footer floats arrive
-  // per page through `pageBodyExclusions`.
+  // per page through `getPageBodyExclusions`.
   // Note: headerContentHeights are still available for future use (e.g., warnings)
   void options.headerContentHeights;
   void options.footerContentHeights;
@@ -238,7 +238,7 @@ export function layoutDocument(
     margins: initialConfig.margins,
     columns: initialConfig.columns ?? DEFAULT_COLUMNS,
     footnoteReservedHeights: options.footnoteReservedHeights,
-    pageBodyExclusions: options.pageBodyExclusions,
+    getPageBodyExclusions: options.getPageBodyExclusions,
   });
 
   // Apply contextual spacing: suppress spaceBefore/spaceAfter between
@@ -1003,7 +1003,7 @@ function handleSectionBreak(
 
 // Re-export types
 export * from './types';
-export type { BodyExclusionBand, PageBodyExclusions } from './bodyExclusions';
+export type { BodyExclusionBand, GetPageBodyExclusions } from './bodyExclusions';
 export { createPaginator } from './paginator';
 export type { PageState, PaginatorOptions, Paginator } from './paginator';
 export {

@@ -287,7 +287,7 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     // Word keeps the body clear of header/footer floats that wrap text and
     // leave no room beside them (a page-wide logo with square wrap pushes every
     // page's body below it). Same stories, distances and page pick as the paint.
-    pageBodyExclusions: createHeaderFooterBodyExclusions({
+    getPageBodyExclusions: createHeaderFooterBodyExclusions({
       header: headerContentForRender,
       footer: footerContentForRender,
       firstPageHeader: firstPageHeaderForRender,

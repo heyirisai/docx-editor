@@ -9,7 +9,7 @@
  * nothing.
  *
  * This module turns those floats into full-width {@link BodyExclusionBand}s
- * for the paginator (`LayoutOptions.pageBodyExclusions`). Only floats that
+ * for the paginator (`LayoutOptions.getPageBodyExclusions`). Only floats that
  * leave no usable width beside them inside the text column become bands — a
  * page-wide banner, or a `topAndBottom` object. A narrower float that text
  * could wrap beside does not narrow body lines yet (body lines are measured
@@ -24,7 +24,7 @@
  */
 
 import type { ImageRun, Page, TextBoxBlock } from '../layout-engine/types';
-import type { BodyExclusionBand, PageBodyExclusions } from '../layout-engine/bodyExclusions';
+import type { BodyExclusionBand, GetPageBodyExclusions } from '../layout-engine/bodyExclusions';
 import { wrapsAroundText } from '../docx/wrapTypes';
 import { imageWrapTextFromCssFloat } from '../layout-painter/floatingImageFlow';
 import {
@@ -216,7 +216,7 @@ export interface HeaderFooterExclusionSources {
 }
 
 /**
- * Build the `LayoutOptions.pageBodyExclusions` callback for a layout: each
+ * Build the `LayoutOptions.getPageBodyExclusions` callback for a layout: each
  * page gets the bands of the header and footer the painter will draw on it
  * (the first-page pair on page 1 under `titlePg`, the default pair elsewhere).
  * Returns `undefined` when no header/footer float displaces the body, so
@@ -226,7 +226,7 @@ export interface HeaderFooterExclusionSources {
  */
 export function createHeaderFooterBodyExclusions(
   sources: HeaderFooterExclusionSources
-): PageBodyExclusions | undefined {
+): GetPageBodyExclusions | undefined {
   const stories = [
     sources.header,
     sources.footer,

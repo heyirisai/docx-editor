@@ -6,7 +6,7 @@
  */
 
 import type { Page, PageMargins, Fragment, ColumnLayout } from './types';
-import type { BodyExclusionBand, PageBodyExclusions } from './bodyExclusions';
+import type { BodyExclusionBand, GetPageBodyExclusions } from './bodyExclusions';
 
 /**
  * Smallest body height a page keeps once exclusion bands are applied. Bands
@@ -68,7 +68,7 @@ export type PageState = {
   columnIndex: number;
   /**
    * Top of the body area: the top margin, moved below any exclusion band that
-   * covers it (see `PaginatorOptions.pageBodyExclusions`).
+   * covers it (see `PaginatorOptions.getPageBodyExclusions`).
    */
   topMargin: number;
   /**
@@ -92,8 +92,8 @@ export type PaginatorOptions = {
   columns?: ColumnLayout;
   /** Per-page footnote reserved heights (pageNumber → height in pixels). */
   footnoteReservedHeights?: Map<number, number>;
-  /** Full-width bands each new page's body must stay clear of (see LayoutOptions). */
-  pageBodyExclusions?: PageBodyExclusions;
+  /** Returns the full-width bands each new page's body must stay clear of (see LayoutOptions). */
+  getPageBodyExclusions?: GetPageBodyExclusions;
   /** Callback when a new page is created. */
   onNewPage?: (state: PageState) => void;
 };
@@ -201,7 +201,7 @@ export function createPaginator(options: PaginatorOptions) {
     const bodyArea = resolveBodyArea(
       margins.top,
       getContentBottom(),
-      options.pageBodyExclusions?.(page)
+      options.getPageBodyExclusions?.(page)
     );
     const topMargin = bodyArea.top;
     // The painter hangs the footnote area from the same bottom.

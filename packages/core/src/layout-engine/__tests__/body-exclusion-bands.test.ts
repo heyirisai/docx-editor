@@ -1,7 +1,7 @@
 /**
- * `LayoutOptions.pageBodyExclusions`: full-width bands a page's body must stay
- * clear of (from header/footer floats that wrap text and leave no room beside
- * them). A band over the top edge of the body starts that page's body below
+ * `LayoutOptions.getPageBodyExclusions`: full-width bands a page's body must
+ * stay clear of (from header/footer floats that wrap text and leave no room
+ * beside them). A band over the top edge of the body starts that page's body below
  * it, one over the bottom edge ends the body above it, and the reduced area
  * paginates — content that no longer fits flows to the next page.
  */
@@ -102,13 +102,13 @@ describe('resolveBodyArea', () => {
   });
 });
 
-describe('layoutDocument with pageBodyExclusions', () => {
+describe('layoutDocument with getPageBodyExclusions', () => {
   test('every page starts its body below a band covering the top margin', () => {
     const { blocks, measures } = paragraphs(80);
     const layout = layoutDocument(
       blocks,
       measures,
-      makeLayoutOptions({ pageBodyExclusions: () => [{ top: -9, bottom: 137 }] })
+      makeLayoutOptions({ getPageBodyExclusions: () => [{ top: -9, bottom: 137 }] })
     );
     expect(layout.pages.length).toBeGreaterThan(1);
     for (const page of layout.pages) {
@@ -127,7 +127,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
     const banded = layoutDocument(
       blocks,
       measures,
-      makeLayoutOptions({ pageBodyExclusions: () => [{ top: 0, bottom: 137 }] })
+      makeLayoutOptions({ getPageBodyExclusions: () => [{ top: 0, bottom: 137 }] })
     );
     expect(banded.pages).toHaveLength(2);
     const lastOnPage1 = Math.max(...banded.pages[0]!.fragments.map((f) => f.y + f.height));
@@ -141,7 +141,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
     const layout = layoutDocument(
       blocks,
       measures,
-      makeLayoutOptions({ pageBodyExclusions: () => [{ top: 0, bottom: 137 }] })
+      makeLayoutOptions({ getPageBodyExclusions: () => [{ top: 0, bottom: 137 }] })
     );
     expect(layout.pages).toHaveLength(2);
     const [first, second] = layout.pages.map((p) => p.fragments[0] as ParagraphFragment);
@@ -156,7 +156,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
     const layout = layoutDocument(
       blocks,
       measures,
-      makeLayoutOptions({ pageBodyExclusions: () => [{ top: 900, bottom: 1056 }] })
+      makeLayoutOptions({ getPageBodyExclusions: () => [{ top: 900, bottom: 1056 }] })
     );
     expect(layout.pages).toHaveLength(2);
     const bottom = Math.max(...layout.pages[0]!.fragments.map((f) => f.y + f.height));
@@ -169,7 +169,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
       blocks,
       measures,
       makeLayoutOptions({
-        pageBodyExclusions: () => [{ top: 900, bottom: 1056 }],
+        getPageBodyExclusions: () => [{ top: 900, bottom: 1056 }],
         footnoteReservedHeights: new Map([[1, 60]]),
       })
     );
@@ -185,7 +185,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
       blocks,
       measures,
       makeLayoutOptions({
-        pageBodyExclusions: (page) => (page.number === 1 ? [] : [{ top: 0, bottom: 137 }]),
+        getPageBodyExclusions: (page) => (page.number === 1 ? [] : [{ top: 0, bottom: 137 }]),
       })
     );
     expect(firstY(layout.pages[0]!.fragments)).toBe(96);
@@ -199,7 +199,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
       blocks,
       measures,
       makeLayoutOptions({
-        pageBodyExclusions: (page) => {
+        getPageBodyExclusions: (page) => {
           seen.push(page.number);
           expect(page.size).toEqual({ w: 816, h: 1056 });
           expect(page.margins.top).toBe(96);
@@ -227,7 +227,7 @@ describe('layoutDocument with pageBodyExclusions', () => {
     const layout = layoutDocument(
       blocks,
       measures,
-      makeLayoutOptions({ pageBodyExclusions: () => [{ top: 0, bottom: 137 }] })
+      makeLayoutOptions({ getPageBodyExclusions: () => [{ top: 0, bottom: 137 }] })
     );
     // The second break lands on a fresh (empty) page and collapses, exactly as
     // without bands: the "fresh page" check follows the moved body top.

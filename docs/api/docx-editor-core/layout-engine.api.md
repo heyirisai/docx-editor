@@ -216,6 +216,9 @@ export function getHeaderRowsHeight(measure: TableMeasure, headerRowCount: numbe
 export function getMidChainIndices(chains: Map<number, KeepNextChain>): Set<number>;
 
 // @public
+export type GetPageBodyExclusions = (page: Readonly<Pick<Page, 'number' | 'size' | 'margins'>>) => readonly BodyExclusionBand[] | undefined;
+
+// @public
 export function hasKeepLines(block: FlowBlock): boolean;
 
 // @public
@@ -400,7 +403,7 @@ export type LayoutOptions = {
     evenAndOddHeaders?: boolean;
     footnoteReservedHeights?: Map<number, number>;
     bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
-    pageBodyExclusions?: PageBodyExclusions;
+    getPageBodyExclusions?: GetPageBodyExclusions;
 };
 
 // @public
@@ -473,9 +476,6 @@ export type Page = {
 };
 
 // @public
-export type PageBodyExclusions = (page: Readonly<Pick<Page, 'number' | 'size' | 'margins'>>) => readonly BodyExclusionBand[] | undefined;
-
-// @public
 export type PageBreakBlock = {
     sdtGroups?: SdtGroup[];
     kind: 'pageBreak';
@@ -521,7 +521,7 @@ export type PaginatorOptions = {
     margins: PageMargins;
     columns?: ColumnLayout;
     footnoteReservedHeights?: Map<number, number>;
-    pageBodyExclusions?: PageBodyExclusions;
+    getPageBodyExclusions?: GetPageBodyExclusions;
     onNewPage?: (state: PageState) => void;
 };
 

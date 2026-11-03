@@ -25,16 +25,16 @@ export type BodyExclusionBand = {
 };
 
 /**
- * `LayoutOptions.pageBodyExclusions`: the full-width bands a page's body must
- * stay clear of, asked once per page as it is created. A band covering the top
- * edge of the body area (or starting less than a line below it) starts that
- * page's body below the band; one covering the bottom edge ends the body above
- * it, so content that no longer fits flows to the next page. Bands lying deeper
- * inside the body area are ignored, as are bands that would leave the page
- * (almost) no body at all.
+ * Callback for `LayoutOptions.getPageBodyExclusions`: returns the full-width
+ * bands a page's body must stay clear of, called once per page as it is
+ * created. A band covering the top edge of the body area (or starting less
+ * than a line below it) starts that page's body below the band; one covering
+ * the bottom edge ends the body above it, so content that no longer fits flows
+ * to the next page. Bands lying deeper inside the body area are ignored, as are
+ * bands that would leave the page (almost) no body at all.
  *
  * @public
  */
-export type PageBodyExclusions = (
+export type GetPageBodyExclusions = (
   page: Readonly<Pick<Page, 'number' | 'size' | 'margins'>>
 ) => readonly BodyExclusionBand[] | undefined;

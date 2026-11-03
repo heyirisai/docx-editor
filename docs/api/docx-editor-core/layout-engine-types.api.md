@@ -282,7 +282,7 @@ export type LayoutOptions = {
     evenAndOddHeaders?: boolean;
     footnoteReservedHeights?: Map<number, number>;
     bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
-    pageBodyExclusions?: PageBodyExclusions;
+    getPageBodyExclusions?: GetPageBodyExclusions;
 };
 
 // @public

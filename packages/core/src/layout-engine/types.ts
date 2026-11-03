@@ -8,7 +8,7 @@
  */
 
 import type { InlineSdtWidget } from './inlineSdtWidgets';
-import type { PageBodyExclusions } from './bodyExclusions';
+import type { GetPageBodyExclusions } from './bodyExclusions';
 
 export type { InlineSdtWidget } from './inlineSdtWidgets';
 
@@ -1073,8 +1073,8 @@ export type LayoutOptions = {
   footnoteReservedHeights?: Map<number, number>;
   /** Section break type for the body-level (final) section (for section transition logic). */
   bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
-  /** Per-page full-width bands the body must stay clear of (see {@link PageBodyExclusions}). */
-  pageBodyExclusions?: PageBodyExclusions;
+  /** Returns each page's full-width bands the body must stay clear of. */
+  getPageBodyExclusions?: GetPageBodyExclusions;
 };
 
 // =============================================================================
