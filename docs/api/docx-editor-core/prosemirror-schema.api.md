@@ -168,7 +168,9 @@ export interface ParagraphAttrs {
     lineSpacingRule?: LineSpacingRule;
     listAbstractNumId?: number;
     listIsBullet?: boolean;
+    listLevelAbstractStarts?: number[];
     listLevelNumFmts?: NumberFormat[];
+    listLevelStarts?: number[];
     listMarker?: string;
     listMarkerFontFamily?: string;
     listMarkerFontSize?: number;

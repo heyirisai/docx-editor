@@ -83,4 +83,32 @@ describe('renderPage footnote area', () => {
     expect(area!.textContent).toContain('measured sample footnote');
     expect(area!.textContent).not.toContain('plain fallback');
   });
+
+  test('sits above a footer float band the body was kept clear of', () => {
+    // The paginator ended the body at 200 (a page-wide wrapping footer picture
+    // starts there) and reserved the footnotes above that, not above the
+    // 250px bottom-margin line the picture covers.
+    const footnoteContent = makeFootnoteContent('1  footnote above a footer band');
+    const reservedHeight = footnoteContent.height + FOOTNOTE_SEPARATOR_HEIGHT;
+    const page: Page = {
+      number: 1,
+      fragments: [],
+      margins: { top: 50, right: 50, bottom: 50, left: 50 },
+      size: { w: 400, h: 300 },
+      footnoteReservedHeight: reservedHeight,
+      bodyBottom: 200,
+    };
+
+    const el = renderPage(
+      page,
+      { pageNumber: 1, totalPages: 1, section: 'body' },
+      {
+        document,
+        footnoteArea: [{ displayNumber: '1', text: 'fallback', content: footnoteContent }],
+      }
+    );
+
+    const area = el.querySelector<HTMLElement>('.layout-footnote-area');
+    expect(area!.style.top).toBe(`${200 - page.margins.top - reservedHeight}px`);
+  });
 });

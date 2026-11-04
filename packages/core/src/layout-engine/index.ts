@@ -191,9 +191,10 @@ export function layoutDocument(
     footer: options.margins?.footer ?? options.margins?.bottom ?? DEFAULT_MARGINS.bottom,
   };
 
-  // Use document margins directly for WYSIWYG fidelity
-  // Word uses fixed margins from the document - body content always starts at marginTop
-  // If header content extends below marginTop, it overlaps (this matches Word behavior)
+  // Use document margins directly for WYSIWYG fidelity. In-flow header/footer
+  // growth is already folded into the margins by the caller
+  // (`extendMarginsForHeaderFooter`), and wrapping header/footer floats arrive
+  // per page through `getPageBodyExclusions`.
   // Note: headerContentHeights are still available for future use (e.g., warnings)
   void options.headerContentHeights;
   void options.footerContentHeights;
@@ -237,6 +238,7 @@ export function layoutDocument(
     margins: initialConfig.margins,
     columns: initialConfig.columns ?? DEFAULT_COLUMNS,
     footnoteReservedHeights: options.footnoteReservedHeights,
+    getPageBodyExclusions: options.getPageBodyExclusions,
   });
 
   // Apply contextual spacing: suppress spaceBefore/spaceAfter between
@@ -1001,6 +1003,7 @@ function handleSectionBreak(
 
 // Re-export types
 export * from './types';
+export type { BodyExclusionBand, GetPageBodyExclusions } from './bodyExclusions';
 export { createPaginator } from './paginator';
 export type { PageState, PaginatorOptions, Paginator } from './paginator';
 export {

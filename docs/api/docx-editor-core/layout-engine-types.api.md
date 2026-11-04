@@ -282,6 +282,7 @@ export type LayoutOptions = {
     evenAndOddHeaders?: boolean;
     footnoteReservedHeights?: Map<number, number>;
     bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
+    getPageBodyExclusions?: GetPageBodyExclusions;
 };
 
 // @public
@@ -348,6 +349,7 @@ export type Page = {
     };
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
+    bodyBottom?: number;
     footnoteColumns?: number;
     columns?: ColumnLayout;
 };

@@ -4,19 +4,33 @@
  * Helpers for rendering OOXML list markers from the counter stack:
  *   - format numbers as decimal/roman/letter per ECMA-376 §17.9.16 numFmt
  *   - resolve lvlText templates ("%1.%2.") against the counter stack
- *   - drive the per-paragraph counter increment, including startOverride.
+ *   - drive the per-paragraph counter increment from each level's start
+ *     value, including startOverride.
  */
 
 import type { NumberFormat } from '../../types/document';
 import type { ParagraphAttrs as PMParagraphAttrs } from '../../prosemirror/schema/nodes';
 import { convertBulletToUnicode } from '../../docx/blockContentParser';
-import { padDecimal } from '../../docx/numberingParser';
+import { clampListStart, padDecimal } from '../../docx/numberingParser';
+
+/**
+ * Counter slot of a level nothing on the abstractNum has numbered yet. It takes
+ * the level's abstract start (`w:start`), not a numId's startOverride.
+ */
+const NEVER = -2;
+
+/**
+ * Counter slot of a level a shallower level restarted. It takes the numId's
+ * start for the level, startOverride included. A real value can be 0 (a level
+ * whose start is 0), so both markers are negative.
+ */
+const UNSET = -1;
 
 export function formatNumberedMarker(counters: number[], level: number): string {
   const parts: number[] = [];
   for (let i = 0; i <= level; i += 1) {
-    const value = counters[i] ?? 0;
-    if (value <= 0) break;
+    const value = counters[i] ?? UNSET;
+    if (value < 0) break;
     parts.push(value);
   }
   if (parts.length === 0) return '1.';
@@ -65,8 +79,20 @@ function toLetter(n: number, upper: boolean): string {
   return upper ? out : out.toLowerCase();
 }
 
+/** Formats with no zero. Word prints a 0 in them as a space (see {@link formatCounter}). */
+const NO_ZERO_FORMATS: ReadonlySet<NumberFormat> = new Set([
+  'upperRoman',
+  'lowerRoman',
+  'upperLetter',
+  'lowerLetter',
+]);
+
 function formatCounter(value: number, fmt: NumberFormat | undefined): string {
-  if (value <= 0) return '';
+  // 0 prints as "0" in the decimal formats. Roman and letter have no zero, so
+  // Word prints a space in its place and keeps the punctuation after it:
+  // "%1." reads " ." for a lowerLetter level at 0.
+  if (value < 0) return '';
+  if (value === 0 && fmt && NO_ZERO_FORMATS.has(fmt)) return ' ';
   switch (fmt) {
     case 'upperRoman':
       return toRoman(value, true);
@@ -108,14 +134,54 @@ export function resolveListTemplate(
   counters: number[],
   levelNumFmts: NumberFormat[] | undefined
 ): string {
+  return resolveTemplate(template, counters, levelNumFmts, 1);
+}
+
+/**
+ * {@link resolveListTemplate} with the smallest counter value that counts as
+ * "has a number": 1 for the exported helper, 0 for the marker computation,
+ * whose counter stack marks numberless levels with {@link UNSET}.
+ */
+function resolveTemplate(
+  template: string,
+  counters: number[],
+  levelNumFmts: NumberFormat[] | undefined,
+  minValue: number
+): string {
   return template.replace(/%(\d)([.):\]])?/g, (_, digit, punct = '') => {
     const idx = parseInt(digit, 10) - 1;
     if (idx < 0) return '';
-    const value = counters[idx] ?? 0;
+    const value = counters[idx] ?? UNSET;
+    if (value < minValue) return '';
     const fmt = levelNumFmts?.[idx] ?? 'decimal';
     const formatted = formatCounter(value, fmt);
     return formatted ? formatted + punct : '';
   });
+}
+
+/**
+ * Start value of `ilvl` for this paragraph's numId: the parsed per-level start
+ * (lvlOverride startOverride, else `w:start`, else 0), falling back for
+ * paragraphs without it (editor-created lists) to the paragraph's own
+ * startOverride, then 1. Clamped to 0–32767 whatever the attrs carry, so the
+ * counters (and the roman formatter's work) stay bounded by the cap plus the
+ * list's length.
+ */
+function levelStart(pmAttrs: PMParagraphAttrs, ilvl: number, paraLevel: number): number {
+  const start =
+    pmAttrs.listLevelStarts?.[ilvl] ??
+    (ilvl === paraLevel ? pmAttrs.listStartOverride : undefined) ??
+    1;
+  return clampListStart(start);
+}
+
+/**
+ * Start value of `ilvl` without the numId's startOverride: the level's own
+ * `w:start` (ListRendering.levelAbstractStarts), else 1 for paragraphs
+ * without it (editor-created lists). Clamped like {@link levelStart}.
+ */
+function abstractStart(pmAttrs: PMParagraphAttrs, ilvl: number): number {
+  return clampListStart(pmAttrs.listLevelAbstractStarts?.[ilvl] ?? 1);
 }
 
 /**
@@ -154,20 +220,40 @@ export function computeListMarker(
   }
 
   const counterKey = pmAttrs.listAbstractNumId ?? numId;
-  const counters = listCounters.get(counterKey) ?? new Array(9).fill(0);
+  const counters = listCounters.get(counterKey) ?? new Array<number>(9).fill(NEVER);
 
+  // A numId's startOverride for a level restarts that level the first time the
+  // numId numbers a paragraph AT that level (ECMA-376 §17.9.27), even when
+  // another numId on the same abstractNum has been counting it. Word's
+  // "Restart at 1" is such an override on level 0. Shallower levels the
+  // paragraph skips are left alone, as in Word.
   const seenKey = `${numId}:${level}`;
+  let restartedHere = false;
   if (!seenNumIds.has(seenKey)) {
     seenNumIds.add(seenKey);
-    if (pmAttrs.listStartOverride != null) {
-      // Set to (start - 1) so the increment below produces `start` itself.
-      counters[level] = pmAttrs.listStartOverride - 1;
-    }
+    restartedHere = pmAttrs.listStartOverride != null;
   }
 
-  counters[level] = (counters[level] ?? 0) + 1;
+  // A shallower level with no number yet takes a start value and counts as
+  // used, as in Word: its abstract `w:start` if nothing has numbered it yet,
+  // or the numId's start (startOverride included) if an even shallower level
+  // restarted it. So a list that opens with sub-items numbers them "1.1.",
+  // "1.2." and its first top-level item "2." ("5.1.", "5.2.", "6." when level
+  // 0's w:start is 5), while a "Restart at 1" list that opens with sub-items
+  // prints "1.1.", "1.2." and then "1." again. A skipped level prints "1.1.1."
+  // (not "1.0.1."), and the next item at that level is "1.2.".
+  for (let i = 0; i < level; i += 1) {
+    const value = counters[i] ?? NEVER;
+    if (value === NEVER) counters[i] = abstractStart(pmAttrs, i);
+    else if (value === UNSET) counters[i] = levelStart(pmAttrs, i, level);
+  }
+
+  const current = counters[level] ?? NEVER;
+  if (restartedHere || current === UNSET) counters[level] = levelStart(pmAttrs, level, level);
+  else if (current === NEVER) counters[level] = abstractStart(pmAttrs, level);
+  else counters[level] = current + 1;
   for (let i = level + 1; i < counters.length; i += 1) {
-    counters[i] = 0;
+    counters[i] = UNSET;
   }
   listCounters.set(counterKey, counters);
 
@@ -175,7 +261,7 @@ export function computeListMarker(
   // counter stack. Editor-created lists with no template fall back to the
   // generic decimal formatter.
   if (pmAttrs.listMarker && pmAttrs.listMarker.includes('%')) {
-    return resolveListTemplate(pmAttrs.listMarker, counters, pmAttrs.listLevelNumFmts ?? undefined);
+    return resolveTemplate(pmAttrs.listMarker, counters, pmAttrs.listLevelNumFmts ?? undefined, 0);
   }
   if (pmAttrs.listMarker) {
     return pmAttrs.listMarker;

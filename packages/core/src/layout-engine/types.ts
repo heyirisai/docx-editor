@@ -8,6 +8,7 @@
  */
 
 import type { InlineSdtWidget } from './inlineSdtWidgets';
+import type { GetPageBodyExclusions } from './bodyExclusions';
 
 export type { InlineSdtWidget } from './inlineSdtWidgets';
 
@@ -970,6 +971,8 @@ export type Page = {
   footnoteIds?: number[];
   /** Height reserved for the footnote area at page bottom (pixels). */
   footnoteReservedHeight?: number;
+  /** Body-area bottom (px from page top) when a footer float band raised it above the margin. */
+  bodyBottom?: number;
   /** Footnote-area columns (`w15:footnoteColumns`); absent/1 = single column. */
   footnoteColumns?: number;
   /** Column layout for this page (if multi-column). */
@@ -1070,6 +1073,8 @@ export type LayoutOptions = {
   footnoteReservedHeights?: Map<number, number>;
   /** Section break type for the body-level (final) section (for section transition logic). */
   bodyBreakType?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
+  /** Returns each page's full-width bands the body must stay clear of. */
+  getPageBodyExclusions?: GetPageBodyExclusions;
 };
 
 // =============================================================================

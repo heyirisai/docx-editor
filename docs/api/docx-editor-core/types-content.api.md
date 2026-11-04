@@ -484,6 +484,10 @@ export interface ParagraphPropertyChange {
     currentFormatting?: ParagraphFormatting;
     info: PropertyChangeInfo;
     previousFormatting?: ParagraphFormatting;
+    previousListStarts?: {
+        levelStarts: number[] | null;
+        levelAbstractStarts: number[] | null;
+    };
     // (undocumented)
     type: 'paragraphPropertyChange';
 }

@@ -290,6 +290,8 @@ const paragraphNodeSpec: NodeSpec = {
     listLevelNumFmts: { default: null },
     listAbstractNumId: { default: null },
     listStartOverride: { default: null },
+    listLevelStarts: { default: null },
+    listLevelAbstractStarts: { default: null },
     styleId: { default: null },
     borders: { default: null },
     shading: { default: null },

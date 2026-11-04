@@ -89,6 +89,7 @@ function computePageFingerprint(page: Page): string {
   );
   parts.push(`n:${page.number}`);
   if (page.footnoteReservedHeight) parts.push(`fn:${page.footnoteReservedHeight}`);
+  if (page.bodyBottom !== undefined) parts.push(`bb:${page.bodyBottom}`);
 
   // Each fragment's stable properties
   for (const frag of page.fragments) {

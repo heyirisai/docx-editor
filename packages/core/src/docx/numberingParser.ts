@@ -703,6 +703,27 @@ export function createNumberingMap(definitions: NumberingDefinitions): Numbering
 }
 
 /**
+ * Highest list start value the layout numbers from. Word documents a lower
+ * bound for a level's `w:start` (at least 0, [MS-OI29500] §17.9.25) but no
+ * upper one, so this is a defensive cap: 32767 is the maximum Word documents
+ * for its other numbering start value (line numbering, [MS-OI29500] §17.6.8).
+ * Without it a crafted start (e.g. 2147483647) turns a roman-numeral marker
+ * into a multi-megabyte string. The parsed numbering keeps the file's value,
+ * so a save writes it back unchanged.
+ */
+const MAX_LIST_START = 32767;
+
+/**
+ * Clamp a list start value (`w:start` / `w:startOverride`) to the range the
+ * layout numbers from: 0 to {@link MAX_LIST_START}.
+ *
+ * @internal
+ */
+export function clampListStart(value: number): number {
+  return Math.min(MAX_LIST_START, Math.max(0, value));
+}
+
+/**
  * Resolve a paragraph's `numPr` against the numbering definitions into the
  * `ListRendering` the layout pipeline needs (marker template, per-level
  * numFmts, counter key, start override). Returns null when the numPr doesn't
@@ -733,6 +754,30 @@ export function computeListRendering(
   const instance = numbering.getInstance(numId);
   const overrideForLevel = instance?.levelOverrides?.find((o) => o.ilvl === ilvl);
 
+  // Each level's start for this numId, with and without its startOverride
+  // (see ListRendering.levelStarts / levelAbstractStarts). The override's
+  // startOverride wins over a level it redefines with `w:lvl`.
+  const abstractLevels = instance
+    ? numbering.getAbstract(instance.abstractNumId)?.levels
+    : undefined;
+  const levelStarts: number[] = [];
+  const levelAbstractStarts: number[] = [];
+  for (let i = 0; i < 9; i += 1) {
+    const override = instance?.levelOverrides?.find((o) => o.ilvl === i);
+    const defined = numbering.getLevel(numId, i);
+    // getLevel folds a bare startOverride into the level's start; read the
+    // abstract level under it (or the w:lvl redefinition) instead.
+    const own =
+      override?.lvl ??
+      (override?.startOverride !== undefined
+        ? abstractLevels?.find((l) => l.ilvl === i)
+        : undefined) ??
+      defined;
+    const ownStart = own?.start ?? (own ? 0 : 1);
+    levelStarts.push(clampListStart(override?.startOverride ?? ownStart));
+    levelAbstractStarts.push(clampListStart(ownStart));
+  }
+
   return {
     level: ilvl,
     numId,
@@ -746,7 +791,12 @@ export function computeListRendering(
     markerSuffix: level.suffix,
     levelNumFmts,
     abstractNumId: instance?.abstractNumId,
-    startOverride: overrideForLevel?.startOverride,
+    startOverride:
+      overrideForLevel?.startOverride === undefined
+        ? undefined
+        : clampListStart(overrideForLevel.startOverride),
+    levelStarts,
+    levelAbstractStarts,
   };
 }
 

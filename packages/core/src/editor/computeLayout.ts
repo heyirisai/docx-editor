@@ -42,6 +42,7 @@ import {
   twipsToPixels,
   type FloatPageGeometry,
 } from '../layout-bridge';
+import { createHeaderFooterBodyExclusions } from '../layout-bridge/headerFooterFloatExclusions';
 import {
   pageGeometryFromPage,
   type FootnoteRenderItem,
@@ -241,6 +242,17 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
   // Watermark rides PM state as a doc attr (so it's undoable).
   const watermark = (state.doc.attrs?.watermark as Watermark | null) ?? undefined;
 
+  // Nullish, not truthy: an explicit `w:header="0"` must paint the header at
+  // the page top, not fall back to the painter's 0.5in default (#740).
+  const headerDistancePx =
+    sectionProperties?.headerDistance != null
+      ? twipsToPixels(sectionProperties.headerDistance)
+      : undefined;
+  const footerDistancePx =
+    sectionProperties?.footerDistance != null
+      ? twipsToPixels(sectionProperties.footerDistance)
+      : undefined;
+
   // Margin extension — push body clear of the header/footer bands (Word grows
   // the band when in-flow content exceeds the authored margin). Shared core
   // helper: uses in-flow `flowHeight` so page/margin-anchored floats (e.g. a
@@ -272,6 +284,18 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     columns: finalColumns,
     bodyBreakType,
     pageGap,
+    // Word keeps the body clear of header/footer floats that wrap text and
+    // leave no room beside them (a page-wide logo with square wrap pushes every
+    // page's body below it). Same stories, distances and page pick as the paint.
+    getPageBodyExclusions: createHeaderFooterBodyExclusions({
+      header: headerContentForRender,
+      footer: footerContentForRender,
+      firstPageHeader: firstPageHeaderForRender,
+      firstPageFooter: firstPageFooterForRender,
+      titlePg: hasTitlePg,
+      headerDistance: headerDistancePx,
+      footerDistance: footerDistancePx,
+    }),
   };
 
   let layout: Layout;
@@ -325,16 +349,8 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     firstPageFooterForRender,
     hasTitlePg,
     watermark,
-    // Nullish, not truthy: an explicit `w:header="0"` must paint the header at
-    // the page top, not fall back to the painter's 0.5in default (#740).
-    headerDistancePx:
-      sectionProperties?.headerDistance != null
-        ? twipsToPixels(sectionProperties.headerDistance)
-        : undefined,
-    footerDistancePx:
-      sectionProperties?.footerDistance != null
-        ? twipsToPixels(sectionProperties.footerDistance)
-        : undefined,
+    headerDistancePx,
+    footerDistancePx,
     pageBorders: sectionProperties?.pageBorders,
     footnotesByPage: footnotesByPage?.size ? footnotesByPage : undefined,
   };

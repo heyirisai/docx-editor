@@ -70,13 +70,84 @@ export interface HeaderFooterLayoutInfo {
   };
 }
 
+/** Smallest height of a header/footer element, its double-click target. */
+const MIN_HEADER_FOOTER_HIT_HEIGHT = 24;
+
+/**
+ * Height of the empty header/footer strip at the page edge when the margin is
+ * thinner than this (down to 0). That strip overlaps the body, so it stays a
+ * thin edge: enough to double-click, but not a full strip that would swallow
+ * clicks on the whole first body line.
+ */
+const MIN_HEADER_FOOTER_EDGE_HIT_HEIGHT = 8;
+
+/**
+ * Vertical box (page px) of the header/footer element, which is also the
+ * double-click target for editing it.
+ *
+ * With content, the box tracks the in-flow band (`flowHeight`), NOT the
+ * float-inclusive `visualBottom`: a page/margin-anchored shape (e.g. a
+ * full-page letterhead in a header) overflows the band visually but must not
+ * inflate the box, or it covers the body and swallows clicks meant for the
+ * document text (#856). The box grows to cover content anchored above the band
+ * (negative `visualTop`). A header box starts at the header distance; a footer
+ * box is bottom-anchored at the footer distance and grows upward.
+ *
+ * Without content the box is only a click strip. Header/footer bands paint
+ * under the body, so the strip stays inside the page margin: where the distance
+ * leaves less than the strip height before the body edge (Word's "Narrow"
+ * margins put the distance on the margin itself), it moves into the margin
+ * instead of lying unreachable under the first body line.
+ *
+ * A margin thinner than the edge strip (e.g. 0) cannot hold it, so the strip
+ * sits on the page edge over the body and `aboveBody` asks the painter to lift
+ * it there. Word, too, still opens the header from the top edge of the page.
+ * Only an empty strip is lifted: it has no content that could hide body text.
+ */
+export function headerFooterBox(
+  section: 'header' | 'footer',
+  content: HeaderFooterContent | undefined,
+  page: { size: { h: number }; margins: { top: number; bottom: number } },
+  distance: number
+): { top: number; height: number; aboveBody: boolean } {
+  const min = MIN_HEADER_FOOTER_HIT_HEIGHT;
+  const pageHeight = page.size.h;
+  if (content && content.blocks.length > 0) {
+    const visualTop = content.visualTop ?? 0;
+    const flowHeight = content.flowHeight ?? content.height ?? 0;
+    const height = Math.max(flowHeight - Math.min(0, visualTop), min);
+    const top = section === 'header' ? distance + visualTop : pageHeight - distance - height;
+    return { top, height, aboveBody: false };
+  }
+  let top: number;
+  let bottom: number;
+  if (section === 'header') {
+    bottom = Math.min(distance + min, page.margins.top);
+    top = Math.max(0, Math.min(distance, bottom - min));
+  } else {
+    top = Math.max(pageHeight - distance - min, pageHeight - page.margins.bottom);
+    bottom = Math.min(pageHeight, Math.max(pageHeight - distance, top + min));
+  }
+  const edge = MIN_HEADER_FOOTER_EDGE_HIT_HEIGHT;
+  if (bottom - top >= edge) {
+    return { top, height: bottom - top, aboveBody: false };
+  }
+  return { top: section === 'header' ? 0 : pageHeight - edge, height: edge, aboveBody: true };
+}
+
 function getPositionAlignment(
   position: { align?: string; alignment?: string } | undefined
 ): string | undefined {
   return position?.align ?? position?.alignment;
 }
 
-function resolveHeaderFooterFloatTop(
+/**
+ * Resolve the top (px, relative to the HF flow origin `layout.flowTop`) of an
+ * anchored object in a header/footer, honoring `wp:positionV`. Shared by the
+ * painter and by `headerFooterBodyExclusions`, so the body is kept clear of a
+ * float exactly where the float is painted.
+ */
+export function resolveHeaderFooterFloatTop(
   floatImg: {
     height: number;
     paragraphY: number;
@@ -145,23 +216,38 @@ export function resolveHeaderFooterFloatLeft(
   h: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string } | undefined,
   layout: HeaderFooterLayoutInfo
 ): string {
-  if (!h) return '0';
+  const left = resolveHeaderFooterFloatLeftPx(width, h, layout);
+  return left === undefined ? '0' : `${left}px`;
+}
+
+/**
+ * Numeric form of {@link resolveHeaderFooterFloatLeft}: the object's left edge
+ * in px relative to the HF flow origin (`layout.flowLeft`), or `undefined` when
+ * the anchor carries no usable horizontal position (the object sits at the
+ * flow origin, i.e. 0).
+ */
+export function resolveHeaderFooterFloatLeftPx(
+  width: number,
+  h: { relativeTo?: string; posOffset?: number; align?: string; alignment?: string } | undefined,
+  layout: HeaderFooterLayoutInfo
+): number | undefined {
+  if (!h) return undefined;
   const align = getPositionAlignment(h);
 
   if (h.relativeTo === 'page') {
-    if (h.posOffset !== undefined) return `${emuToPixels(h.posOffset) - layout.flowLeft}px`;
-    if (align === 'right') return `${layout.pageWidth - width - layout.flowLeft}px`;
-    if (align === 'center') return `${(layout.pageWidth - width) / 2 - layout.flowLeft}px`;
-    if (align === 'left') return `${-layout.flowLeft}px`;
+    if (h.posOffset !== undefined) return emuToPixels(h.posOffset) - layout.flowLeft;
+    if (align === 'right') return layout.pageWidth - width - layout.flowLeft;
+    if (align === 'center') return (layout.pageWidth - width) / 2 - layout.flowLeft;
+    if (align === 'left') return -layout.flowLeft;
   }
 
   // `relativeTo: margin` falls through here intentionally: the HF content width
   // IS the margin box, so the content-relative branch is already margin-correct.
-  if (h.posOffset !== undefined) return `${emuToPixels(h.posOffset)}px`;
-  if (align === 'right') return `${layout.contentWidth - width}px`;
-  if (align === 'center') return `${(layout.contentWidth - width) / 2}px`;
+  if (h.posOffset !== undefined) return emuToPixels(h.posOffset);
+  if (align === 'right') return layout.contentWidth - width;
+  if (align === 'center') return (layout.contentWidth - width) / 2;
 
-  return '0';
+  return undefined;
 }
 
 function applyHeaderFooterFloatHorizontalPosition(

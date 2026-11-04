@@ -279,6 +279,8 @@ function paragraphFormattingToAttrs(
     listLevelNumFmts: paragraph.listRendering?.levelNumFmts || undefined,
     listAbstractNumId: paragraph.listRendering?.abstractNumId,
     listStartOverride: paragraph.listRendering?.startOverride,
+    listLevelStarts: paragraph.listRendering?.levelStarts,
+    listLevelAbstractStarts: paragraph.listRendering?.levelAbstractStarts,
     // Store original inline formatting for lossless serialization round-trip
     _originalFormatting: formatting || undefined,
   };
