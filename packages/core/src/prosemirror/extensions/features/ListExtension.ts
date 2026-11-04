@@ -118,11 +118,11 @@ function toggleList(numId: number): Command {
             listMarker: null,
             // Start values belong to the previous list's numId.
             listLevelStarts: null,
-            listStartOverrideLevels: null,
+            listLevelAbstractStarts: null,
           };
           previousListStarts = {
             levelStarts: node.attrs.listLevelStarts ?? null,
-            startOverrideLevels: node.attrs.listStartOverrideLevels ?? null,
+            levelAbstractStarts: node.attrs.listLevelAbstractStarts ?? null,
           };
         }
         if (rev) {

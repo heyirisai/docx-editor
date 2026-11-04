@@ -212,16 +212,20 @@ export interface ListRendering {
    * Start value of each level 0–8 of the numId: the lvlOverride's
    * `w:startOverride`, else the level's `w:start`, else 0 (the ECMA-376
    * §17.9.26 default Word applies). A level the numbering does not define
-   * holds 1. Values are clamped to 0–32767. A level takes this value when it
-   * first numbers a paragraph and whenever a shallower level restarts it.
+   * holds 1. Values are clamped to 0–32767. A level takes this value when a
+   * shallower level restarts it, and when the numId first numbers a paragraph
+   * at a level that has a startOverride.
    */
   levelStarts?: number[];
   /**
-   * Levels the numId's `w:lvlOverride`/`w:startOverride` restarts (§17.9.27)
-   * the first time the numId numbers a paragraph, even when another numId on
-   * the same abstractNum has been counting them.
+   * Start value of each level 0–8 without the numId's `w:startOverride`: the
+   * level's own `w:start` (or that of a `w:lvl` redefinition in the
+   * lvlOverride), else 0; 1 for a level the numbering does not define. Clamped
+   * to 0–32767. A level nothing on the abstractNum has numbered yet takes
+   * this value, as in Word; the startOverride applies only when its own level
+   * first numbers a paragraph of the numId, or is restarted.
    */
-  startOverrideLevels?: number[];
+  levelAbstractStarts?: number[];
 }
 
 /**

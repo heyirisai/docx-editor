@@ -103,29 +103,37 @@ describe('toFlowBlocks — shallower list levels with no number yet', () => {
 /**
  * The same paragraphs resolved through a parsed numbering part, so level start
  * values (`w:start`, `w:lvlOverride`/`w:startOverride`) reach the markers the
- * way they do for a loaded document. Three levels, decimal unless `level0Fmt`
- * says otherwise for level 0; `level0Start` is level 0's `w:start` (omitted
- * when null). numId 1 is the plain list; numIds 2.. carry the given level-0
- * startOverride.
+ * way they do for a loaded document. One abstractNum with three levels,
+ * decimal unless `level0Fmt` says otherwise for level 0; `level0Start` is
+ * level 0's `w:start` (omitted when null), levels 1 and 2 start at 1.
+ * `overrides` maps a numId to its per-level startOverrides; numId 1 is a plain
+ * instance unless `overrides` gives it some.
  */
 function numberingXml(
   level0Start: number | null,
-  overrides: Record<number, number> = {},
+  overrides: Record<number, Record<number, number>> = {},
   level0Fmt = 'decimal'
 ): string {
   const lvl = (ilvl: number, start: number | null) =>
     `<w:lvl w:ilvl="${ilvl}">${start === null ? '' : `<w:start w:val="${start}"/>`}` +
     `<w:numFmt w:val="${ilvl === 0 ? level0Fmt : 'decimal'}"/>` +
     `<w:lvlText w:val="${TEMPLATES[ilvl]}"/></w:lvl>`;
-  const nums = Object.entries(overrides).map(
-    ([numId, start]) =>
+  const nums = { 1: {}, ...overrides };
+  const numXml = Object.entries(nums).map(
+    ([numId, levels]) =>
       `<w:num w:numId="${numId}"><w:abstractNumId w:val="7"/>` +
-      `<w:lvlOverride w:ilvl="0"><w:startOverride w:val="${start}"/></w:lvlOverride></w:num>`
+      Object.entries(levels)
+        .map(
+          ([ilvl, start]) =>
+            `<w:lvlOverride w:ilvl="${ilvl}"><w:startOverride w:val="${start}"/></w:lvlOverride>`
+        )
+        .join('') +
+      `</w:num>`
   );
   return (
     `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
     `<w:abstractNum w:abstractNumId="7">${lvl(0, level0Start)}${lvl(1, 1)}${lvl(2, 1)}</w:abstractNum>` +
-    `<w:num w:numId="1"><w:abstractNumId w:val="7"/></w:num>${nums.join('')}</w:numbering>`
+    `${numXml.join('')}</w:numbering>`
   );
 }
 
@@ -140,31 +148,84 @@ function parsedMarkers(xml: string, paras: Array<[numId: number, ilvl: number]>)
   );
 }
 
-describe('toFlowBlocks — shallower list levels take their start value', () => {
-  test('a restarted list that opens with sub-items does not repeat its first number', () => {
-    // Word's "Restart at 1": a new numId on the same abstractNum with a
-    // level-0 startOverride. Before the fix the override fired only when level
-    // 0 itself first appeared, resetting the filled-in 1 and printing "1." again.
-    const xml = numberingXml(1, { 2: 1 });
+/**
+ * Each expected list is Word's own `list string` for the same paragraphs,
+ * read back from minimal fixtures opened in Word for Mac. "Restart at 1" is a
+ * new numId on the same abstractNum with a level-0 startOverride of 1. Word
+ * fills a parent level nothing has numbered yet from the abstract `w:start`,
+ * and applies a startOverride only when its own level first numbers a
+ * paragraph of the numId (or a shallower level restarts it).
+ */
+describe('toFlowBlocks — startOverride and unused parent levels, as Word numbers them', () => {
+  test('a Restart at 1 list after a numbered list continues level 0 until it reaches level 0', () => {
     expect(
-      parsedMarkers(xml, [
-        [2, 1],
-        [2, 1],
-        [2, 0],
-      ])
-    ).toEqual(['1.1.', '1.2.', '2.']);
-    expect(
-      parsedMarkers(xml, [
+      parsedMarkers(numberingXml(1, { 2: { 0: 1 } }), [
         [1, 0],
         [1, 0],
         [2, 1],
         [2, 1],
         [2, 0],
-        [2, 1],
       ])
-    ).toEqual(['1.', '2.', '1.1.', '1.2.', '2.', '2.1.']);
+    ).toEqual(['1.', '2.', '2.1.', '2.2.', '1.']);
   });
 
+  test('a Restart at 1 list that opens with sub-items repeats 1. at level 0', () => {
+    expect(
+      parsedMarkers(numberingXml(1, { 2: { 0: 1 } }), [
+        [2, 1],
+        [2, 1],
+        [2, 0],
+        [2, 1],
+      ])
+    ).toEqual(['1.1.', '1.2.', '1.', '1.1.']);
+  });
+
+  test('a Restart at 1 list after a numbered list numbers its later sub-items from the restart', () => {
+    expect(
+      parsedMarkers(numberingXml(1, { 2: { 0: 1 } }), [
+        [1, 0],
+        [1, 0],
+        [2, 1],
+        [2, 1],
+        [2, 0],
+        [2, 1],
+      ])
+    ).toEqual(['1.', '2.', '2.1.', '2.2.', '1.', '1.1.']);
+  });
+
+  test('a level-0 startOverride of 5 leaves opening sub-items under the abstract start', () => {
+    expect(
+      parsedMarkers(numberingXml(1, { 3: { 0: 5 } }), [
+        [3, 1],
+        [3, 1],
+        [3, 0],
+        [3, 1],
+      ])
+    ).toEqual(['1.1.', '1.2.', '5.', '5.1.']);
+  });
+
+  test('a level-0 w:start of 3 with a startOverride of 5 numbers opening sub-items from 3', () => {
+    expect(
+      parsedMarkers(numberingXml(3, { 3: { 0: 5 } }), [
+        [3, 1],
+        [3, 1],
+        [3, 0],
+      ])
+    ).toEqual(['3.1.', '3.2.', '5.']);
+  });
+
+  test('a level-1 startOverride of 5 fills a restarted level 1 and applies again when level 1 is used', () => {
+    expect(
+      parsedMarkers(numberingXml(1, { 1: { 1: 5 } }), [
+        [1, 0],
+        [1, 2],
+        [1, 1],
+      ])
+    ).toEqual(['1.', '1.5.1.', '1.5.']);
+  });
+});
+
+describe('toFlowBlocks — shallower list levels take their start value', () => {
   test('a level-0 start of 5 numbers the opening sub-items 5.1., 5.2. and the parent 6.', () => {
     expect(
       parsedMarkers(numberingXml(5), [
@@ -176,16 +237,16 @@ describe('toFlowBlocks — shallower list levels take their start value', () => 
     ).toEqual(['5.1.', '5.2.', '6.', '6.1.']);
   });
 
-  test('a level-0 startOverride of 5 does the same', () => {
-    const xml = numberingXml(1, { 3: 5 });
+  test('a startOverride re-applies when a parent level restarts its level', () => {
     expect(
-      parsedMarkers(xml, [
-        [3, 1],
-        [3, 1],
-        [3, 0],
-        [3, 1],
+      parsedMarkers(numberingXml(1, { 2: { 1: 5 } }), [
+        [2, 0],
+        [2, 1],
+        [2, 1],
+        [2, 0],
+        [2, 1],
       ])
-    ).toEqual(['5.1.', '5.2.', '6.', '6.1.']);
+    ).toEqual(['1.', '1.5.', '1.6.', '2.', '2.5.']);
   });
 
   test('a skipped level starts at its own start value', () => {
@@ -214,6 +275,24 @@ describe('toFlowBlocks — shallower list levels take their start value', () => 
       ])
     ).toEqual(['0.1.', '1.']);
   });
+
+  test('a letter or roman level at 0 keeps its punctuation, as in Word', () => {
+    // Roman and letter numerals have no zero. Word prints a space for the
+    // number and keeps the "." after it.
+    for (const [fmt, next] of [
+      ['lowerLetter', 'a.'],
+      ['upperLetter', 'A.'],
+      ['lowerRoman', 'i.'],
+      ['upperRoman', 'I.'],
+    ]) {
+      expect(
+        parsedMarkers(numberingXml(null, {}, fmt), [
+          [1, 0],
+          [1, 0],
+        ])
+      ).toEqual([' .', next]);
+    }
+  });
 });
 
 describe('toFlowBlocks — huge list start values', () => {
@@ -241,7 +320,7 @@ describe('toFlowBlocks — huge list start values', () => {
 
   test('a huge startOverride is capped the same way', () => {
     expect(
-      parsedMarkers(numberingXml(1, { 2: HUGE }), [
+      parsedMarkers(numberingXml(1, { 2: { 0: HUGE } }), [
         [2, 0],
         [2, 0],
       ])

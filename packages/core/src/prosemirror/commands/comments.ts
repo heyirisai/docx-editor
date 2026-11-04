@@ -573,7 +573,7 @@ function applyPriorParagraphFormattingToAttrs(
   } else if (listStarts) {
     // A list switch cleared the old numId's start values; they come back with it.
     next.listLevelStarts = listStarts.levelStarts;
-    next.listStartOverrideLevels = listStarts.startOverrideLevels;
+    next.listLevelAbstractStarts = listStarts.levelAbstractStarts;
   }
   return next;
 }

@@ -27,6 +27,7 @@ function item(text: string): PMNode {
       listLevelNumFmts: ['decimal'],
       listAbstractNumId: 5,
       listLevelStarts: [5, 0, 0, 0, 0, 0, 0, 0, 0],
+      listLevelAbstractStarts: [5, 0, 0, 0, 0, 0, 0, 0, 0],
     },
     [schema.text(text)]
   );
@@ -73,10 +74,14 @@ describe('toggleList — tracked switch to another list', () => {
     const switched = run(before, toggleNumberedList);
     expect(switched.doc.firstChild?.attrs.numPr).toEqual({ numId: 2, ilvl: 0 });
     expect(switched.doc.firstChild?.attrs.listLevelStarts).toBeNull();
+    expect(switched.doc.firstChild?.attrs.listLevelAbstractStarts).toBeNull();
 
     const rejected = run(switched, rejectChangeById(revisionId(switched)));
     expect(rejected.doc.firstChild?.attrs.numPr).toEqual({ numId: 5, ilvl: 0 });
     expect(rejected.doc.firstChild?.attrs.listLevelStarts).toEqual([5, 0, 0, 0, 0, 0, 0, 0, 0]);
+    expect(rejected.doc.firstChild?.attrs.listLevelAbstractStarts).toEqual([
+      5, 0, 0, 0, 0, 0, 0, 0, 0,
+    ]);
     expect(markers(rejected)).toEqual(['5.', '6.']);
   });
 
@@ -85,6 +90,7 @@ describe('toggleList — tracked switch to another list', () => {
     const accepted = run(switched, acceptChangeById(revisionId(switched)));
     expect(accepted.doc.firstChild?.attrs.numPr).toEqual({ numId: 2, ilvl: 0 });
     expect(accepted.doc.firstChild?.attrs.listLevelStarts).toBeNull();
+    expect(accepted.doc.firstChild?.attrs.listLevelAbstractStarts).toBeNull();
     expect(accepted.doc.firstChild?.attrs.pPrChange).toBeNull();
     expect(markers(accepted)).toEqual(['1.', '2.']);
   });

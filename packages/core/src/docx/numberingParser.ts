@@ -754,19 +754,29 @@ export function computeListRendering(
   const instance = numbering.getInstance(numId);
   const overrideForLevel = instance?.levelOverrides?.find((o) => o.ilvl === ilvl);
 
-  // Each level's start for this numId (see ListRendering.levelStarts). The
-  // override's startOverride wins over a level it redefines with `w:lvl`.
+  // Each level's start for this numId, with and without its startOverride
+  // (see ListRendering.levelStarts / levelAbstractStarts). The override's
+  // startOverride wins over a level it redefines with `w:lvl`.
+  const abstractLevels = instance
+    ? numbering.getAbstract(instance.abstractNumId)?.levels
+    : undefined;
   const levelStarts: number[] = [];
+  const levelAbstractStarts: number[] = [];
   for (let i = 0; i < 9; i += 1) {
     const override = instance?.levelOverrides?.find((o) => o.ilvl === i);
     const defined = numbering.getLevel(numId, i);
-    levelStarts.push(
-      clampListStart(override?.startOverride ?? defined?.start ?? (defined ? 0 : 1))
-    );
+    // getLevel folds a bare startOverride into the level's start; read the
+    // abstract level under it (or the w:lvl redefinition) instead.
+    const own =
+      override?.lvl ??
+      (override?.startOverride !== undefined
+        ? abstractLevels?.find((l) => l.ilvl === i)
+        : undefined) ??
+      defined;
+    const ownStart = own?.start ?? (own ? 0 : 1);
+    levelStarts.push(clampListStart(override?.startOverride ?? ownStart));
+    levelAbstractStarts.push(clampListStart(ownStart));
   }
-  const startOverrideLevels = (instance?.levelOverrides ?? [])
-    .filter((o) => o.startOverride !== undefined)
-    .map((o) => o.ilvl);
 
   return {
     level: ilvl,
@@ -786,7 +796,7 @@ export function computeListRendering(
         ? undefined
         : clampListStart(overrideForLevel.startOverride),
     levelStarts,
-    startOverrideLevels: startOverrideLevels.length > 0 ? startOverrideLevels : undefined,
+    levelAbstractStarts,
   };
 }
 

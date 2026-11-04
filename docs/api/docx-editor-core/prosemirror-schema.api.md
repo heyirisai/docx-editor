@@ -168,6 +168,7 @@ export interface ParagraphAttrs {
     lineSpacingRule?: LineSpacingRule;
     listAbstractNumId?: number;
     listIsBullet?: boolean;
+    listLevelAbstractStarts?: number[];
     listLevelNumFmts?: NumberFormat[];
     listLevelStarts?: number[];
     listMarker?: string;
@@ -177,7 +178,6 @@ export interface ParagraphAttrs {
     listMarkerSuffix?: 'tab' | 'space' | 'nothing';
     listNumFmt?: NumberFormat;
     listStartOverride?: number;
-    listStartOverrideLevels?: number[];
     // (undocumented)
     numPr?: {
         numId?: number;

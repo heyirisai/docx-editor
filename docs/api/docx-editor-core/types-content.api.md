@@ -486,7 +486,7 @@ export interface ParagraphPropertyChange {
     previousFormatting?: ParagraphFormatting;
     previousListStarts?: {
         levelStarts: number[] | null;
-        startOverrideLevels: number[] | null;
+        levelAbstractStarts: number[] | null;
     };
     // (undocumented)
     type: 'paragraphPropertyChange';

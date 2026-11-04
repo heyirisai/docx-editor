@@ -14,8 +14,15 @@ import { convertBulletToUnicode } from '../../docx/blockContentParser';
 import { clampListStart, padDecimal } from '../../docx/numberingParser';
 
 /**
- * Counter slot of a level with no number yet: unused so far, or restarted by a
- * shallower level. A real value can be 0 (a level whose start is 0).
+ * Counter slot of a level nothing on the abstractNum has numbered yet. It takes
+ * the level's abstract start (`w:start`), not a numId's startOverride.
+ */
+const NEVER = -2;
+
+/**
+ * Counter slot of a level a shallower level restarted. It takes the numId's
+ * start for the level, startOverride included. A real value can be 0 (a level
+ * whose start is 0), so both markers are negative.
  */
 const UNSET = -1;
 
@@ -72,9 +79,20 @@ function toLetter(n: number, upper: boolean): string {
   return upper ? out : out.toLowerCase();
 }
 
+/** Formats with no zero. Word prints a 0 in them as a space (see {@link formatCounter}). */
+const NO_ZERO_FORMATS: ReadonlySet<NumberFormat> = new Set([
+  'upperRoman',
+  'lowerRoman',
+  'upperLetter',
+  'lowerLetter',
+]);
+
 function formatCounter(value: number, fmt: NumberFormat | undefined): string {
-  // 0 prints as "0" in the decimal formats; roman and letter have no zero.
+  // 0 prints as "0" in the decimal formats. Roman and letter have no zero, so
+  // Word prints a space in its place and keeps the punctuation after it:
+  // "%1." reads " ." for a lowerLetter level at 0.
   if (value < 0) return '';
+  if (value === 0 && fmt && NO_ZERO_FORMATS.has(fmt)) return ' ';
   switch (fmt) {
     case 'upperRoman':
       return toRoman(value, true);
@@ -158,6 +176,15 @@ function levelStart(pmAttrs: PMParagraphAttrs, ilvl: number, paraLevel: number):
 }
 
 /**
+ * Start value of `ilvl` without the numId's startOverride: the level's own
+ * `w:start` (ListRendering.levelAbstractStarts), else 1 for paragraphs
+ * without it (editor-created lists). Clamped like {@link levelStart}.
+ */
+function abstractStart(pmAttrs: PMParagraphAttrs, ilvl: number): number {
+  return clampListStart(pmAttrs.listLevelAbstractStarts?.[ilvl] ?? 1);
+}
+
+/**
  * Advance the counter stack for a list paragraph and return the rendered
  * marker. Mutates `counters` in place. Returns null when no marker should
  * be drawn (numId is missing or 0 — "no numbering" per ECMA-376).
@@ -193,34 +220,38 @@ export function computeListMarker(
   }
 
   const counterKey = pmAttrs.listAbstractNumId ?? numId;
-  const counters = listCounters.get(counterKey) ?? new Array<number>(9).fill(UNSET);
+  const counters = listCounters.get(counterKey) ?? new Array<number>(9).fill(NEVER);
 
-  // The first paragraph of a numId restarts every level its lvlOverride gives a
-  // startOverride (and the levels below it), even when another numId on the
-  // same abstractNum has been counting them (ECMA-376 §17.9.27). Word's
-  // "Restart at 1" is such an override on level 0.
-  const seenKey = String(numId);
+  // A numId's startOverride for a level restarts that level the first time the
+  // numId numbers a paragraph AT that level (ECMA-376 §17.9.27), even when
+  // another numId on the same abstractNum has been counting it. Word's
+  // "Restart at 1" is such an override on level 0. Shallower levels the
+  // paragraph skips are left alone, as in Word.
+  const seenKey = `${numId}:${level}`;
+  let restartedHere = false;
   if (!seenNumIds.has(seenKey)) {
     seenNumIds.add(seenKey);
-    const restarted =
-      pmAttrs.listStartOverrideLevels ?? (pmAttrs.listStartOverride != null ? [level] : []);
-    for (const ilvl of restarted) {
-      for (let i = Math.max(0, ilvl); i < counters.length; i += 1) counters[i] = UNSET;
-    }
+    restartedHere = pmAttrs.listStartOverride != null;
   }
 
-  // A shallower level with no number yet (unused so far in this list, or
-  // restarted by an even shallower level) takes its start value and counts as
-  // used, as in Word. A list that opens with sub-items numbers them "1.1.",
+  // A shallower level with no number yet takes a start value and counts as
+  // used, as in Word: its abstract `w:start` if nothing has numbered it yet,
+  // or the numId's start (startOverride included) if an even shallower level
+  // restarted it. So a list that opens with sub-items numbers them "1.1.",
   // "1.2." and its first top-level item "2." ("5.1.", "5.2.", "6." when level
-  // 0 starts at 5). A skipped level prints "1.1.1." (not "1.1."), and the next
-  // item at that level is "1.2.".
+  // 0's w:start is 5), while a "Restart at 1" list that opens with sub-items
+  // prints "1.1.", "1.2." and then "1." again. A skipped level prints "1.1.1."
+  // (not "1.0.1."), and the next item at that level is "1.2.".
   for (let i = 0; i < level; i += 1) {
-    if ((counters[i] ?? UNSET) === UNSET) counters[i] = levelStart(pmAttrs, i, level);
+    const value = counters[i] ?? NEVER;
+    if (value === NEVER) counters[i] = abstractStart(pmAttrs, i);
+    else if (value === UNSET) counters[i] = levelStart(pmAttrs, i, level);
   }
 
-  const current = counters[level] ?? UNSET;
-  counters[level] = current === UNSET ? levelStart(pmAttrs, level, level) : current + 1;
+  const current = counters[level] ?? NEVER;
+  if (restartedHere || current === UNSET) counters[level] = levelStart(pmAttrs, level, level);
+  else if (current === NEVER) counters[level] = abstractStart(pmAttrs, level);
+  else counters[level] = current + 1;
   for (let i = level + 1; i < counters.length; i += 1) {
     counters[i] = UNSET;
   }

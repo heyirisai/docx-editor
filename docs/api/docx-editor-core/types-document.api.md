@@ -580,6 +580,7 @@ export interface ListRendering {
     abstractNumId?: number;
     isBullet: boolean;
     level: number;
+    levelAbstractStarts?: number[];
     levelNumFmts?: NumberFormat[];
     levelStarts?: number[];
     marker: string;
@@ -590,7 +591,6 @@ export interface ListRendering {
     numFmt?: NumberFormat;
     numId: number;
     startOverride?: number;
-    startOverrideLevels?: number[];
 }
 
 // @public
@@ -795,7 +795,7 @@ export interface ParagraphPropertyChange {
     previousFormatting?: ParagraphFormatting;
     previousListStarts?: {
         levelStarts: number[] | null;
-        startOverrideLevels: number[] | null;
+        levelAbstractStarts: number[] | null;
     };
     // (undocumented)
     type: 'paragraphPropertyChange';
