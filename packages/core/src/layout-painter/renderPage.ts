@@ -884,7 +884,8 @@ export function renderPage(
       options.headerContent?.visualBottom ?? options.headerContent?.height ?? 0;
     // The element box is the in-flow band (floating content overflows it,
     // visible, and is non-interactive in normal mode via CSS) or, when empty, a
-    // double-click strip kept in the margin — see `headerFooterBox`.
+    // double-click strip kept in the margin (or on the page edge when the
+    // margin is too thin) — see `headerFooterBox`.
     const headerBox = headerFooterBox('header', options.headerContent, page, headerDistance);
     // If header content fits in the original space, clip overflow; otherwise
     // margins.top was already expanded so let content show fully.
@@ -899,6 +900,9 @@ export function renderPage(
     headerEl.style.width = `${headerContentWidth}px`;
     headerEl.style.height = `${headerBox.height}px`;
     headerEl.style.minHeight = `${headerBox.height}px`;
+    // An empty strip on a margin too thin to hold it lies over the body; lift
+    // it above the (z-auto) body area so the double-click still reaches it.
+    if (headerBox.aboveBody) headerEl.style.zIndex = '1';
 
     let shouldClipHeader = !headerOverflows;
     if (options.headerContent && options.headerContent.blocks.length > 0) {
@@ -971,6 +975,7 @@ export function renderPage(
     footerEl.style.width = `${footerContentWidth}px`;
     footerEl.style.height = `${footerBox.height}px`;
     footerEl.style.minHeight = `${footerBox.height}px`;
+    if (footerBox.aboveBody) footerEl.style.zIndex = '1';
 
     // Content anchored above the band (negative visualTop) paints outside the
     // box; clipping would cut it off, so only clip when everything sits inside.

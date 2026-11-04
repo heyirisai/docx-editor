@@ -44,6 +44,11 @@ function storyWithPicture(): HeaderFooterContent {
   return { blocks: [block], measures: [measure], height: 18, flowHeight: 18 };
 }
 
+const box = (el: HTMLElement) => ({
+  top: parseFloat(el.style.top),
+  bottom: parseFloat(el.style.top) + parseFloat(el.style.height),
+});
+
 describe('header/footer paint behind the body', () => {
   test('header and footer bands come before the body content area', () => {
     const pageEl = renderPage(
@@ -84,12 +89,11 @@ describe('header/footer paint behind the body', () => {
     );
     const header = pageEl.querySelector(`.${PAGE_CLASS_NAMES.header}`) as HTMLElement;
     const footer = pageEl.querySelector(`.${PAGE_CLASS_NAMES.footer}`) as HTMLElement;
-    const box = (el: HTMLElement) => ({
-      top: parseFloat(el.style.top),
-      bottom: parseFloat(el.style.top) + parseFloat(el.style.height),
-    });
     expect(box(header)).toEqual({ top: 24, bottom: 48 });
     expect(box(footer)).toEqual({ top: 1123 - 48, bottom: 1123 - 24 });
+    // Clear of the body, so they stay under it (no lift).
+    expect(header.style.zIndex).toBe('');
+    expect(footer.style.zIndex).toBe('');
 
     // Default margins leave room at the distance: the strip stays there.
     const roomy = renderPage(
@@ -105,6 +109,50 @@ describe('header/footer paint behind the body', () => {
       top: 1123 - 72,
       bottom: 1123 - 48,
     });
+  });
+
+  test('at a zero margin an empty header/footer strip sits on the page edge, lifted over the body', () => {
+    // No margin leaves no room clear of the body: without a strip on the page
+    // edge there is no "Double-click to add header" target at all.
+    const flush: Page = {
+      ...makePage(),
+      margins: { top: 0, right: 48, bottom: 0, left: 48, header: 48, footer: 48 },
+    };
+    const pageEl = renderPage(
+      flush,
+      { pageNumber: 1, totalPages: 1, section: 'body' },
+      { document }
+    );
+    const header = pageEl.querySelector(`.${PAGE_CLASS_NAMES.header}`) as HTMLElement;
+    const footer = pageEl.querySelector(`.${PAGE_CLASS_NAMES.footer}`) as HTMLElement;
+    const content = pageEl.querySelector(`.${PAGE_CLASS_NAMES.content}`) as HTMLElement;
+
+    expect(box(header).top).toBe(0);
+    expect(box(header).bottom).toBeGreaterThan(0);
+    expect(box(footer).bottom).toBe(1123);
+    expect(box(footer).top).toBeLessThan(1123);
+
+    // The strips overlap the body area, which still follows them in DOM order,
+    // so only a z-index above the body's (auto) keeps them hit-testable.
+    const order = Array.from(pageEl.children);
+    expect(order.indexOf(header)).toBeLessThan(order.indexOf(content));
+    expect(order.indexOf(footer)).toBeLessThan(order.indexOf(content));
+    expect(content.style.zIndex).toBe('');
+    expect(Number(header.style.zIndex)).toBeGreaterThan(0);
+    expect(Number(footer.style.zIndex)).toBeGreaterThan(0);
+
+    // Header/footer CONTENT is never lifted: at the same margin it stays behind.
+    const withContent = renderPage(
+      flush,
+      { pageNumber: 1, totalPages: 1, section: 'body' },
+      { document, headerContent: storyWithPicture(), footerContent: storyWithPicture() }
+    );
+    expect(
+      (withContent.querySelector(`.${PAGE_CLASS_NAMES.header}`) as HTMLElement).style.zIndex
+    ).toBe('');
+    expect(
+      (withContent.querySelector(`.${PAGE_CLASS_NAMES.footer}`) as HTMLElement).style.zIndex
+    ).toBe('');
   });
 
   test('bands render even without header/footer content (double-click targets)', () => {

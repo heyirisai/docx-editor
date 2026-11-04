@@ -74,6 +74,14 @@ export interface HeaderFooterLayoutInfo {
 const MIN_HEADER_FOOTER_HIT_HEIGHT = 24;
 
 /**
+ * Height of the empty header/footer strip at the page edge when the margin is
+ * thinner than this (down to 0). That strip overlaps the body, so it stays a
+ * thin edge: enough to double-click, but not a full strip that would swallow
+ * clicks on the whole first body line.
+ */
+const MIN_HEADER_FOOTER_EDGE_HIT_HEIGHT = 8;
+
+/**
  * Vertical box (page px) of the header/footer element, which is also the
  * double-click target for editing it.
  *
@@ -90,13 +98,18 @@ const MIN_HEADER_FOOTER_HIT_HEIGHT = 24;
  * leaves less than the strip height before the body edge (Word's "Narrow"
  * margins put the distance on the margin itself), it moves into the margin
  * instead of lying unreachable under the first body line.
+ *
+ * A margin thinner than the edge strip (e.g. 0) cannot hold it, so the strip
+ * sits on the page edge over the body and `aboveBody` asks the painter to lift
+ * it there. Word, too, still opens the header from the top edge of the page.
+ * Only an empty strip is lifted: it has no content that could hide body text.
  */
 export function headerFooterBox(
   section: 'header' | 'footer',
   content: HeaderFooterContent | undefined,
   page: { size: { h: number }; margins: { top: number; bottom: number } },
   distance: number
-): { top: number; height: number } {
+): { top: number; height: number; aboveBody: boolean } {
   const min = MIN_HEADER_FOOTER_HIT_HEIGHT;
   const pageHeight = page.size.h;
   if (content && content.blocks.length > 0) {
@@ -104,16 +117,22 @@ export function headerFooterBox(
     const flowHeight = content.flowHeight ?? content.height ?? 0;
     const height = Math.max(flowHeight - Math.min(0, visualTop), min);
     const top = section === 'header' ? distance + visualTop : pageHeight - distance - height;
-    return { top, height };
+    return { top, height, aboveBody: false };
   }
+  let top: number;
+  let bottom: number;
   if (section === 'header') {
-    const bottom = Math.min(distance + min, page.margins.top);
-    const top = Math.max(0, Math.min(distance, bottom - min));
-    return { top, height: Math.max(0, bottom - top) };
+    bottom = Math.min(distance + min, page.margins.top);
+    top = Math.max(0, Math.min(distance, bottom - min));
+  } else {
+    top = Math.max(pageHeight - distance - min, pageHeight - page.margins.bottom);
+    bottom = Math.min(pageHeight, Math.max(pageHeight - distance, top + min));
   }
-  const top = Math.max(pageHeight - distance - min, pageHeight - page.margins.bottom);
-  const bottom = Math.min(pageHeight, Math.max(pageHeight - distance, top + min));
-  return { top, height: Math.max(0, bottom - top) };
+  const edge = MIN_HEADER_FOOTER_EDGE_HIT_HEIGHT;
+  if (bottom - top >= edge) {
+    return { top, height: bottom - top, aboveBody: false };
+  }
+  return { top: section === 'header' ? 0 : pageHeight - edge, height: edge, aboveBody: true };
 }
 
 function getPositionAlignment(
