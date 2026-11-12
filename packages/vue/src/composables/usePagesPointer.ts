@@ -21,6 +21,7 @@ import {
   detectTableInsertHover,
   TABLE_INSERT_HIDE_DELAY_MS,
 } from '@eigenpal/docx-editor-core/layout-bridge/tableInsertHover';
+import { pageHeaderFooterRId } from '@eigenpal/docx-editor-core/layout-bridge';
 import {
   scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
   resolvePos as resolvePosImpl,
@@ -380,10 +381,18 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       null;
     const refs = position === 'header' ? sp?.headerReferences : sp?.footerReferences;
     const map = position === 'header' ? doc.package.headers : doc.package.footers;
-    // Default ref takes priority; fall back to `first` if the doc only ships first.
+    // Edit the part the clicked page actually shows (each section paints its
+    // own header/footer); otherwise default ref first, then `first`.
+    const pageNumber = Number(
+      (hfEl.closest('.layout-page') as HTMLElement | null)?.dataset.pageNumber
+    );
+    const shown = pageHeaderFooterRId(
+      opts.layout.value?.pages.find((p) => p.number === pageNumber),
+      position
+    );
     const refEntry =
       refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
-    let rId: string | null = refEntry?.rId ?? null;
+    let rId: string | null = shown?.rId ?? refEntry?.rId ?? null;
     let hf: HeaderFooter | null = rId ? (map?.get(rId) ?? null) : null;
 
     // Materialise an empty HF part if none exists for this section yet

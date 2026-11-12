@@ -89,9 +89,9 @@ export function getMargins(sp: SectionProperties | null | undefined): PageMargin
  *
  * Mirrors React's lookup in DocxEditor.tsx: read `pkg.headers`/`footers`
  * (Maps keyed by rId), resolve through `sp.headerReferences` /
- * `footerReferences`. When `titlePg` is unset and only `first` HFs
- * exist, they serve as the default — same Word fallback both adapters
- * have shipped.
+ * `footerReferences`. A `first` part is only ever shown under `titlePg`
+ * (ECMA-376 §17.10.6); without it the section's pages show the `default`
+ * part, or nothing when there is none — `first` never stands in for it.
  */
 export function resolveHeaderFooter(
   doc: Document | null,
@@ -124,11 +124,6 @@ export function resolveHeaderFooter(
     if (def?.rId) footer = footers.get(def.rId) ?? null;
     const first = sp.footerReferences.find((r) => r.type === 'first');
     if (first?.rId) firstFooter = footers.get(first.rId) ?? null;
-  }
-
-  if (!sp?.titlePg) {
-    if (!header && firstHeader) header = firstHeader;
-    if (!footer && firstFooter) footer = firstFooter;
   }
 
   return { header, footer, firstHeader, firstFooter };

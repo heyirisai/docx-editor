@@ -16,10 +16,21 @@ export function floatingImageIsBehindDoc(img: { wrapType?: string }): boolean {
 
 /**
  * Check if an image run is a floating image positioned at page/cell level.
+ * A body topAndBottom anchor (`anchoredBand`) counts: it paints at its anchor
+ * and its band is reserved by a float zone instead of a block line.
  */
 export function isFloatingImageRun(run: ImageRun): boolean {
   if (isFloatingWrapType(run.wrapType)) return true;
+  if (run.anchoredBand === true) return true;
   return run.displayMode === 'float';
+}
+
+/**
+ * A `wp:anchor` picture with `wrapTopAndBottom` (it has a position): Word
+ * places it at its anchor offset and breaks the text above and below it.
+ */
+export function isAnchoredTopAndBottomImageRun(run: ImageRun): boolean {
+  return run.wrapType === 'topAndBottom' && !!run.position;
 }
 
 /**

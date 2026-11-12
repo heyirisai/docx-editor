@@ -145,3 +145,91 @@ export function extendMarginsForHeaderFooter(
 
   return { margins: extendedMargins, finalMargins: extendedFinal };
 }
+
+/**
+ * One section's header/footer stories for {@link extendSectionMarginsForHeaderFooter},
+ * in section order (one per `sectionBreak` block, then the final section).
+ *
+ * @internal
+ */
+export interface SectionHeaderFooterBands {
+  headers: Array<HeaderFooterContent | undefined>;
+  footers: Array<HeaderFooterContent | undefined>;
+  /** The section's `w:header` distance in px, when it states one. */
+  headerDistance?: number;
+  /** The section's `w:footer` distance in px, when it states one. */
+  footerDistance?: number;
+}
+
+/**
+ * Per-section variant of {@link extendMarginsForHeaderFooter}: each section's
+ * body clears ITS OWN header/footer bands (a cover section without a header
+ * keeps its margins even when later sections have a tall one). A
+ * `sectionBreak` without its own margins record gets one materialised from
+ * the section it continues, so the extension stays scoped to that section.
+ *
+ * `sections` aligns with the section order; missing trailing entries reuse
+ * the last one.
+ *
+ * @internal
+ */
+export function extendSectionMarginsForHeaderFooter(input: {
+  pageSize: { w: number; h: number };
+  margins: PageMargins;
+  finalPageSize?: { w: number; h: number };
+  finalMargins: PageMargins;
+  bodyBlocks: FlowBlock[];
+  sections: SectionHeaderFooterBands[];
+  warn?: (message: string) => void;
+}): ExtendMarginsForHeaderFooterResult {
+  const { bodyBlocks, sections, warn } = input;
+  if (sections.length === 0) return { margins: input.margins, finalMargins: input.finalMargins };
+  const bandsFor = (i: number) => sections[Math.min(i, sections.length - 1)];
+
+  const extendFor = (
+    i: number,
+    pageSize: { w: number; h: number },
+    base: PageMargins
+  ): PageMargins => {
+    const bands = bandsFor(i);
+    const withDistances: PageMargins = {
+      ...base,
+      header: bands.headerDistance ?? base.header,
+      footer: bands.footerDistance ?? base.footer,
+    };
+    const { margins: extended } = extendMarginsForHeaderFooter({
+      pageSize,
+      margins: withDistances,
+      finalMargins: withDistances,
+      headers: bands.headers,
+      footers: bands.footers,
+      warn,
+    });
+    if (extended === withDistances) return base;
+    return { ...base, top: extended.top, bottom: extended.bottom };
+  };
+
+  let sectionIdx = 0;
+  let prevPageSize = input.pageSize;
+  let prevMargins = input.margins;
+  for (const block of bodyBlocks) {
+    if (block.kind !== 'sectionBreak') continue;
+    const sb = block as SectionBreakBlock;
+    const pageSize = sb.pageSize ?? prevPageSize;
+    const base = sb.margins ?? prevMargins;
+    const extended = extendFor(sectionIdx, pageSize, base);
+    if (extended !== base) sb.margins = extended;
+    prevPageSize = pageSize;
+    prevMargins = base;
+    sectionIdx++;
+  }
+
+  const finalMargins = extendFor(
+    sectionIdx,
+    input.finalPageSize ?? input.pageSize,
+    input.finalMargins
+  );
+  // The body fallback geometry stands in for the first section's.
+  const margins = extendFor(0, input.pageSize, input.margins);
+  return { margins, finalMargins };
+}

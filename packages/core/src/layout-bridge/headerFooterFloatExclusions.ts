@@ -27,6 +27,7 @@ import type { ImageRun, Page, TextBoxBlock } from '../layout-engine/types';
 import type { BodyExclusionBand, GetPageBodyExclusions } from '../layout-engine/bodyExclusions';
 import { wrapsAroundText } from '../docx/wrapTypes';
 import { imageWrapTextFromCssFloat } from '../layout-painter/floatingImageFlow';
+import { pageUsesFirstPageHeaderFooter } from './sectionHeaderFooters';
 import {
   resolveHeaderFooterFloatLeftPx,
   resolveHeaderFooterFloatTop,
@@ -252,7 +253,7 @@ export function createHeaderFooterBodyExclusions(
   // Pages share a handful of geometries; resolve each (story, geometry) once.
   const cache = new Map<string, BodyExclusionBand[]>();
   return (page) => {
-    const firstPage = sources.titlePg === true && page.number === 1;
+    const firstPage = pageUsesFirstPageHeaderFooter(page, sources.titlePg);
     const header = firstPage ? sources.firstPageHeader : sources.header;
     const footer = firstPage ? sources.firstPageFooter : sources.footer;
     const { size, margins } = page;
@@ -276,5 +277,24 @@ export function createHeaderFooterBodyExclusions(
       cache.set(key, bands);
     }
     return bands;
+  };
+}
+
+/**
+ * Per-section variant of {@link createHeaderFooterBodyExclusions}: each page
+ * gets the bands of its own section's header/footer (`Page.sectionIndex`
+ * indexes `sections`). Returns `undefined` when no section's stories displace
+ * the body.
+ *
+ * @internal
+ */
+export function createSectionHeaderFooterBodyExclusions(
+  sections: HeaderFooterExclusionSources[]
+): GetPageBodyExclusions | undefined {
+  const perSection = sections.map((sources) => createHeaderFooterBodyExclusions(sources));
+  if (!perSection.some(Boolean)) return undefined;
+  return (page) => {
+    const index = Math.min(page.sectionIndex ?? 0, perSection.length - 1);
+    return perSection[index]?.(page) ?? [];
   };
 }

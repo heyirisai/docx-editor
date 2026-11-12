@@ -124,7 +124,42 @@ export function parseXml(xml: string): XmlElement {
  * Serialize an XmlElement back to an XML string
  */
 export function elementToXml(element: XmlElement): string {
-  return js2xml({ elements: [element] }, { compact: false, spaces: 0 });
+  return js2xml(
+    { elements: [element] },
+    {
+      compact: false,
+      spaces: 0,
+      // xml-js types `attributesFn` like `textFn`; at runtime it receives and
+      // returns the attribute map.
+      attributesFn: escapeAttributeValues as unknown as (value: string) => void,
+    }
+  );
+}
+
+/**
+ * Parsed attribute values are decoded text, but xml-js writes them back with
+ * only `"` escaped. A preserved shape whose `descr` held `R&D` therefore came
+ * out malformed and was dropped by the save-time well-formedness check, and a
+ * `&#xA;` in alt text or `o:gfxdata` came back as a literal newline, which XML
+ * attribute normalisation turns into a space on the next read.
+ */
+function escapeAttributeValues(attributes: Record<string, unknown> | undefined) {
+  if (!attributes) return attributes;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(attributes)) {
+    out[key] =
+      typeof value === 'string'
+        ? value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/\n/g, '&#xA;')
+            .replace(/\r/g, '&#xD;')
+            .replace(/\t/g, '&#x9;')
+        : value;
+  }
+  return out;
 }
 
 /**

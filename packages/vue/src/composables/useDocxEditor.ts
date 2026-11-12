@@ -377,6 +377,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageHeaderForRender,
         firstPageFooterForRender,
         hasTitlePg,
+        sectionHeaderFooters,
         watermark,
         footnotesByPage,
       } = computeLayout({
@@ -418,6 +419,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageHeaderContent: firstPageHeaderForRender,
         firstPageFooterContent: firstPageFooterForRender,
         titlePage: hasTitlePg,
+        sectionHeaderFooters,
         watermark,
         footnotesByPage,
         imageAssetLoader,

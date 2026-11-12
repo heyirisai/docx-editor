@@ -168,3 +168,16 @@ export {
   DEFAULT_BODY_MARGIN_PX,
   DEFAULT_HF_DISTANCE_PX,
 } from './sectionGeometry';
+
+// Per-section header/footer stories (which part each page shows).
+export {
+  resolveSectionHeaderFooters,
+  sectionHeaderFooterSettings,
+  pageUsesFirstPageHeaderFooter,
+  pageHeaderFooterRId,
+} from './sectionHeaderFooters';
+export type {
+  HeaderFooterDoubleClickHandler,
+  HeaderFooterPartOnPage,
+  ResolvedSectionHeaderFooter,
+} from './sectionHeaderFooters';

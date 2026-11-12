@@ -117,6 +117,8 @@ export const tableRowSpec: NodeSpec = {
     trIns: { default: null },
     trDel: { default: null },
     trPrChange: { default: null },
+    // Table-level `w:sdt` / `w:customXml` wrappers around this row (round trip).
+    tableWrappers: { default: null },
   },
   parseDOM: [{ tag: 'tr' }],
   toDOM(node) {

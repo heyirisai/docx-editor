@@ -111,6 +111,7 @@ export function createPaginator(options: PaginatorOptions): {
         y: number;
     };
     forcePageBreak: () => PageState;
+    startSection: (index: number, startsNewPage: boolean) => void;
     forceColumnBreak: () => PageState;
     getColumnX: (columnIndex: number) => number;
     updateColumns: (newColumns: ColumnLayout) => void;
@@ -216,7 +217,7 @@ export function getHeaderRowsHeight(measure: TableMeasure, headerRowCount: numbe
 export function getMidChainIndices(chains: Map<number, KeepNextChain>): Set<number>;
 
 // @public
-export type GetPageBodyExclusions = (page: Readonly<Pick<Page, 'number' | 'size' | 'margins'>>) => readonly BodyExclusionBand[] | undefined;
+export type GetPageBodyExclusions = (page: Readonly<Pick<Page, 'number' | 'size' | 'margins' | 'sectionIndex' | 'firstPageOfSection'>>) => readonly BodyExclusionBand[] | undefined;
 
 // @public
 export function hasKeepLines(block: FlowBlock): boolean;
@@ -305,6 +306,7 @@ export type ImageRun = {
     relativeHeight?: number;
     renderOnly?: boolean;
     wrapType?: string;
+    anchoredBand?: boolean;
     displayMode?: 'inline' | 'block' | 'float';
     cssFloat?: 'left' | 'right' | 'none';
     distTop?: number;
@@ -460,14 +462,8 @@ export type Page = {
     };
     orientation?: 'portrait' | 'landscape';
     sectionIndex?: number;
-    headerFooterRefs?: {
-        headerDefault?: string;
-        headerFirst?: string;
-        headerEven?: string;
-        footerDefault?: string;
-        footerFirst?: string;
-        footerEven?: string;
-    };
+    firstPageOfSection?: boolean;
+    headerFooterRefs?: SectionHeaderFooterRefs;
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
     bodyBottom?: number;
@@ -697,11 +693,30 @@ export type SectionBreakBlock = {
     orientation?: 'portrait' | 'landscape';
     margins?: PageMargins;
     columns?: ColumnLayout;
+    headerFooter?: SectionHeaderFooterSettings;
 };
 
 // @public
 export type SectionBreakMeasure = {
     kind: 'sectionBreak';
+};
+
+// @public
+export type SectionHeaderFooterRefs = {
+    headerDefault?: string;
+    headerFirst?: string;
+    headerEven?: string;
+    footerDefault?: string;
+    footerFirst?: string;
+    footerEven?: string;
+};
+
+// @public
+export type SectionHeaderFooterSettings = {
+    refs?: SectionHeaderFooterRefs;
+    titlePg?: boolean;
+    headerDistance?: number;
+    footerDistance?: number;
 };
 
 // @public

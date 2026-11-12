@@ -49,7 +49,9 @@ function collectNewImages(blocks: BlockContent[]): Image[] {
 
   const collectFromRun = (run: { content: { type: string; image?: Image }[] }): void => {
     for (const c of run.content) {
-      if (c.type === 'drawing' && c.image?.src?.startsWith('data:')) {
+      // Render-only previews are never written (the preserved source is), so
+      // their paint — a picture or a generated SVG — needs no media part.
+      if (c.type === 'drawing' && !c.image?.renderOnly && c.image?.src?.startsWith('data:')) {
         images.push(c.image);
       }
     }

@@ -1,11 +1,14 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type {
   Document,
   HeaderFooter,
   BlockContent,
   SectionProperties,
 } from '@eigenpal/docx-editor-core/types/document';
-import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
+import {
+  resolveHeaderFooter,
+  type HeaderFooterDoubleClickHandler,
+} from '@eigenpal/docx-editor-core/layout-bridge';
 import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
 import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor';
 
@@ -46,26 +49,64 @@ export function useHeaderFooterEditing({
   hfEditIsFirstPage: boolean;
   setHfEditIsFirstPage: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
+  // The part a double-click opened when the clicked page shows its own
+  // section's header/footer (sections paint their own parts, ECMA-376 §17.10).
+  const [editTarget, setEditTarget] = useState<{
+    position: 'header' | 'footer';
+    rId: string;
+    isFirstPage: boolean;
+  } | null>(null);
+
   const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } =
     useMemo(() => {
       const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(
         document ?? null,
         finalSectionProperties ?? initialSectionProperties
       );
-      return {
+      const resolved = {
         headerContent: header,
         footerContent: footer,
         firstPageHeaderContent: firstHeader,
         firstPageFooterContent: firstFooter,
       };
-    }, [document, initialSectionProperties, finalSectionProperties]);
+      if (editTarget && hfEditPosition === editTarget.position) {
+        const map =
+          editTarget.position === 'header'
+            ? document?.package?.headers
+            : document?.package?.footers;
+        const hf = map?.get(editTarget.rId);
+        if (hf) {
+          const key =
+            editTarget.position === 'header'
+              ? editTarget.isFirstPage
+                ? 'firstPageHeaderContent'
+                : 'headerContent'
+              : editTarget.isFirstPage
+                ? 'firstPageFooterContent'
+                : 'footerContent';
+          resolved[key] = hf;
+        }
+      }
+      return resolved;
+    }, [document, initialSectionProperties, finalSectionProperties, editTarget, hfEditPosition]);
 
-  const handleHeaderFooterDoubleClick = useCallback(
-    (position: 'header' | 'footer', pageNumber?: number) => {
+  const handleHeaderFooterDoubleClick = useCallback<HeaderFooterDoubleClickHandler>(
+    (position, pageNumber, shown) => {
       // No scroll-to-page-1 — the HF content is shared across all pages by
       // `r:id`, so the painter renders the same edits on every page in real
       // time. Whichever page the user double-clicked, the chrome bar floats
       // over THAT page's header and edits propagate visually to all others.
+      // Edit the part the clicked page shows, when it shows one.
+      const shownMap =
+        position === 'header' ? document?.package?.headers : document?.package?.footers;
+      if (shown && shownMap?.has(shown.rId)) {
+        setEditTarget({ position, rId: shown.rId, isFirstPage: shown.isFirstPage });
+        setHfEditIsFirstPage(shown.isFirstPage);
+        setHfEditPosition(position);
+        return;
+      }
+      setEditTarget(null);
+
       const sectProps = document?.package?.document?.finalSectionProperties;
       const isFirstPage = sectProps?.titlePg === true && (pageNumber ?? 1) === 1;
       const hf = isFirstPage
@@ -168,7 +209,12 @@ export function useHeaderFooterEditing({
           ? sectionProps?.headerReferences
           : sectionProps?.footerReferences;
       const targetType = hfEditIsFirstPage ? 'first' : 'default';
+      const target =
+        editTarget && editTarget.position === hfEditPosition
+          ? { type: editTarget.isFirstPage ? 'first' : 'default', rId: editTarget.rId }
+          : null;
       const activeRef =
+        target ??
         refs?.find((r) => r.type === targetType) ??
         refs?.find((r) => r.type === 'default') ??
         refs?.find((r) => r.type === 'first') ??
@@ -199,7 +245,7 @@ export function useHeaderFooterEditing({
 
       setHfEditPosition(null);
     },
-    [hfEditPosition, hfEditIsFirstPage, document, pushDocument, setHfEditPosition]
+    [hfEditPosition, hfEditIsFirstPage, editTarget, document, pushDocument, setHfEditPosition]
   );
 
   const handleBodyClick = useCallback(() => {
@@ -226,7 +272,20 @@ export function useHeaderFooterEditing({
     const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
     const refs = sectionProps?.[refKey];
     const delTargetType = hfEditIsFirstPage ? 'first' : 'default';
+    if (
+      editTarget &&
+      editTarget.position === hfEditPosition &&
+      !refs?.some((r) => r.rId === editTarget.rId)
+    ) {
+      // The part belongs to an earlier section only; removing it would need
+      // that section's sectPr rewritten — leave it in place.
+      setHfEditPosition(null);
+      return;
+    }
     const activeRef =
+      (editTarget && editTarget.position === hfEditPosition
+        ? refs?.find((r) => r.rId === editTarget.rId)
+        : undefined) ??
       refs?.find((r) => r.type === delTargetType) ??
       refs?.find((r) => r.type === 'default') ??
       refs?.find((r) => r.type === 'first') ??
@@ -258,7 +317,7 @@ export function useHeaderFooterEditing({
     }
 
     setHfEditPosition(null);
-  }, [hfEditPosition, hfEditIsFirstPage, document, pushDocument, setHfEditPosition]);
+  }, [hfEditPosition, hfEditIsFirstPage, editTarget, document, pushDocument, setHfEditPosition]);
 
   const getHfTargetElement = useCallback(
     (pos: 'header' | 'footer'): HTMLElement | null => {

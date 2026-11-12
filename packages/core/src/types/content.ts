@@ -61,7 +61,13 @@ export type {
   TextBox,
 } from './content/shape';
 
-export type { TableCell, TableCellRowWrapper, TableRow, Table } from './content/table';
+export type {
+  TableCell,
+  TableCellRowWrapper,
+  TableRowTableWrapper,
+  TableRow,
+  Table,
+} from './content/table';
 
 export type { Comment, CommentRangeStart, CommentRangeEnd } from './content/comment';
 

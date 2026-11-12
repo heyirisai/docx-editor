@@ -36,5 +36,5 @@ export type BodyExclusionBand = {
  * @public
  */
 export type GetPageBodyExclusions = (
-  page: Readonly<Pick<Page, 'number' | 'size' | 'margins'>>
+  page: Readonly<Pick<Page, 'number' | 'size' | 'margins' | 'sectionIndex' | 'firstPageOfSection'>>
 ) => readonly BodyExclusionBand[] | undefined;
