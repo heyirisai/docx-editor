@@ -175,10 +175,13 @@ export {
   sectionHeaderFooterSettings,
   pageUsesFirstPageHeaderFooter,
   pageHeaderFooterRId,
+  resolveHeaderFooterSectionTarget,
+  createHeaderFooterPart,
 } from './sectionHeaderFooters';
 export type {
   HeaderFooterDoubleClickHandler,
   HeaderFooterPageSection,
+  HeaderFooterSectionTarget,
   HeaderFooterPartOnPage,
   ResolvedSectionHeaderFooter,
 } from './sectionHeaderFooters';

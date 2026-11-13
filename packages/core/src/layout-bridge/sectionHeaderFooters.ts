@@ -21,7 +21,8 @@ import type {
   SectionHeaderFooterRefs,
   SectionHeaderFooterSettings,
 } from '../layout-engine/types';
-import type { HeaderFooter, SectionProperties } from '../types/document';
+import type { Node as PMNode } from 'prosemirror-model';
+import type { DocxPackage, HeaderFooter, SectionProperties } from '../types/document';
 import { twipsToPixels } from '../utils/units';
 
 /** Header/footer settings a `w:sectPr` states itself (no inheritance). */
@@ -194,4 +195,112 @@ export function pageHeaderFooterRId(
   if (first) return { rId: first, isFirstPage: true };
   const def = position === 'header' ? refs.headerDefault : refs.footerDefault;
   return def ? { rId: def, isFirstPage: false } : null;
+}
+
+/**
+ * The section a header/footer double-click edits, for a page that shows no
+ * part (see {@link HeaderFooterDoubleClickHandler}).
+ */
+export interface HeaderFooterSectionTarget {
+  /** Position of the section-break paragraph holding the sectPr; null for the body-level one. */
+  pos: number | null;
+  sectionProperties: SectionProperties | undefined;
+  hdrFtrType: 'default' | 'first';
+  isFirstPage: boolean;
+  /** The part this section uses for that variant after inheritance, if any. */
+  inheritedRId?: string;
+}
+
+/**
+ * Resolve the clicked page's own section (ECMA-376 §17.10): its `w:sectPr`
+ * is a `_sectionProperties` paragraph attr in the body PM doc, or the
+ * body-level one for the last section (also the fallback without page info).
+ * References and `w:titlePg` inherit from earlier sections.
+ */
+export function resolveHeaderFooterSectionTarget(
+  pmDoc: PMNode | null | undefined,
+  finalSectionProperties: SectionProperties | null | undefined,
+  position: 'header' | 'footer',
+  section?: HeaderFooterPageSection,
+  pageNumber?: number
+): HeaderFooterSectionTarget {
+  const sections: { sp: SectionProperties | undefined; pos: number | null }[] = [];
+  pmDoc?.descendants((node, pos) => {
+    if (node.type.name === 'table') return false;
+    const sp = node.attrs._sectionProperties as SectionProperties | null | undefined;
+    if (node.type.name === 'paragraph' && sp) sections.push({ sp, pos });
+    return true;
+  });
+  sections.push({ sp: finalSectionProperties ?? undefined, pos: null });
+  const index = Math.min(section?.index ?? sections.length - 1, sections.length - 1);
+
+  const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
+  let titlePg = false;
+  for (let i = 0; i <= index; i++) titlePg = sections[i]!.sp?.titlePg ?? titlePg;
+  const isFirstPage = titlePg && (section ? section.firstPageOfSection : (pageNumber ?? 1) === 1);
+  const hdrFtrType = isFirstPage ? 'first' : 'default';
+  let inheritedRId: string | undefined;
+  for (let i = 0; i <= index; i++) {
+    const ref = sections[i]!.sp?.[refKey]?.find((r) => r.type === hdrFtrType);
+    if (ref?.rId) inheritedRId = ref.rId;
+  }
+  const { pos, sp } = sections[index]!;
+  return { pos, sectionProperties: sp, hdrFtrType, isFirstPage, inheritedRId };
+}
+
+/**
+ * A new empty header/footer part for `pkg`: its `r:id`, the part map and the
+ * relationships with it registered (so the serializer wires up content types
+ * and document rels), plus `sectionProperties` with a reference to it.
+ */
+export function createHeaderFooterPart(
+  pkg: DocxPackage,
+  sectionProperties: SectionProperties,
+  position: 'header' | 'footer',
+  hdrFtrType: 'default' | 'first'
+): {
+  rId: string;
+  part: HeaderFooter;
+  map: Map<string, HeaderFooter>;
+  relationships: NonNullable<DocxPackage['relationships']>;
+  sectionProperties: SectionProperties;
+} {
+  const mapKey = position === 'header' ? 'headers' : 'footers';
+  const existingRels = pkg.relationships;
+  let rId = `rId_new_${position}_${hdrFtrType}`;
+  for (let n = 2; existingRels?.has(rId) || pkg[mapKey]?.has(rId); n++) {
+    rId = `rId_new_${position}_${hdrFtrType}_${n}`;
+  }
+  const part: HeaderFooter = {
+    type: position,
+    hdrFtrType,
+    content: [{ type: 'paragraph', content: [] }],
+  };
+  const map = new Map(pkg[mapKey] ?? []);
+  map.set(rId, part);
+
+  const usedTargets = new Set<string>();
+  for (const rel of existingRels?.values() ?? []) {
+    if (rel.target) usedTargets.add(rel.target);
+  }
+  let targetNum = 1;
+  while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
+  const relationships = new Map(existingRels);
+  relationships.set(rId, {
+    id: rId,
+    type: `http://schemas.openxmlformats.org/officeDocument/2006/relationships/${position}`,
+    target: `${position}${targetNum}.xml`,
+  });
+
+  const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
+  return {
+    rId,
+    part,
+    map,
+    relationships,
+    sectionProperties: {
+      ...sectionProperties,
+      [refKey]: [...(sectionProperties[refKey] ?? []), { type: hdrFtrType, rId }],
+    },
+  };
 }

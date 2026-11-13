@@ -6,7 +6,9 @@ import type {
   SectionProperties,
 } from '@eigenpal/docx-editor-core/types/document';
 import {
+  createHeaderFooterPart,
   resolveHeaderFooter,
+  resolveHeaderFooterSectionTarget,
   type HeaderFooterDoubleClickHandler,
 } from '@eigenpal/docx-editor-core/layout-bridge';
 import { fromProseDoc, proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
@@ -113,36 +115,20 @@ export function useHeaderFooterEditing({
       if (!document?.package) return;
       const pkg = document.package;
 
-      // The clicked page's own section (ECMA-376 §17.10): its `w:sectPr` lives
-      // on a section-break paragraph of the main PM doc, or is the body-level
-      // one for the last section. Without page info, the last section.
+      // The clicked page's own section (ECMA-376 §17.10).
       const view = mainEditorRef?.current?.getView() ?? null;
-      const sections: { sp: SectionProperties | undefined; pos: number | null }[] = [];
-      view?.state.doc.descendants((node, pos) => {
-        if (node.type.name === 'table') return false;
-        const sp = node.attrs._sectionProperties as SectionProperties | null | undefined;
-        if (node.type.name === 'paragraph' && sp) sections.push({ sp, pos });
-        return true;
-      });
-      sections.push({ sp: pkg.document?.finalSectionProperties, pos: null });
-      const index = Math.min(section?.index ?? sections.length - 1, sections.length - 1);
-
-      // References and titlePg inherit from earlier sections.
-      const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
-      let titlePg = false;
-      for (let i = 0; i <= index; i++) titlePg = sections[i]!.sp?.titlePg ?? titlePg;
-      const isFirstPage =
-        titlePg && (section ? section.firstPageOfSection : (pageNumber ?? 1) === 1);
-      const hdrFtrType: 'first' | 'default' = isFirstPage ? 'first' : 'default';
-      let inherited: string | undefined;
-      for (let i = 0; i <= index; i++) {
-        const ref = sections[i]!.sp?.[refKey]?.find((r) => r.type === hdrFtrType);
-        if (ref?.rId) inherited = ref.rId;
-      }
+      const target = resolveHeaderFooterSectionTarget(
+        view?.state.doc,
+        pkg.document?.finalSectionProperties,
+        position,
+        section,
+        pageNumber
+      );
+      const { isFirstPage, inheritedRId } = target;
       setHfEditIsFirstPage(isFirstPage);
       const mapKey = position === 'header' ? 'headers' : 'footers';
-      if (inherited && pkg[mapKey]?.has(inherited)) {
-        setEditTarget({ position, rId: inherited, isFirstPage });
+      if (inheritedRId && pkg[mapKey]?.has(inheritedRId)) {
+        setEditTarget({ position, rId: inheritedRId, isFirstPage });
         setHfEditPosition(position);
         return;
       }
@@ -150,44 +136,14 @@ export function useHeaderFooterEditing({
       // Materialise an empty header/footer in THAT section's sectPr, as Word
       // does, so the user can start typing. Later sections that do not name
       // their own part inherit it.
-      const target = sections[index]!;
-      if (!target.sp || (target.pos !== null && !view)) return;
-
-      const existingRels = pkg.relationships;
-      let rId = `rId_new_${position}_${hdrFtrType}`;
-      for (let n = 2; existingRels?.has(rId) || pkg[mapKey]?.has(rId); n++) {
-        rId = `rId_new_${position}_${hdrFtrType}_${n}`;
-      }
-      const emptyHf: HeaderFooter = {
-        type: position === 'header' ? 'header' : 'footer',
-        hdrFtrType,
-        content: [{ type: 'paragraph', content: [] }],
-      };
-      const newMap = new Map(pkg[mapKey] ?? []);
-      newMap.set(rId, emptyHf);
-
-      // Register the rel so the serializer wires up content types + doc rels (#274).
-      const usedTargets = new Set<string>();
-      for (const rel of existingRels?.values() ?? []) {
-        if (rel.target) usedTargets.add(rel.target);
-      }
-      let targetNum = 1;
-      while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
-      const relType =
-        position === 'header'
-          ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
-          : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
-      const newRelationships = new Map(existingRels);
-      newRelationships.set(rId, {
-        id: rId,
-        type: relType,
-        target: `${position}${targetNum}.xml`,
-      });
-
-      const sectionProps: SectionProperties = {
-        ...target.sp,
-        [refKey]: [...(target.sp[refKey] ?? []), { type: hdrFtrType, rId }],
-      };
+      if (!target.sectionProperties || (target.pos !== null && !view)) return;
+      const created = createHeaderFooterPart(
+        pkg,
+        target.sectionProperties,
+        position,
+        target.hdrFtrType
+      );
+      const { rId } = created;
       let base: Document = document;
       if (target.pos !== null && view) {
         // A non-final section: its sectPr is a PM paragraph attribute.
@@ -195,7 +151,7 @@ export function useHeaderFooterEditing({
         view.dispatch(
           view.state.tr.setNodeMarkup(target.pos, undefined, {
             ...node.attrs,
-            _sectionProperties: sectionProps,
+            _sectionProperties: created.sectionProperties,
           })
         );
         base = fromProseDoc(view.state.doc, document);
@@ -205,11 +161,11 @@ export function useHeaderFooterEditing({
         ...base,
         package: {
           ...basePkg,
-          [mapKey]: newMap,
-          relationships: newRelationships,
+          [mapKey]: created.map,
+          relationships: created.relationships,
           document:
             target.pos === null && basePkg.document
-              ? { ...basePkg.document, finalSectionProperties: sectionProps }
+              ? { ...basePkg.document, finalSectionProperties: created.sectionProperties }
               : basePkg.document,
         },
       });
