@@ -699,7 +699,17 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
           e.stopPropagation();
           const position = headerEl ? 'header' : 'footer';
           const page = layout?.pages.find((p) => p.number === pageNum);
-          onHeaderFooterDoubleClick(position, pageNum, pageHeaderFooterRId(page, position));
+          onHeaderFooterDoubleClick(
+            position,
+            pageNum,
+            pageHeaderFooterRId(page, position),
+            page
+              ? {
+                  index: page.sectionIndex ?? 0,
+                  firstPageOfSection: page.firstPageOfSection ?? page.number === 1,
+                }
+              : undefined
+          );
           return;
         }
       }

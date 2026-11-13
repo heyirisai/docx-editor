@@ -161,14 +161,23 @@ export interface HeaderFooterPartOnPage {
   isFirstPage: boolean;
 }
 
+/** The section a clicked page belongs to (`Page.sectionIndex`). */
+export interface HeaderFooterPageSection {
+  index: number;
+  /** The page is its section's first page (shows `first` parts under `w:titlePg`). */
+  firstPageOfSection: boolean;
+}
+
 /**
  * Host callback for a double-click on a page's header/footer: the slot, the
- * page number, and the part that page shows (null when it shows none).
+ * page number, the part that page shows (null when it shows none), and the
+ * page's section (to create a part there when it shows none).
  */
 export type HeaderFooterDoubleClickHandler = (
   position: 'header' | 'footer',
   pageNumber?: number,
-  shownPart?: HeaderFooterPartOnPage | null
+  shownPart?: HeaderFooterPartOnPage | null,
+  section?: HeaderFooterPageSection
 ) => void;
 
 /**

@@ -178,6 +178,7 @@ export {
 } from './sectionHeaderFooters';
 export type {
   HeaderFooterDoubleClickHandler,
+  HeaderFooterPageSection,
   HeaderFooterPartOnPage,
   ResolvedSectionHeaderFooter,
 } from './sectionHeaderFooters';
