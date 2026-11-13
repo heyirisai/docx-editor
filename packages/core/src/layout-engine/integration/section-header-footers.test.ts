@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import JSZip from 'jszip';
 import { installCanvasDocumentStub } from './helpers';
 import { layoutDocxHeadless, parseDocxHeadless } from './headlessDocxLayout';
+import { sectionHeaderFooterSettings } from '../../layout-bridge/sectionHeaderFooters';
 
 const NS_W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -244,5 +245,13 @@ describe('each section paints its own header/footer (Word parity)', () => {
     const tops = res.layout.pages.map((p) => Math.round(p.margins.top));
     expect(tops.slice(0, 3)).toEqual([TOP_MARGIN_PX, TOP_MARGIN_PX, TOP_MARGIN_PX]);
     expect(tops[4]).toBeGreaterThan(TOP_MARGIN_PX);
+  });
+
+  test('even-page references are not carried (w:evenAndOddHeaders is unsupported)', () => {
+    const settings = sectionHeaderFooterSettings({
+      headerReferences: [{ type: 'even', rId: 'rIdEvenH' }],
+      footerReferences: [{ type: 'even', rId: 'rIdEvenF' }],
+    });
+    expect(settings?.refs).toBeUndefined();
   });
 });

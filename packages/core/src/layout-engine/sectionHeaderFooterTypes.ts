@@ -5,15 +5,14 @@
  */
 
 /**
- * Header/footer part references (`r:id`s) of one section, by variant.
+ * Header/footer part references (`r:id`s) of one section, by variant. Even-page
+ * parts are not modelled: `w:evenAndOddHeaders` is unsupported.
  */
 export type SectionHeaderFooterRefs = {
   headerDefault?: string;
   headerFirst?: string;
-  headerEven?: string;
   footerDefault?: string;
   footerFirst?: string;
-  footerEven?: string;
 };
 
 /**

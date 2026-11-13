@@ -7,7 +7,8 @@
  * everywhere else. A section that omits a reference of some type inherits
  * that reference from the previous section; the first section has nothing to
  * inherit, so a variant it does not reference is simply empty. A `first`
- * reference is never shown without `w:titlePg`.
+ * reference is never shown without `w:titlePg`. `even` references are ignored
+ * (`w:evenAndOddHeaders` is unsupported).
  *
  * Section settings travel on the `sectionBreak` flow blocks (so they follow
  * edits to the PM doc) plus the body-level `w:sectPr` for the last section.
@@ -33,13 +34,11 @@ export function sectionHeaderFooterSettings(
     if (!ref.rId) continue;
     if (ref.type === 'default') refs.headerDefault = ref.rId;
     else if (ref.type === 'first') refs.headerFirst = ref.rId;
-    else if (ref.type === 'even') refs.headerEven = ref.rId;
   }
   for (const ref of sp.footerReferences ?? []) {
     if (!ref.rId) continue;
     if (ref.type === 'default') refs.footerDefault = ref.rId;
     else if (ref.type === 'first') refs.footerFirst = ref.rId;
-    else if (ref.type === 'even') refs.footerEven = ref.rId;
   }
   const settings: SectionHeaderFooterSettings = {};
   if (Object.keys(refs).length > 0) settings.refs = refs;
@@ -65,10 +64,8 @@ export interface ResolvedSectionHeaderFooter {
 const REF_KEYS: Array<keyof SectionHeaderFooterRefs> = [
   'headerDefault',
   'headerFirst',
-  'headerEven',
   'footerDefault',
   'footerFirst',
-  'footerEven',
 ];
 
 /**
