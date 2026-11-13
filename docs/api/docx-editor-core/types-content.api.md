@@ -820,6 +820,7 @@ export interface TableRow {
     formatting?: TableRowFormatting;
     propertyChanges?: TableRowPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;
+    tableWrappers?: TableRowTableWrapper[];
     // (undocumented)
     type: 'tableRow';
 }
@@ -832,6 +833,18 @@ export interface TableRowPropertyChange {
     // (undocumented)
     type: 'tableRowPropertyChange';
 }
+
+// @public
+export type TableRowTableWrapper = {
+    kind: 'sdt';
+    id: number;
+    properties: SdtProperties;
+} | {
+    kind: 'customXml';
+    id: number;
+    startXml: string;
+    endXml: string;
+};
 
 // @public
 export interface TableStructuralChangeInfo {

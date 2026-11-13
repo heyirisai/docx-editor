@@ -58,7 +58,12 @@ import {
 } from './xmlParser';
 import { resolveThemeFontRef } from './themeParser';
 import { isTextBoxDrawing } from './textBoxParser';
-import { deriveGroupPreviewImages } from './groupPreview';
+import {
+  deriveDrawingPreview,
+  deriveVmlPreview,
+  drawingGraphicKind,
+  type DrawingPreviewContext,
+} from './drawingPreview';
 import { parseImage } from './imageParser';
 import { parseVmlImageContent } from './vmlImageParser';
 
@@ -580,9 +585,11 @@ function getLocalName(name: string | undefined): string {
 function parseRunContents(
   runElement: XmlElement,
   rels: RelationshipMap | null,
-  media: Map<string, MediaFile> | null
+  media: Map<string, MediaFile> | null,
+  theme: Theme | null = null
 ): RunContent[] {
   const contents: RunContent[] = [];
+  const previewCtx: DrawingPreviewContext = { rels, media, theme };
   const children = getChildElements(runElement);
 
   for (const child of children) {
@@ -639,13 +646,24 @@ function parseRunContents(
         contents.push({ type: 'noBreakHyphen' } as NoBreakHyphenContent);
         break;
 
-      case 'drawing':
-        // Drawing/image
+      case 'drawing': {
+        // Pictures are modelled; text boxes are lifted by blockContentParser.
+        // Any other graphic (shape, group, chart, diagram, canvas) has no model,
+        // so its source is carried through verbatim and painted from a
+        // render-only preview — parsing it as a picture wrote back an empty
+        // pic:pic and lost the shape on save.
+        const kind = isTextBoxDrawing(child) ? null : drawingGraphicKind(child);
+        if (kind && kind !== 'picture') {
+          contents.push({ type: 'rawXml', xml: elementToSelfContainedXml(child) } as RawXmlContent);
+          contents.push(...deriveDrawingPreview(child, previewCtx));
+          break;
+        }
         const drawing = parseDrawingContent(child, rels, media);
         if (drawing) {
           contents.push(drawing);
         }
         break;
+      }
 
       case 'pict':
       case 'object': {
@@ -656,6 +674,15 @@ function parseRunContents(
         const vmlImage = parseVmlImageContent(child, rels, media);
         if (vmlImage) {
           contents.push(vmlImage);
+          break;
+        }
+        // A drawn VML shape (no picture) has no model: keep its source rather
+        // than drop it, and reserve its box. Watermarks yield no preview and
+        // stay with extractWatermark, which writes them back itself.
+        const vmlPreview = deriveVmlPreview(child);
+        if (vmlPreview.length > 0) {
+          contents.push({ type: 'rawXml', xml: elementToSelfContainedXml(child) } as RawXmlContent);
+          contents.push(...vmlPreview);
         }
         break;
       }
@@ -679,6 +706,7 @@ function parseRunContents(
         const targetEl =
           choiceEl ?? getChildElements(child).find((el) => getLocalName(el.name) === 'Fallback');
         let modelled = false;
+        let previewSource: XmlElement | null = null;
         if (targetEl) {
           for (const innerChild of getChildElements(targetEl)) {
             const innerName = getLocalName(innerChild.name);
@@ -689,12 +717,18 @@ function parseRunContents(
                 modelled = true;
                 continue;
               }
-              const innerDrawing = parseDrawingContent(innerChild, rels, media);
-              // Only include drawings that have actual image data (skip shapes/connectors)
-              if (innerDrawing?.image?.src) {
-                contents.push(innerDrawing);
-                modelled = true;
+              if (drawingGraphicKind(innerChild) === 'picture') {
+                const innerDrawing = parseDrawingContent(innerChild, rels, media);
+                // Only include drawings that have actual image data
+                if (innerDrawing?.image?.src) {
+                  contents.push(innerDrawing);
+                  modelled = true;
+                  continue;
+                }
               }
+              previewSource ??= innerChild;
+            } else if (innerName === 'pict') {
+              previewSource ??= innerChild;
             }
           }
         }
@@ -705,9 +739,16 @@ function parseRunContents(
             type: 'rawXml',
             xml: elementToSelfContainedXml(child),
           } as RawXmlContent);
-          // Canvas-only images so the group can be painted; the preserved
-          // source above stays the only thing written back.
-          contents.push(...deriveGroupPreviewImages(child, rels, media));
+          // A render-only preview at the drawing's real frame, so the page
+          // lays out and paints around it; the preserved source above stays
+          // the only thing written back.
+          if (previewSource) {
+            contents.push(
+              ...(getLocalName(previewSource.name) === 'drawing'
+                ? deriveDrawingPreview(previewSource, previewCtx)
+                : deriveVmlPreview(previewSource))
+            );
+          }
         }
         break;
       }
@@ -773,7 +814,7 @@ export function parseRun(
   }
 
   // Parse run contents (text, tabs, breaks, images, etc.)
-  run.content = parseRunContents(node, rels, media);
+  run.content = parseRunContents(node, rels, media, theme);
 
   return run;
 }

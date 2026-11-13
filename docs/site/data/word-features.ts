@@ -402,7 +402,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Drag-to-reposition and edge resize with Word-style handles; text reflows around float zones.',
+      'Drag-to-reposition and edge resize with Word-style handles; text reflows around float zones. A topAndBottom picture sits at its anchor offset, with the text above it staying above and the text below starting under it.',
   },
   {
     id: 'images.wmf',
@@ -439,11 +439,11 @@ export const wordFeatures: WordFeature[] = [
     name: 'Drawing shapes & geometry',
     category: 'images',
     editing: 'none',
-    rendering: 'none',
+    rendering: 'partial',
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'A shape outside a group (wps:wsp, connectors, custom geometry) is kept verbatim and written back unchanged, but is not painted — nothing appears where it sits. Custom geometry authored in the editor is reduced to its bounding rectangle on save.',
+      'A shape without text (wps:wsp, connectors, custom geometry, drawn VML) is kept verbatim and written back unchanged. It is painted at its real size, position and wrapping: rectangles, rounded rectangles, ellipses, lines and custom geometry with solid, gradient and theme fills are drawn; any other shape, chart or diagram shows as a labelled, dashed placeholder in its box. Custom geometry authored in the editor is reduced to its bounding rectangle on save.',
   },
   {
     id: 'images.groups',
@@ -454,7 +454,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'preserved',
     tier: 'community',
     notes:
-      'The group is preserved verbatim and survives a save untouched. Rendering is a paint-only view of its PICTURES: nested groups compose correctly and page/column anchoring is honoured, but shapes, text boxes and connectors inside the group are not painted, and a16 rotation/flip on a child is ignored. A branded cover of banner shape + logo therefore shows the logo over blank space.',
+      'The group is preserved verbatim and survives a save untouched. Rendering is paint-only: nested groups compose correctly and page/column anchoring is honoured; its pictures and the shapes the shape preview supports are drawn, a text box inside the group is marked as a placeholder, and a16 rotation/flip on a child is ignored.',
   },
   {
     id: 'images.crop',
@@ -539,7 +539,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Margins editable; mid-body sectPr (section breaks) render and round-trip. Inserting new sections from the UI is not built yet.',
+      "Margins editable; mid-body sectPr (section breaks) render and round-trip. Each section paints its own header and footer (the first-page pair on its first page under titlePg), and double-clicking a header or footer edits the one of the clicked page's section, creating it there when missing. Inserting new sections from the UI is not built yet.",
   },
   {
     id: 'layout.headers-footers',
@@ -802,7 +802,7 @@ export const wordFeatures: WordFeature[] = [
     roundTrip: 'full',
     tier: 'community',
     notes:
-      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable, and a block control inside a table cell or text box is not modeled.',
+      'Discover, create, fill, and remove by tag/id/alias from the headless API and the editor (inline controls in table cells, headers and footers included). Content is editable; control properties (tag, alias, lock) are not UI-editable, and a block control inside a table cell or text box is not modeled. Table rows wrapped in a row-level control or customXml open, edit and save with their wrapper.',
     docsLink: '/docs/1.x/guides/content-controls',
   },
   {

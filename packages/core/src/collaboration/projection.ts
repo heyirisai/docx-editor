@@ -14,7 +14,8 @@ const DEFAULT_SCHEMA_VERSION = 2;
 const PRIVATE_ATTRS_BY_NODE: Readonly<Record<string, readonly string[]>> = {
   paragraph: ['_originalFormatting', '_originalRunBoundaries'],
   table: ['_originalFormatting'],
-  tableRow: ['_originalFormatting'],
+  // `tableWrappers` replays captured `w:sdtPr` / `w:customXml` tags around rows.
+  tableRow: ['_originalFormatting', 'tableWrappers'],
   // `rowWrappers` carries captured `w:customXml` tags that the serializer
   // replays, so like `rawPropertiesXml` it stays out of the peer-writable doc.
   tableCell: ['_originalFormatting', '_originalResolvedFill', 'rowWrappers'],

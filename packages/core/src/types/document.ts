@@ -92,6 +92,7 @@ export type {
   TextBox,
   TableCell,
   TableCellRowWrapper,
+  TableRowTableWrapper,
   TableRow,
   Table,
   Comment,

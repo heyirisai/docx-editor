@@ -84,7 +84,9 @@ describe('issue #472 anchored text box render', () => {
     const segments = [...pageEl.querySelectorAll<HTMLElement>('.layout-line-segment')];
     expect(segments.length).toBeGreaterThanOrEqual(2);
     expect(segments[0]?.style.left).toBe('0px');
-    expect(segments[1]?.style.left).toBe('363px');
+    // The box's exact EMU extent, not a whole-px rounding of it: text box
+    // sizes stay unrounded so they survive a save unchanged.
+    expect(parseFloat(segments[1]?.style.left ?? '')).toBeCloseTo(362.67, 1);
     expect(segments[0]?.textContent).not.toEqual(segments[1]?.textContent);
   });
 });

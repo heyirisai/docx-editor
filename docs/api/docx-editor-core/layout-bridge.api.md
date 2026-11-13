@@ -449,6 +449,9 @@ export function halfPtToPx(halfPt: number): number;
 export function hashParagraphBlock(block: ParagraphBlock): string;
 
 // @public
+export type HeaderFooterDoubleClickHandler = (position: 'header' | 'footer', pageNumber?: number, shownPart?: HeaderFooterPartOnPage | null) => void;
+
+// @public
 export type HeaderFooterMetrics = {
     section: 'header' | 'footer';
     pageSize: {
@@ -457,6 +460,13 @@ export type HeaderFooterMetrics = {
     };
     margins: PageMargins;
 };
+
+// @public
+export interface HeaderFooterPartOnPage {
+    isFirstPage: boolean;
+    // (undocumented)
+    rId: string;
+}
 
 // @public
 export function hitTest(layout: Layout, blocks: FlowBlock[], measures: Measure[], point: Point): HitTestResult;
@@ -538,11 +548,17 @@ export function normalizeHeaderFooterMeasureBlocks(blocks: FlowBlock[]): FlowBlo
 export function normalizeTableColumnWidths(columnWidths: number[], colCount: number, targetWidth: number): number[];
 
 // @public
+export function pageHeaderFooterRId(page: Readonly<Pick<Page, 'headerFooterRefs'>> | null | undefined, position: 'header' | 'footer'): HeaderFooterPartOnPage | null;
+
+// @public
 export type PageHit = {
     pageIndex: number;
     page: Page;
     pageY: number;
 };
+
+// @public
+export function pageUsesFirstPageHeaderFooter(page: Readonly<Pick<Page, 'number' | 'firstPageOfSection'>>, titlePg: boolean | undefined): boolean;
 
 // @public
 export type Point = {
@@ -602,6 +618,25 @@ export interface ResolvedGridCell {
 }
 
 // @public
+export interface ResolvedSectionHeaderFooter {
+    // (undocumented)
+    firstFooter: HeaderFooter | null;
+    // (undocumented)
+    firstHeader: HeaderFooter | null;
+    // (undocumented)
+    footer: HeaderFooter | null;
+    // (undocumented)
+    footerDistance?: number;
+    // (undocumented)
+    header: HeaderFooter | null;
+    // (undocumented)
+    headerDistance?: number;
+    refs: SectionHeaderFooterRefs;
+    // (undocumented)
+    titlePg: boolean;
+}
+
+// @public
 export function resolveHeaderFooter(doc: Document_2 | null, sp: SectionProperties | null | undefined): {
     header: HeaderFooter | null;
     footer: HeaderFooter | null;
@@ -614,6 +649,9 @@ export function resolveHeaderFooterVisualTop(run: ImageRun, paragraphY: number, 
 
 // @public
 export function resolveListTemplate(template: string, counters: number[], levelNumFmts: NumberFormat[] | undefined): string;
+
+// @public
+export function resolveSectionHeaderFooters(blocks: readonly FlowBlock[], finalSectionProperties: SectionProperties | null | undefined, headers: Map<string, HeaderFooter> | undefined, footers: Map<string, HeaderFooter> | undefined): ResolvedSectionHeaderFooter[];
 
 // @internal
 export function resolveTableColumnWidths(tableBlock: TableBlock, contentWidth: number): number[];
@@ -633,6 +671,9 @@ export interface RunMeasurement {
     // (undocumented)
     width: number;
 }
+
+// @public
+export function sectionHeaderFooterSettings(sp: SectionProperties | null | undefined): SectionHeaderFooterSettings | undefined;
 
 // @public
 export type SelectionRect = {

@@ -1286,7 +1286,6 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     getCachedStyleResolver,
     commentIdAllocator: commentIdAllocatorRef.current,
   });
-
   const initialSectionProperties = useMemo(
     () => getInitialSectionProperties(history.state),
     [history.state]
@@ -1314,6 +1313,7 @@ export const DocxEditor = forwardRef<DocxEditorRef, DocxEditorProps>(function Do
     setHfEditPosition,
     hfEditIsFirstPage,
     setHfEditIsFirstPage,
+    mainEditorRef: pagedEditorRef,
   });
 
   // Container styles - using overflow: auto so sticky toolbar works

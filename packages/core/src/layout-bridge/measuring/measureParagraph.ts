@@ -459,6 +459,9 @@ export function measureParagraph(
       toChar: 0,
       width: 0,
       ...emptyMetrics,
+      // A paragraph mark can't sit beside a float that leaves no room (a
+      // topAndBottom band) any more than text can: it moves below it too.
+      ...(pendingFloatSkip > 0 ? { floatSkipBefore: pendingFloatSkip } : {}),
     });
 
     // Word renders spacing.before / spacing.after for empty paragraphs the
@@ -466,7 +469,7 @@ export function measureParagraph(
     // to totalHeight; do the same here so empty paragraphs don't collapse
     // their authored spacing (e.g. an HF horizontal-rule paragraph with
     // <w:spacing w:before="120">).
-    let emptyTotal = emptyMetrics.lineHeight;
+    let emptyTotal = emptyMetrics.lineHeight + pendingFloatSkip;
     if (spacing?.before) emptyTotal += spacing.before;
     if (spacing?.after) emptyTotal += spacing.after;
 
@@ -491,9 +494,10 @@ export function measureParagraph(
       toChar: 0,
       width: 0,
       ...emptyMetrics,
+      ...(pendingFloatSkip > 0 ? { floatSkipBefore: pendingFloatSkip } : {}),
     });
 
-    let emptyTotal = emptyMetrics.lineHeight;
+    let emptyTotal = emptyMetrics.lineHeight + pendingFloatSkip;
     if (spacing?.before) emptyTotal += spacing.before;
     if (spacing?.after) emptyTotal += spacing.after;
 
@@ -816,7 +820,7 @@ export function measureParagraph(
 
       // Skip truly floating images - they don't contribute to line height
       // (they are positioned absolutely and text wraps around them)
-      if (run.position && isFloating) {
+      if ((run.position && isFloating) || run.anchoredBand === true) {
         currentLine.toRun = runIndex;
         currentLine.toChar = 1;
         continue;

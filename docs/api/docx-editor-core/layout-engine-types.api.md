@@ -204,6 +204,7 @@ export type ImageRun = {
     relativeHeight?: number;
     renderOnly?: boolean;
     wrapType?: string;
+    anchoredBand?: boolean;
     displayMode?: 'inline' | 'block' | 'float';
     cssFloat?: 'left' | 'right' | 'none';
     distTop?: number;
@@ -339,14 +340,8 @@ export type Page = {
     };
     orientation?: 'portrait' | 'landscape';
     sectionIndex?: number;
-    headerFooterRefs?: {
-        headerDefault?: string;
-        headerFirst?: string;
-        headerEven?: string;
-        footerDefault?: string;
-        footerFirst?: string;
-        footerEven?: string;
-    };
+    firstPageOfSection?: boolean;
+    headerFooterRefs?: SectionHeaderFooterRefs;
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
     bodyBottom?: number;
@@ -544,11 +539,30 @@ export type SectionBreakBlock = {
     orientation?: 'portrait' | 'landscape';
     margins?: PageMargins;
     columns?: ColumnLayout;
+    headerFooter?: SectionHeaderFooterSettings;
 };
 
 // @public
 export type SectionBreakMeasure = {
     kind: 'sectionBreak';
+};
+
+// @public
+export type SectionHeaderFooterRefs = {
+    headerDefault?: string;
+    headerFirst?: string;
+    headerEven?: string;
+    footerDefault?: string;
+    footerFirst?: string;
+    footerEven?: string;
+};
+
+// @public
+export type SectionHeaderFooterSettings = {
+    refs?: SectionHeaderFooterRefs;
+    titlePg?: boolean;
+    headerDistance?: number;
+    footerDistance?: number;
 };
 
 // @public

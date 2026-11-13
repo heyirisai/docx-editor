@@ -22,6 +22,11 @@ import {
   TABLE_INSERT_HIDE_DELAY_MS,
 } from '@eigenpal/docx-editor-core/layout-bridge/tableInsertHover';
 import {
+  createHeaderFooterPart,
+  pageHeaderFooterRId,
+  resolveHeaderFooterSectionTarget,
+} from '@eigenpal/docx-editor-core/layout-bridge';
+import {
   scrollVisiblePositionIntoView as scrollVisiblePositionIntoViewImpl,
   resolvePos as resolvePosImpl,
   selectWord as selectWordImpl,
@@ -371,89 +376,80 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
     const doc = opts.getDocument();
     if (!doc?.package) return;
 
-    // Resolve the HF for the current section. Mirrors the lookup in
-    // useDocxEditor.runLayoutPipeline so what the user sees on page is
-    // what they get to edit.
-    const sp =
-      doc.package.document?.sections?.[0]?.properties ??
-      doc.package.document?.finalSectionProperties ??
-      null;
-    const refs = position === 'header' ? sp?.headerReferences : sp?.footerReferences;
     const map = position === 'header' ? doc.package.headers : doc.package.footers;
-    // Default ref takes priority; fall back to `first` if the doc only ships first.
-    const refEntry =
-      refs?.find((r) => r.type === 'default') ?? refs?.find((r) => r.type === 'first') ?? null;
-    let rId: string | null = refEntry?.rId ?? null;
+    // Edit the part the clicked page actually shows (each section paints its
+    // own header/footer).
+    const pageNumber = Number(
+      (hfEl.closest('.layout-page') as HTMLElement | null)?.dataset.pageNumber
+    );
+    const page = opts.layout.value?.pages.find((p) => p.number === pageNumber);
+    const shown = pageHeaderFooterRId(page, position);
+    let rId: string | null = shown?.rId ?? null;
     let hf: HeaderFooter | null = rId ? (map?.get(rId) ?? null) : null;
 
-    // Materialise an empty HF part if none exists for this section yet
-    // (mirrors React's `handleHeaderFooterDoubleClick` in
-    // useHeaderFooterEditing.ts). Without this, double-clicking an empty
-    // header is a no-op — the user has no way to add one.
     if (!hf) {
-      if (!sp) return;
-      const hdrFtrType = 'default' as const;
-      const newRId = `rId_new_${position}_${hdrFtrType}`;
-      const emptyHf: HeaderFooter = {
-        type: position,
-        hdrFtrType,
-        content: [{ type: 'paragraph', content: [] }],
-      };
-      const mapKey = position === 'header' ? 'headers' : 'footers';
-      const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
-      const newMap = new Map(doc.package[mapKey] ?? []);
-      newMap.set(newRId, emptyHf);
-
-      // Register a relationship so the serializer emits content types + doc rels.
-      const existingRels = doc.package.relationships;
-      const usedTargets = new Set<string>();
-      for (const rel of existingRels?.values() ?? []) {
-        if (rel.target) usedTargets.add(rel.target);
+      // The page shows none: resolve its own section (mirrors React's
+      // `handleHeaderFooterDoubleClick` in useHeaderFooterEditing.ts).
+      const view = opts.editorView.value;
+      const target = resolveHeaderFooterSectionTarget(
+        view?.state.doc,
+        doc.package.document?.finalSectionProperties,
+        position,
+        page
+          ? {
+              index: page.sectionIndex ?? 0,
+              firstPageOfSection: page.firstPageOfSection ?? page.number === 1,
+            }
+          : undefined,
+        pageNumber
+      );
+      const inherited = target.inheritedRId ? map?.get(target.inheritedRId) : undefined;
+      if (inherited) {
+        rId = target.inheritedRId!;
+        hf = inherited;
+      } else {
+        // Materialise an empty part in THAT section's sectPr, as Word does.
+        // Without this, double-clicking an empty header is a no-op.
+        if (!target.sectionProperties || (target.pos !== null && !view)) return;
+        const created = createHeaderFooterPart(
+          doc.package,
+          target.sectionProperties,
+          position,
+          target.hdrFtrType
+        );
+        if (target.pos !== null && view) {
+          // A non-final section: its sectPr is a PM paragraph attribute.
+          const node = view.state.doc.nodeAt(target.pos)!;
+          view.dispatch(
+            view.state.tr.setNodeMarkup(target.pos, undefined, {
+              ...node.attrs,
+              _sectionProperties: created.sectionProperties,
+            })
+          );
+        }
+        // Fresh Document identity so watchers refire and undo/redo can track
+        // the materialization (mirror of React's pushDocument path).
+        const base = opts.getDocument() ?? doc;
+        const mapKey = position === 'header' ? 'headers' : 'footers';
+        const newDoc: Document = {
+          ...base,
+          package: {
+            ...base.package,
+            [mapKey]: created.map,
+            relationships: created.relationships,
+            document:
+              target.pos === null && base.package.document
+                ? { ...base.package.document, finalSectionProperties: created.sectionProperties }
+                : base.package.document,
+          },
+        };
+        rId = created.rId;
+        hf = created.part;
+        opts.setDocument?.(newDoc);
+        opts.syncHfPMs?.();
+        opts.reLayout();
+        opts.emit('change', newDoc);
       }
-      let targetNum = 1;
-      while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
-      const relType =
-        position === 'header'
-          ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
-          : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
-      const newRels = new Map(existingRels);
-      newRels.set(newRId, {
-        id: newRId,
-        type: relType,
-        target: `${position}${targetNum}.xml`,
-      });
-
-      // Create a fresh Document with the new HF wired in (mirror of React's
-      // pushDocument path) so any computeds watching document identity
-      // refire and undo/redo can track the materialization event.
-      const newRef = { type: hdrFtrType, rId: newRId };
-      const newSp = sp ? { ...sp, [refKey]: [...(sp[refKey] ?? []), newRef] } : sp;
-      const newDoc: Document = {
-        ...doc,
-        package: {
-          ...doc.package,
-          [mapKey]: newMap,
-          relationships: newRels,
-          document: doc.package.document
-            ? {
-                ...doc.package.document,
-                sections: doc.package.document.sections?.map((s, i) =>
-                  i === 0 ? { ...s, properties: newSp ?? s.properties } : s
-                ),
-                finalSectionProperties:
-                  doc.package.document.finalSectionProperties === sp
-                    ? newSp
-                    : doc.package.document.finalSectionProperties,
-              }
-            : doc.package.document,
-        },
-      };
-      rId = newRId;
-      hf = emptyHf;
-      opts.setDocument?.(newDoc);
-      opts.syncHfPMs?.();
-      opts.reLayout();
-      opts.emit('change', newDoc);
     }
 
     // Bounding rect relative to the pages-viewport. zoom is applied via

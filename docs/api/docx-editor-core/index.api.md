@@ -1223,14 +1223,8 @@ export type Page = {
     };
     orientation?: 'portrait' | 'landscape';
     sectionIndex?: number;
-    headerFooterRefs?: {
-        headerDefault?: string;
-        headerFirst?: string;
-        headerEven?: string;
-        footerDefault?: string;
-        footerFirst?: string;
-        footerEven?: string;
-    };
+    firstPageOfSection?: boolean;
+    headerFooterRefs?: SectionHeaderFooterRefs;
     footnoteIds?: number[];
     footnoteReservedHeight?: number;
     bodyBottom?: number;
@@ -1885,6 +1879,7 @@ export interface TableRow {
     formatting?: TableRowFormatting;
     propertyChanges?: TableRowPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;
+    tableWrappers?: TableRowTableWrapper[];
     // (undocumented)
     type: 'tableRow';
 }

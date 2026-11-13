@@ -127,6 +127,14 @@ export function createPaginator(options: PaginatorOptions) {
   let pendingPageSize: { w: number; h: number } | undefined;
   let pendingMargins: PageMargins | undefined;
 
+  // Section bookkeeping for `Page.sectionIndex` / `Page.firstPageOfSection`.
+  // `sectionOpensNextPage` marks the next page created (or the current page,
+  // while still empty) as the first page of `sectionIndex`; a continuous
+  // break instead queues `pendingSectionIndex` for the next natural page.
+  let sectionIndex = 0;
+  let sectionOpensNextPage = true;
+  let pendingSectionIndex: number | undefined;
+
   const pages: Page[] = [];
   const states: PageState[] = [];
 
@@ -168,6 +176,30 @@ export function createPaginator(options: PaginatorOptions) {
   }
 
   /**
+   * Resolve an empty page's body area and reset its cursor to the top: margins
+   * first, then any full-width exclusion bands (e.g. a header picture that
+   * wraps text and spans the text column — Word starts the body below it).
+   * `page.margins` stays the authored geometry: the painter positions
+   * fragments by their own y, and the header/footer anchor against the real
+   * margins.
+   */
+  function resolvePageBody(state: PageState, footnoteHeight: number): void {
+    const { page } = state;
+    const bodyArea = resolveBodyArea(
+      margins.top,
+      getContentBottom(),
+      options.getPageBodyExclusions?.(page)
+    );
+    // The painter hangs the footnote area from the same bottom.
+    if (bodyArea.bottom < getContentBottom()) page.bodyBottom = bodyArea.bottom;
+    else delete page.bodyBottom;
+    state.topMargin = bodyArea.top;
+    state.cursorY = bodyArea.top;
+    // Reduce content bottom by footnote reserved height for this page
+    state.contentBottom = bodyArea.bottom - footnoteHeight;
+  }
+
+  /**
    * Create a new page and add it to the list.
    */
   function createNewPage(): PageState {
@@ -180,6 +212,10 @@ export function createPaginator(options: PaginatorOptions) {
       pendingMargins = undefined;
       columnWidth = calculateColumnWidth(pageSize.w, margins.left, margins.right, columns);
     }
+    if (pendingSectionIndex !== undefined) {
+      sectionIndex = pendingSectionIndex;
+      pendingSectionIndex = undefined;
+    }
     const pageNumber = pages.length + 1;
     const footnoteHeight = options.footnoteReservedHeights?.get(pageNumber) ?? 0;
 
@@ -188,41 +224,31 @@ export function createPaginator(options: PaginatorOptions) {
       fragments: [],
       margins: { ...margins },
       size: { ...pageSize },
+      sectionIndex,
       footnoteReservedHeight: footnoteHeight > 0 ? footnoteHeight : undefined,
       // Set initial columns; may be overwritten by updateColumns() for continuous section breaks
       columns: columns.count > 1 ? { ...columns } : undefined,
     };
-
-    // The body area: margins first, then any full-width exclusion bands (e.g. a
-    // header picture that wraps text and spans the text column — Word starts
-    // the body below it). `page.margins` stays the authored geometry: the
-    // painter positions fragments by their own y, and the header/footer anchor
-    // against the real margins.
-    const bodyArea = resolveBodyArea(
-      margins.top,
-      getContentBottom(),
-      options.getPageBodyExclusions?.(page)
-    );
-    const topMargin = bodyArea.top;
-    // The painter hangs the footnote area from the same bottom.
-    if (bodyArea.bottom < getContentBottom()) page.bodyBottom = bodyArea.bottom;
-    // Reduce content bottom by footnote reserved height for this page
-    const pageContentBottom = bodyArea.bottom - footnoteHeight;
+    if (sectionOpensNextPage) {
+      page.firstPageOfSection = true;
+      sectionOpensNextPage = false;
+    }
 
     const state: PageState = {
       page,
-      cursorY: topMargin,
+      cursorY: 0,
       columnIndex: 0,
-      topMargin,
-      contentBottom: pageContentBottom,
+      topMargin: 0,
+      contentBottom: 0,
       trailingSpacing: 0,
     };
+    resolvePageBody(state, footnoteHeight);
 
     pages.push(page);
     states.push(state);
 
     // Reset column region to page top on new page
-    columnRegionTop = topMargin;
+    columnRegionTop = state.topMargin;
 
     if (options.onNewPage) {
       options.onNewPage(state);
@@ -359,10 +385,41 @@ export function createPaginator(options: PaginatorOptions) {
     if (states.length > 0) {
       const current = states[states.length - 1];
       if (current.page.fragments.length === 0 && current.cursorY === current.topMargin) {
+        if (sectionOpensNextPage) {
+          // The section opens on this still-empty page: it takes the page
+          // over (geometry included), and the body clears the new section's
+          // header/footer.
+          current.page.margins = { ...margins };
+          current.page.size = { ...pageSize };
+          current.page.sectionIndex = sectionIndex;
+          current.page.firstPageOfSection = true;
+          sectionOpensNextPage = false;
+          resolvePageBody(current, current.page.footnoteReservedHeight ?? 0);
+          columnRegionTop = current.topMargin;
+        }
         return current;
       }
     }
     return createNewPage();
+  }
+
+  /**
+   * Begin section `index` (the section after a section break).
+   *
+   * `startsNewPage = true` (nextPage / evenPage / oddPage breaks): the next
+   * page the caller forces opens the section and is its first page.
+   * `startsNewPage = false` (continuous): the current page stays in the
+   * previous section; the section takes over from the next naturally-created
+   * page, which is not its first page.
+   */
+  function startSection(index: number, startsNewPage: boolean): void {
+    if (startsNewPage) {
+      sectionIndex = index;
+      pendingSectionIndex = undefined;
+      sectionOpensNextPage = true;
+    } else {
+      pendingSectionIndex = index;
+    }
   }
 
   /**
@@ -465,6 +522,8 @@ export function createPaginator(options: PaginatorOptions) {
     addFragment,
     /** Force a page break. */
     forcePageBreak,
+    /** Begin the next section (sets `Page.sectionIndex` / `firstPageOfSection`). */
+    startSection,
     /** Force a column break. */
     forceColumnBreak,
     /** Get X position for column. */

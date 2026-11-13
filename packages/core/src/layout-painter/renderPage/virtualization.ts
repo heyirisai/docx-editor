@@ -18,6 +18,7 @@ import {
   type RenderPageOptions,
 } from '../renderPage';
 import type { FootnoteRenderItem } from './footnotes';
+import { pageUsesFirstPageHeaderFooter } from '../../layout-bridge/sectionHeaderFooters';
 
 type FullPageOptions = RenderPageOptions & {
   footnotesByPage?: Map<number, FootnoteRenderItem[]>;
@@ -40,8 +41,19 @@ function buildPageRenderArgs(
     imageAssetLoader: options.imageAssetLoader,
   };
   const pageOptions: RenderPageOptions = { ...options };
-  // Per-page header/footer selection when titlePg is enabled
-  if (options.titlePg && page.number === 1) {
+  const sections = options.sectionHeaderFooters;
+  if (sections && sections.length > 0) {
+    // Each page shows its own section's stories (ECMA-376 §17.10): the
+    // first-page pair on the section's first page under titlePg, the default
+    // pair everywhere else.
+    const section = sections[Math.min(page.sectionIndex ?? 0, sections.length - 1)];
+    const first = pageUsesFirstPageHeaderFooter(page, section.titlePg);
+    pageOptions.headerContent = first ? section.firstPageHeader : section.header;
+    pageOptions.footerContent = first ? section.firstPageFooter : section.footer;
+    pageOptions.headerDistance = section.headerDistance;
+    pageOptions.footerDistance = section.footerDistance;
+  } else if (options.titlePg && page.number === 1) {
+    // Per-page header/footer selection when titlePg is enabled
     pageOptions.headerContent = options.firstPageHeaderContent;
     pageOptions.footerContent = options.firstPageFooterContent;
   }
@@ -79,6 +91,11 @@ interface PageContainer extends HTMLElement {
  * Compute a fingerprint string for a page that changes when its content changes.
  * Used to detect which pages need re-rendering on incremental updates.
  */
+/** What picks a page's header/footer stories: its section and first-page status. */
+function headerFooterKey(page: Page): string {
+  return `${page.sectionIndex ?? 0}${page.firstPageOfSection ? 'f' : ''}`;
+}
+
 function computePageFingerprint(page: Page): string {
   const parts: string[] = [];
 
@@ -88,6 +105,8 @@ function computePageFingerprint(page: Page): string {
     `m:${page.margins.top},${page.margins.right},${page.margins.bottom},${page.margins.left}`
   );
   parts.push(`n:${page.number}`);
+  // The section picks the page's header/footer.
+  parts.push(`sec:${headerFooterKey(page)}`);
   if (page.footnoteReservedHeight) parts.push(`fn:${page.footnoteReservedHeight}`);
   if (page.bodyBottom !== undefined) parts.push(`bb:${page.bodyBottom}`);
 
@@ -110,6 +129,25 @@ function computePageFingerprint(page: Page): string {
 }
 
 /**
+ * Change key for one header/footer story: geometry plus its top-level text,
+ * so typing into a header repaints the pages that show it (the incremental
+ * path only re-renders pages whose fingerprint or this hash changed).
+ */
+function hfKey(content: RenderPageOptions['headerContent']): string {
+  if (!content) return '-';
+  const text = content.blocks
+    .map((b) =>
+      b.kind === 'paragraph'
+        ? b.runs.map((r) => (r.kind === 'text' ? r.text : '')).join('')
+        : b.kind
+    )
+    .join('\u0001');
+  return `${content.blocks.length},${content.height},${content.visualTop ?? 0},${
+    content.visualBottom ?? content.height
+  },${text}`;
+}
+
+/**
  * Compute a hash for render options that affect all pages globally.
  * When this changes, all pages need a full re-render.
  */
@@ -117,31 +155,18 @@ function computeOptionsHash(options: RenderPageOptions): string {
   const parts: string[] = [];
 
   // Header/footer content changes affect all pages
-  if (options.headerContent) {
-    parts.push(
-      `hdr:${options.headerContent.blocks.length},${options.headerContent.height},${
-        options.headerContent.visualTop ?? 0
-      },${options.headerContent.visualBottom ?? options.headerContent.height}`
-    );
-  }
-  if (options.footerContent) {
-    parts.push(
-      `ftr:${options.footerContent.blocks.length},${options.footerContent.height},${
-        options.footerContent.visualTop ?? 0
-      },${options.footerContent.visualBottom ?? options.footerContent.height}`
-    );
-  }
-  if (options.firstPageHeaderContent) {
-    parts.push(
-      `fp-hdr:${options.firstPageHeaderContent.blocks.length},${options.firstPageHeaderContent.height}`
-    );
-  }
-  if (options.firstPageFooterContent) {
-    parts.push(
-      `fp-ftr:${options.firstPageFooterContent.blocks.length},${options.firstPageFooterContent.height}`
-    );
-  }
+  parts.push(`hdr:${hfKey(options.headerContent)}`, `ftr:${hfKey(options.footerContent)}`);
+  parts.push(`fp-hdr:${hfKey(options.firstPageHeaderContent)}`);
+  parts.push(`fp-ftr:${hfKey(options.firstPageFooterContent)}`);
   if (options.titlePg) parts.push('titlePg');
+  options.sectionHeaderFooters?.forEach((section, i) => {
+    const { header, footer, firstPageHeader, firstPageFooter, titlePg } = section;
+    parts.push(
+      `sec${i}:${hfKey(header)};${hfKey(footer)};${hfKey(firstPageHeader)};` +
+        `${hfKey(firstPageFooter)};${titlePg ? 't' : ''};` +
+        `${section.headerDistance ?? ''};${section.footerDistance ?? ''}`
+    );
+  });
 
   // Theme changes
   if (options.theme) {
@@ -253,11 +278,14 @@ export function renderPages(
 
       // Update data map entry
       if (data) {
+        // A page that moved to another section (or on/off its first page)
+        // shows different header/footer stories, so it can't keep the old ones.
+        const headerFooterChanged = headerFooterKey(data.page) !== headerFooterKey(pages[i]);
         data.page = pages[i];
 
         if (data.rendered) {
           // Surgically replace only the content area, preserving header/footer
-          repopulatePageContent(shell, prevDataMap, totalPages, options);
+          repopulatePageContent(shell, prevDataMap, totalPages, options, headerFooterChanged);
         }
         // If not rendered, it will be populated when it scrolls into view
       }
@@ -519,13 +547,15 @@ function populatePageShell(
 
 /**
  * Surgically replace only the content area of a rendered page shell.
- * Preserves header/footer elements to avoid blinking.
+ * Preserves header/footer elements to avoid blinking, unless
+ * `replaceHeaderFooter` says they changed; then the whole page is repainted.
  */
 function repopulatePageContent(
   shell: HTMLElement,
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
   totalPages: number,
-  options: FullPageOptions
+  options: FullPageOptions,
+  replaceHeaderFooter = false
 ): void {
   const data = pageDataMap.get(shell);
   if (!data) return;
@@ -539,13 +569,13 @@ function repopulatePageContent(
   const newContentEl = fullPageEl.querySelector(`.${PAGE_CLASS_NAMES.content}`);
   const oldContentEl = shell.querySelector(`.${PAGE_CLASS_NAMES.content}`);
 
-  if (newContentEl && oldContentEl) {
+  if (newContentEl && oldContentEl && !replaceHeaderFooter) {
     // Replace only the content area — header/footer stay untouched
     options.imageAssetLoader?.releaseSubtree(oldContentEl);
     shell.replaceChild(newContentEl, oldContentEl);
     options.imageAssetLoader?.releaseSubtree(fullPageEl);
   } else {
-    // Fallback: full replace if structure doesn't match
+    // Full replace: the header/footer changed, or the structure doesn't match
     options.imageAssetLoader?.releaseSubtree(shell);
     options.imageAssetLoader?.releaseSubtree(fullPageEl);
     shell.innerHTML = '';

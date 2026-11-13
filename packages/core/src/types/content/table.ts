@@ -4,7 +4,7 @@
 
 import type { TableFormatting, TableRowFormatting, TableCellFormatting } from '../formatting';
 import type { Paragraph } from './paragraph';
-import type { BlockSdt } from './sdt';
+import type { BlockSdt, SdtProperties } from './sdt';
 import type {
   TablePropertyChange,
   TableRowPropertyChange,
@@ -88,7 +88,36 @@ export interface TableRow {
   structuralChange?: TableStructuralChangeInfo;
   /** Cells in this row */
   cells: TableCell[];
+  /**
+   * Table-level wrappers this row sat inside, outermost first. `CT_Tbl` lets a
+   * row appear inside a `w:sdt` (`w:tbl > w:sdt > w:sdtContent > w:tr`,
+   * `CT_SdtRow`: a row-level content control or repeating section) or a
+   * `w:customXml` (`CT_CustomXmlRow`) instead of directly under the table.
+   * Consecutive rows sharing an `id` sat in the same wrapper; the serializer
+   * re-emits it around them. Absent for ordinary rows.
+   */
+  tableWrappers?: TableRowTableWrapper[];
 }
+
+/**
+ * One table-level wrapper around a row (see {@link TableRow.tableWrappers}).
+ * `id` is unique within the table.
+ */
+export type TableRowTableWrapper =
+  | {
+      kind: 'sdt';
+      id: number;
+      /** The control's properties; `rawPropertiesXml` is replayed on save. */
+      properties: SdtProperties;
+    }
+  | {
+      kind: 'customXml';
+      id: number;
+      /** Verbatim start tag plus `w:customXmlPr`. */
+      startXml: string;
+      /** Verbatim end tag, `</w:customXml>`. */
+      endXml: string;
+    };
 
 /**
  * Table (`w:tbl`) — a block-level grid of rows × cells. Tables carry

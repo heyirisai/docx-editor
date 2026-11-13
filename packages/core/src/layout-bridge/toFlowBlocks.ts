@@ -40,6 +40,7 @@ import {
 import { AUTO_PARAGRAPH_SPACING_PX } from '../utils/units';
 import type { ToFlowBlocksOptions } from './toFlowBlocks/shared';
 import { paragraphToRuns } from './toFlowBlocks/runs';
+import { sectionHeaderFooterSettings } from './sectionHeaderFooters';
 import { convertBorderSpecToLayout, extractCellBorders } from './toFlowBlocks/borders';
 import { computeListMarker } from './toFlowBlocks/listMarkers';
 
@@ -823,6 +824,8 @@ export function toFlowBlocks(doc: PMNode, options: ToFlowBlocksOptions = {}): Fl
             };
 
             if (secProps) {
+              const headerFooter = sectionHeaderFooterSettings(secProps);
+              if (headerFooter) sectionBreak.headerFooter = headerFooter;
               // Populate page size when at least one dimension is overridden.
               if (secProps.pageWidth !== undefined || secProps.pageHeight !== undefined) {
                 sectionBreak.pageSize = {

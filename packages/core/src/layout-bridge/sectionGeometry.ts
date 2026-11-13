@@ -8,6 +8,7 @@
  */
 
 import { collectSectionConfigs, type SectionLayoutConfig } from '../layout-engine';
+import { pageGeometryFromPage, type PageGeometry } from '../layout-painter/anchoredObjectPosition';
 import type { ColumnLayout, FlowBlock, PageMargins } from '../layout-engine/types';
 import type { Document, SectionProperties } from '../types/document';
 import type { HeaderFooter } from '../types/content';
@@ -89,9 +90,9 @@ export function getMargins(sp: SectionProperties | null | undefined): PageMargin
  *
  * Mirrors React's lookup in DocxEditor.tsx: read `pkg.headers`/`footers`
  * (Maps keyed by rId), resolve through `sp.headerReferences` /
- * `footerReferences`. When `titlePg` is unset and only `first` HFs
- * exist, they serve as the default — same Word fallback both adapters
- * have shipped.
+ * `footerReferences`. A `first` part is only ever shown under `titlePg`
+ * (ECMA-376 §17.10.6); without it the section's pages show the `default`
+ * part, or nothing when there is none — `first` never stands in for it.
  */
 export function resolveHeaderFooter(
   doc: Document | null,
@@ -124,11 +125,6 @@ export function resolveHeaderFooter(
     if (def?.rId) footer = footers.get(def.rId) ?? null;
     const first = sp.footerReferences.find((r) => r.type === 'first');
     if (first?.rId) firstFooter = footers.get(first.rId) ?? null;
-  }
-
-  if (!sp?.titlePg) {
-    if (!header && firstHeader) header = firstHeader;
-    if (!footer && firstFooter) footer = firstFooter;
   }
 
   return { header, footer, firstHeader, firstFooter };
@@ -189,4 +185,38 @@ export function computePerBlockWidths(
   }
 
   return widths;
+}
+
+/**
+ * Per-block page geometry, the {@link computePerBlockWidths} way: each block
+ * gets its own section's page size and margins, so a page-anchored float in a
+ * later section is measured against the page it is painted on.
+ */
+export function computePerBlockPageGeometry(
+  blocks: FlowBlock[],
+  initialConfig: SectionLayoutConfig,
+  finalConfig: SectionLayoutConfig
+): PageGeometry[] {
+  const { configs: sectionConfigs, breakIndices } = collectSectionConfigs(
+    blocks,
+    initialConfig,
+    finalConfig
+  );
+  const geometries = sectionConfigs.map((config) =>
+    pageGeometryFromPage({ size: config.pageSize, margins: config.margins })
+  );
+  const fallback = pageGeometryFromPage({
+    size: initialConfig.pageSize,
+    margins: initialConfig.margins,
+  });
+
+  let sectionIdx = 0;
+  const out: PageGeometry[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    out.push(geometries[sectionIdx] ?? fallback);
+    if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
+      sectionIdx++;
+    }
+  }
+  return out;
 }

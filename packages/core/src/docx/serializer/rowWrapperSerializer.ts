@@ -4,7 +4,7 @@
  * `CT_CustomXmlCell`. See `TableCell.rowWrappers`.
  */
 
-import type { TableCell } from '../../types/document';
+import type { TableCell, TableRow } from '../../types/document';
 import { getChildElements, isWellFormedXmlElement, parseXml, type XmlElement } from '../xmlParser';
 
 /** `w:customXmlPr` children — ECMA-376 `CT_CustomXmlPr` (both empty elements). */
@@ -147,5 +147,86 @@ export function serializeRowCells(
   }
 
   while (open.length > 0) out.push(open.pop()!.close);
+  return out.join('');
+}
+
+/** `xml` is absent, or one well-formed `<w:${name}>` element. */
+function isTrustedSdtPart(xml: string | undefined, name: string): boolean {
+  if (xml === undefined || xml === '') return true;
+  if (typeof xml !== 'string' || !new RegExp(`^<w:${name}[\\s/>]`).test(xml)) return false;
+  if (!isWellFormedXmlElement(xml)) return false;
+  try {
+    const roots = (parseXml(xml).elements ?? []).filter((e) => e.type === 'element');
+    return roots.length === 1 && roots[0]!.name === `w:${name}`;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Serialize a table's rows, re-emitting the table-level `w:sdt` /
+ * `w:customXml` wrappers they were parsed from
+ * (`w:tbl > w:sdt > w:sdtContent > w:tr`, ECMA-376 `CT_SdtRow` /
+ * `CT_CustomXmlRow`). See `TableRow.tableWrappers`.
+ *
+ * Consecutive rows sharing a wrapper go back inside the same element. A
+ * wrapper that was already closed (an unwrapped row was inserted inside a
+ * multi-row control) is not reopened, so a control is never duplicated; the
+ * row's other wrappers (e.g. an inner control not yet opened) still are.
+ * Wrappers whose captured tags are not the shape the parser produces are
+ * dropped and their rows kept.
+ */
+export function serializeTableRows(
+  rows: TableRow[],
+  serializeTableRow: (row: TableRow) => string
+): string {
+  const out: string[] = [];
+  const open: { key: string; close: string }[] = [];
+  const closed = new Set<string>();
+  const closeTo = (depth: number) => {
+    while (open.length > depth) {
+      const w = open.pop()!;
+      closed.add(w.key);
+      out.push(w.close);
+    }
+  };
+
+  for (const row of rows) {
+    const planned: { key: string; open: string; close: string }[] = [];
+    for (const w of row.tableWrappers ?? []) {
+      if (w.kind === 'customXml') {
+        if (!isTrustedRowCustomXml(w.startXml, w.endXml)) continue;
+        if (closed.has(`x${w.id}`)) continue;
+        planned.push({ key: `x${w.id}`, open: w.startXml, close: w.endXml });
+      } else {
+        const pr = w.properties?.rawPropertiesXml;
+        const endPr = w.properties?.rawEndPropertiesXml;
+        if (!isTrustedSdtPart(pr, 'sdtPr') || !isTrustedSdtPart(endPr, 'sdtEndPr')) continue;
+        if (closed.has(`s${w.id}`)) continue;
+        planned.push({
+          key: `s${w.id}`,
+          open: `<w:sdt>${pr ?? ''}${endPr ?? ''}<w:sdtContent>`,
+          close: '</w:sdtContent></w:sdt>',
+        });
+      }
+    }
+
+    let common = 0;
+    while (
+      common < open.length &&
+      common < planned.length &&
+      open[common]!.key === planned[common]!.key
+    ) {
+      common++;
+    }
+    closeTo(common);
+    for (const w of planned.slice(common)) {
+      out.push(w.open);
+      open.push(w);
+    }
+    out.push(serializeTableRow(row));
+  }
+
+  closeTo(0);
   return out.join('');
 }
