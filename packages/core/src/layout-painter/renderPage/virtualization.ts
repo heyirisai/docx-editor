@@ -91,6 +91,11 @@ interface PageContainer extends HTMLElement {
  * Compute a fingerprint string for a page that changes when its content changes.
  * Used to detect which pages need re-rendering on incremental updates.
  */
+/** What picks a page's header/footer stories: its section and first-page status. */
+function headerFooterKey(page: Page): string {
+  return `${page.sectionIndex ?? 0}${page.firstPageOfSection ? 'f' : ''}`;
+}
+
 function computePageFingerprint(page: Page): string {
   const parts: string[] = [];
 
@@ -101,7 +106,7 @@ function computePageFingerprint(page: Page): string {
   );
   parts.push(`n:${page.number}`);
   // The section picks the page's header/footer.
-  parts.push(`sec:${page.sectionIndex ?? 0}${page.firstPageOfSection ? 'f' : ''}`);
+  parts.push(`sec:${headerFooterKey(page)}`);
   if (page.footnoteReservedHeight) parts.push(`fn:${page.footnoteReservedHeight}`);
   if (page.bodyBottom !== undefined) parts.push(`bb:${page.bodyBottom}`);
 
@@ -273,11 +278,14 @@ export function renderPages(
 
       // Update data map entry
       if (data) {
+        // A page that moved to another section (or on/off its first page)
+        // shows different header/footer stories, so it can't keep the old ones.
+        const headerFooterChanged = headerFooterKey(data.page) !== headerFooterKey(pages[i]);
         data.page = pages[i];
 
         if (data.rendered) {
           // Surgically replace only the content area, preserving header/footer
-          repopulatePageContent(shell, prevDataMap, totalPages, options);
+          repopulatePageContent(shell, prevDataMap, totalPages, options, headerFooterChanged);
         }
         // If not rendered, it will be populated when it scrolls into view
       }
@@ -539,13 +547,15 @@ function populatePageShell(
 
 /**
  * Surgically replace only the content area of a rendered page shell.
- * Preserves header/footer elements to avoid blinking.
+ * Preserves header/footer elements to avoid blinking, unless
+ * `replaceHeaderFooter` says they changed; then the whole page is repainted.
  */
 function repopulatePageContent(
   shell: HTMLElement,
   pageDataMap: Map<HTMLElement, { page: Page; index: number; rendered: boolean }>,
   totalPages: number,
-  options: FullPageOptions
+  options: FullPageOptions,
+  replaceHeaderFooter = false
 ): void {
   const data = pageDataMap.get(shell);
   if (!data) return;
@@ -559,13 +569,13 @@ function repopulatePageContent(
   const newContentEl = fullPageEl.querySelector(`.${PAGE_CLASS_NAMES.content}`);
   const oldContentEl = shell.querySelector(`.${PAGE_CLASS_NAMES.content}`);
 
-  if (newContentEl && oldContentEl) {
+  if (newContentEl && oldContentEl && !replaceHeaderFooter) {
     // Replace only the content area — header/footer stay untouched
     options.imageAssetLoader?.releaseSubtree(oldContentEl);
     shell.replaceChild(newContentEl, oldContentEl);
     options.imageAssetLoader?.releaseSubtree(fullPageEl);
   } else {
-    // Fallback: full replace if structure doesn't match
+    // Full replace: the header/footer changed, or the structure doesn't match
     options.imageAssetLoader?.releaseSubtree(shell);
     options.imageAssetLoader?.releaseSubtree(fullPageEl);
     shell.innerHTML = '';

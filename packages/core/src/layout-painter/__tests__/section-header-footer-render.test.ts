@@ -93,4 +93,25 @@ describe('renderPages — per-section header/footer', () => {
     expect(headerA.style.top).toBe('0px');
     expect(headerB.style.top).toBe('48px');
   });
+
+  test('an incremental update repaints the header of a page that moved to another section', () => {
+    const sections: SectionHeaderFooterContent[] = [
+      { header: story('Section A'), titlePg: false },
+      { header: story('Section B'), titlePg: false },
+    ];
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const opts = { sectionHeaderFooters: sections, forcePageVirtualization: true };
+    // Page 2 starts in section A ...
+    renderPages([page(1, 0, true), page(2, 0)], container, opts);
+    const pageEls = () => Array.from(container.querySelectorAll(`.${PAGE_CLASS_NAMES.page}`));
+    expect(pageEls().map(headerText)).toEqual(['Section A', 'Section A']);
+
+    // ... then a body edit moves the section break up: same page count, same
+    // options, but page 2 now belongs to section B.
+    const mode = renderPages([page(1, 0, true), page(2, 1, true)], container, opts);
+    expect(mode).toBe('incremental');
+    expect(pageEls().map(headerText)).toEqual(['Section A', 'Section B']);
+    container.remove();
+  });
 });
