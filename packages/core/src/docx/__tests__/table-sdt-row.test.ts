@@ -90,16 +90,16 @@ const LABELS = [
   'Plain row',
 ];
 
-const DOCUMENT_XML =
+const documentXml = (tables: string) =>
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
   `<w:document xmlns:w="${NS_W}" xmlns:w14="${NS_W14}" xmlns:w15="${NS_W15}"><w:body>` +
-  TABLE +
+  tables +
   '<w:p/>' +
   '<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>' +
   '<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>' +
   '</w:sectPr></w:body></w:document>';
 
-async function buildDocx(): Promise<Uint8Array> {
+async function buildDocx(tables = TABLE): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     '[Content_Types].xml',
@@ -117,7 +117,7 @@ async function buildDocx(): Promise<Uint8Array> {
       `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
       `</Relationships>`
   );
-  zip.file('word/document.xml', DOCUMENT_XML);
+  zip.file('word/document.xml', documentXml(tables));
   return new Uint8Array(await zip.generateAsync({ type: 'arraybuffer' }));
 }
 
@@ -262,6 +262,26 @@ describe('table-level content controls wrapping rows', () => {
     rest = cut(rest, tr('0000060', 'Pair top'), tr('0000070', 'Pair bottom'));
     rest = cut(rest, tr('0000080', 'Plain row'), '</w:tbl>');
     expect(rest).toBe(TABLE);
+  });
+
+  test('a row moved into another table stays in its own control', async () => {
+    const one = (label: string, id: string) =>
+      '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/></w:tblPr>' +
+      '<w:tblGrid><w:gridCol w:w="4500"/><w:gridCol w:w="4500"/></w:tblGrid>' +
+      sdt(`<w:sdtPr><w:tag w:val="${label}"/></w:sdtPr>`, tr(id, label)) +
+      '</w:tbl><w:p/>';
+    const doc = await parseDocxHeadless(
+      await buildDocx(one('first', '0000110') + one('second', '0000120'))
+    );
+    const [t1, t2] = doc.package.document!.content.filter((b): b is Table => b.type === 'table');
+    t1!.rows.push(t2!.rows[0]!); // paste table 2's row under table 1's
+    const saved = await JSZip.loadAsync(await repackDocx(doc));
+    const xml = await saved.file('word/document.xml')!.async('string');
+    expect(xml.match(/<w:tbl>.*?<\/w:tbl>/s)?.[0]).toBe(
+      one('first', '0000110').replace('</w:tbl><w:p/>', '') +
+        sdt('<w:sdtPr><w:tag w:val="second"/></w:sdtPr>', tr('0000120', 'second')) +
+        '</w:tbl>'
+    );
   });
 
   test('a save drops a tampered wrapper but keeps its row', async () => {

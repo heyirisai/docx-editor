@@ -71,6 +71,13 @@ export function collectRowCells(
 }
 
 /**
+ * Table-level wrapper ids are unique across every table parsed, not per
+ * table: the row serializer groups rows by id, so a row pasted into another
+ * table must not merge with that table's own control of the same index.
+ */
+let nextTableWrapperId = 0;
+
+/**
  * The `w:tr` elements of a table in document order, with the table-level
  * wrappers (`w:sdt` → `w:sdtContent`, `w:customXml`) each one sits inside,
  * outermost first.
@@ -85,7 +92,6 @@ export function collectTableRows(
   tblElement: XmlElement
 ): { element: XmlElement; wrappers: TableRowTableWrapper[] }[] {
   const out: { element: XmlElement; wrappers: TableRowTableWrapper[] }[] = [];
-  let nextId = 0;
 
   const walk = (container: XmlElement, wrappers: TableRowTableWrapper[]): void => {
     for (const child of container.elements ?? []) {
@@ -103,7 +109,7 @@ export function collectTableRows(
           ...wrappers,
           {
             kind: 'sdt',
-            id: nextId++,
+            id: nextTableWrapperId++,
             properties: parseSdtProperties(
               findChild(child, 'w', 'sdtPr'),
               findChild(child, 'w', 'sdtEndPr')
@@ -112,7 +118,10 @@ export function collectTableRows(
         ]);
       } else if (localName === 'customXml') {
         const { startXml, endXml } = captureCustomXmlTags(child);
-        walk(child, [...wrappers, { kind: 'customXml', id: nextId++, startXml, endXml }]);
+        walk(child, [
+          ...wrappers,
+          { kind: 'customXml', id: nextTableWrapperId++, startXml, endXml },
+        ]);
       }
     }
   };
