@@ -333,6 +333,18 @@ function isPositionMarginRelative(position: ImageRunPosition | undefined): boole
   return rel === 'margin' || rel === 'page';
 }
 
+/**
+ * True when a full-width topAndBottom band is placed from page geometry rather
+ * than from its paragraph — every vertical anchor except paragraph/line, as
+ * `resolveAnchoredObjectVerticalTop` resolves it (topMargin and bottomMargin
+ * included). Such a band reaches the blocks before its anchor on its page.
+ */
+function isBandPageAnchored(position: ImageRunPosition | undefined): boolean {
+  const vertical = position?.vertical;
+  if (!vertical) return false;
+  return vertical.relativeTo !== 'paragraph' && vertical.relativeTo !== 'line';
+}
+
 function extractImageZonesFromParagraph(
   paragraphBlock: ParagraphBlock,
   blockIndex: number,
@@ -355,7 +367,7 @@ function extractImageZonesFromParagraph(
         topY: Math.max(0, rawTopY - (imgRun.distTop ?? 0)),
         bottomY,
         anchorBlockIndex: blockIndex,
-        isMarginRelative: isPositionMarginRelative(imgRun.position),
+        isMarginRelative: isBandPageAnchored(imgRun.position),
         fullWidthBlock: true,
       });
       continue;
@@ -504,7 +516,7 @@ function extractFloatingTextBoxZone(
       topY: Math.max(0, rawTopY - distTop),
       bottomY,
       anchorBlockIndex: blockIndex,
-      isMarginRelative: isPositionMarginRelative(tbBlock.position),
+      isMarginRelative: isBandPageAnchored(tbBlock.position),
       fullWidthBlock: true,
     });
     return;

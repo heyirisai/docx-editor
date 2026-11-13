@@ -195,3 +195,65 @@ describe('measureBlocksWithFloats — floats either side of a page break', () =>
     expect(seen.find((s) => s.id === 'afterSecondBox')?.zones?.length).toBeGreaterThan(0);
   });
 });
+
+// A topAndBottom picture anchored to the top or bottom margin is placed from
+// page geometry, like a page/margin one: its band must reach the paragraphs
+// before its anchor paragraph on the same page.
+describe('measureBlocksWithFloats — topMargin/bottomMargin picture band', () => {
+  const geometry = {
+    pageWidth: 700,
+    pageHeight: 900,
+    marginLeft: 50,
+    marginTop: 100,
+    contentWidth: 600,
+    contentHeight: 700,
+  };
+  const para = (id: string, runs: unknown[] = []): ParagraphBlock =>
+    ({ kind: 'paragraph', id, pmStart: 0, pmEnd: 0, runs, attrs: {} }) as unknown as ParagraphBlock;
+  const picture = (relativeTo: string) => ({
+    kind: 'image',
+    src: '',
+    width: 600,
+    height: 150,
+    anchoredBand: true,
+    position: {
+      horizontal: { relativeTo: 'margin', posOffset: 0 },
+      vertical: { relativeTo, posOffset: 0 },
+    },
+  });
+
+  test.each(['topMargin', 'bottomMargin'])(
+    'a %s band reaches the paragraph before its anchor',
+    (relativeTo) => {
+      const seen: Array<FloatingImageZone[] | undefined> = [];
+      const measureBlock = (_b: FlowBlock, _w: number, zones?: FloatingImageZone[]): Measure => {
+        seen.push(zones);
+        return { kind: 'paragraph', lines: [], totalHeight: 20 } as Measure;
+      };
+      measureBlocksWithFloats(
+        [para('before'), para('anchor', [picture(relativeTo)]), para('after')],
+        600,
+        measureBlock,
+        geometry
+      );
+      expect(seen[0]).toHaveLength(1);
+      expect(seen[0]?.[0].fullWidthBlock).toBe(true);
+    }
+  );
+
+  test('a paragraph-relative band still starts at its own paragraph', () => {
+    const seen: Array<FloatingImageZone[] | undefined> = [];
+    const measureBlock = (_b: FlowBlock, _w: number, zones?: FloatingImageZone[]): Measure => {
+      seen.push(zones);
+      return { kind: 'paragraph', lines: [], totalHeight: 20 } as Measure;
+    };
+    measureBlocksWithFloats(
+      [para('before'), para('anchor', [picture('paragraph')]), para('after')],
+      600,
+      measureBlock,
+      geometry
+    );
+    expect(seen[0]).toBeUndefined();
+    expect(seen[1]).toHaveLength(1);
+  });
+});
