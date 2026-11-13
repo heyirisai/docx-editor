@@ -105,7 +105,8 @@ function startsNewPage(block: FlowBlock): boolean {
  * `topAndBottom` text boxes (e.g. a title banner pinned to the page top):
  * without it their reserved band falls back to flow-relative Y and the band
  * won't line up with where the painter places the box. Build it with the
- * shared `pageGeometryFromPage` helper.
+ * shared `pageGeometryFromPage` helper, or pass one geometry per block
+ * (`computePerBlockPageGeometry`) so each block uses its own section's page.
  *
  * @public
  */
@@ -113,7 +114,7 @@ export function measureBlocksWithFloats(
   blocks: FlowBlock[],
   contentWidth: number | number[],
   measureBlock: MeasureBlockFn,
-  pageGeometry?: FloatPageGeometry
+  pageGeometry?: FloatPageGeometry | FloatPageGeometry[]
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth) ? (contentWidth[0] ?? 0) : contentWidth;
   const floatingZonesWithAnchors = extractFloatingZones(
@@ -244,12 +245,18 @@ function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
   measureBlock: MeasureBlockFn,
-  pageGeometry?: FloatPageGeometry
+  pageGeometryOrPerBlock?: FloatPageGeometry | FloatPageGeometry[]
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex];
+    // Per-block geometry (one entry per block, from its own section) when the
+    // caller has it, so a later section's page-anchored float resolves against
+    // the page it is painted on.
+    const pageGeometry = Array.isArray(pageGeometryOrPerBlock)
+      ? (pageGeometryOrPerBlock[blockIndex] ?? pageGeometryOrPerBlock[0])
+      : pageGeometryOrPerBlock;
     switch (block.kind) {
       case 'paragraph':
         extractImageZonesFromParagraph(

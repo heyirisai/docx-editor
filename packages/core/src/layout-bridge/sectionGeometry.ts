@@ -8,6 +8,7 @@
  */
 
 import { collectSectionConfigs, type SectionLayoutConfig } from '../layout-engine';
+import { pageGeometryFromPage, type PageGeometry } from '../layout-painter/anchoredObjectPosition';
 import type { ColumnLayout, FlowBlock, PageMargins } from '../layout-engine/types';
 import type { Document, SectionProperties } from '../types/document';
 import type { HeaderFooter } from '../types/content';
@@ -184,4 +185,38 @@ export function computePerBlockWidths(
   }
 
   return widths;
+}
+
+/**
+ * Per-block page geometry, the {@link computePerBlockWidths} way: each block
+ * gets its own section's page size and margins, so a page-anchored float in a
+ * later section is measured against the page it is painted on.
+ */
+export function computePerBlockPageGeometry(
+  blocks: FlowBlock[],
+  initialConfig: SectionLayoutConfig,
+  finalConfig: SectionLayoutConfig
+): PageGeometry[] {
+  const { configs: sectionConfigs, breakIndices } = collectSectionConfigs(
+    blocks,
+    initialConfig,
+    finalConfig
+  );
+  const geometries = sectionConfigs.map((config) =>
+    pageGeometryFromPage({ size: config.pageSize, margins: config.margins })
+  );
+  const fallback = pageGeometryFromPage({
+    size: initialConfig.pageSize,
+    margins: initialConfig.margins,
+  });
+
+  let sectionIdx = 0;
+  const out: PageGeometry[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    out.push(geometries[sectionIdx] ?? fallback);
+    if (sectionIdx < breakIndices.length && i === breakIndices[sectionIdx]) {
+      sectionIdx++;
+    }
+  }
+  return out;
 }

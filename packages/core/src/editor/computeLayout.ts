@@ -45,6 +45,7 @@ import {
 } from '../layout-bridge';
 import { createSectionHeaderFooterBodyExclusions } from '../layout-bridge/headerFooterFloatExclusions';
 import { extendSectionMarginsForHeaderFooter } from '../layout-bridge/headerFooterMargins';
+import { computePerBlockPageGeometry } from '../layout-bridge/sectionGeometry';
 import {
   assignPageHeaderFooterRefs,
   resolveSectionHeaderFooters,
@@ -52,7 +53,6 @@ import {
 } from '../layout-bridge/sectionHeaderFooters';
 import { isAnchoredTopAndBottomImageRun } from '../layout-painter/floatingImageFlow';
 import {
-  pageGeometryFromPage,
   type FootnoteRenderItem,
   type HeaderFooterContent,
   type SectionHeaderFooterContent,
@@ -75,7 +75,8 @@ interface PageSizePx {
 export type MeasureBlocksFn = (
   blocks: FlowBlock[],
   contentWidth: number | number[],
-  pageGeometry?: FloatPageGeometry
+  /** One geometry for every block, or one per block (its own section's page). */
+  pageGeometry?: FloatPageGeometry | FloatPageGeometry[]
 ) => Measure[];
 
 export interface ComputeLayoutInputs {
@@ -231,7 +232,11 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
   const measures = measureBlocks(
     blocks,
     blockWidths,
-    pageGeometryFromPage({ size: pageSize, margins })
+    computePerBlockPageGeometry(
+      blocks,
+      { pageSize, margins, columns },
+      { pageSize: finalPageSize, margins: finalMargins, columns: finalColumns }
+    )
   );
 
   // Step 2.5: Footnote references.

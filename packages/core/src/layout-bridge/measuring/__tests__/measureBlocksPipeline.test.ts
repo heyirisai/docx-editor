@@ -257,3 +257,51 @@ describe('measureBlocksWithFloats — topMargin/bottomMargin picture band', () =
     expect(seen[1]).toHaveLength(1);
   });
 });
+
+// A later section with a deeper top margin: its page-relative band must be
+// resolved against ITS page, not the first section's.
+describe('measureBlocksWithFloats — per-block page geometry', () => {
+  test("a later section's page-anchored band uses that section's margins", () => {
+    const geometry = (marginTop: number) => ({
+      pageWidth: 700,
+      pageHeight: 900,
+      marginLeft: 50,
+      marginTop,
+      contentWidth: 600,
+      contentHeight: 900 - 2 * marginTop,
+    });
+    const para = (id: string, runs: unknown[] = []): ParagraphBlock =>
+      ({
+        kind: 'paragraph',
+        id,
+        pmStart: 0,
+        pmEnd: 0,
+        runs,
+        attrs: {},
+      }) as unknown as ParagraphBlock;
+    const banner = {
+      kind: 'image',
+      src: '',
+      width: 600,
+      height: 300,
+      anchoredBand: true,
+      position: {
+        horizontal: { relativeTo: 'margin', posOffset: 0 },
+        vertical: { relativeTo: 'page', posOffset: 0 },
+      },
+    };
+    const blocks = [
+      para('cover'),
+      { kind: 'sectionBreak', id: 'sb', type: 'nextPage' } as unknown as FlowBlock,
+      para('anchor', [banner]),
+    ];
+    const seen: Array<FloatingImageZone[] | undefined> = [];
+    const measureBlock = (_b: FlowBlock, _w: number, zones?: FloatingImageZone[]): Measure => {
+      seen.push(zones);
+      return { kind: 'paragraph', lines: [], totalHeight: 20 } as Measure;
+    };
+    measureBlocksWithFloats(blocks, 600, measureBlock, [geometry(50), geometry(50), geometry(200)]);
+    // Page-relative top 0 sits 200px above the second section's content.
+    expect(seen[2]?.[0].bottomY).toBe(100);
+  });
+});

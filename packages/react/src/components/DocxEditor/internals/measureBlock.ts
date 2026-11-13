@@ -121,7 +121,7 @@ export function measureBlock(
 export function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
-  pageGeometry?: FloatPageGeometry
+  pageGeometry?: FloatPageGeometry | FloatPageGeometry[]
 ): Measure[] {
   return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
 }
