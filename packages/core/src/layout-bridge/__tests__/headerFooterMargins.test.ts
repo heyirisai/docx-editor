@@ -9,7 +9,10 @@
  */
 
 import { describe, test, expect } from 'bun:test';
-import { extendMarginsForHeaderFooter } from '../headerFooterMargins';
+import {
+  extendMarginsForHeaderFooter,
+  extendSectionMarginsForHeaderFooter,
+} from '../headerFooterMargins';
 import type { PageMargins } from '../../layout-engine/types';
 import type { HeaderFooterContent } from '../../layout-painter/renderPage';
 
@@ -138,5 +141,31 @@ describe('extendMarginsForHeaderFooter', () => {
       headers: [hf({ flowHeight: 300 })],
     });
     expect(bodyBlocks[0].margins.top).toBe(347);
+  });
+});
+
+describe('extendSectionMarginsForHeaderFooter', () => {
+  test('a margin-less section after a tall-header section keeps its authored margins', () => {
+    // Section 0 states its margins and has a tall header; section 1 states no
+    // margins and has a short header. Layout falls back to the previous
+    // section's margins for a margin-less break, so section 1 must get the
+    // AUTHORED margins materialised, not section 0's header extension.
+    const bodyBlocks: Array<{ kind: 'sectionBreak'; margins?: PageMargins }> = [
+      { kind: 'sectionBreak', margins: { ...MARGINS } },
+      { kind: 'sectionBreak' },
+    ];
+    extendSectionMarginsForHeaderFooter({
+      pageSize: PAGE,
+      margins: MARGINS,
+      finalMargins: MARGINS,
+      bodyBlocks: bodyBlocks as never,
+      sections: [
+        { headers: [hf({ flowHeight: 300 })], footers: [] },
+        { headers: [hf({ flowHeight: 10 })], footers: [] },
+        { headers: [], footers: [] },
+      ],
+    });
+    expect(bodyBlocks[0].margins?.top).toBe(347);
+    expect(bodyBlocks[1].margins?.top).toBe(MARGINS.top);
   });
 });

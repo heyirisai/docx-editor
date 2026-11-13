@@ -218,7 +218,9 @@ export function extendSectionMarginsForHeaderFooter(input: {
     const pageSize = sb.pageSize ?? prevPageSize;
     const base = sb.margins ?? prevMargins;
     const extended = extendFor(sectionIdx, pageSize, base);
-    if (extended !== base) sb.margins = extended;
+    // Always materialise a margin-less break: left unset, layout would inherit
+    // the previous section's EXTENDED margins, not its authored ones.
+    if (extended !== base || !sb.margins) sb.margins = extended;
     prevPageSize = pageSize;
     prevMargins = base;
     sectionIdx++;
