@@ -21,7 +21,9 @@ import {
   parseDocxHeadless,
   toProseDocHeadless,
 } from '../../layout-engine/integration/headlessDocxLayout';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { schema } from '../../prosemirror/schema';
+import { addRowAbove, addRowBelow } from '../../prosemirror/commands/table';
 import { fromProseDoc } from '../../prosemirror/conversion/fromProseDoc';
 import { repackDocx } from '../rezip';
 import { projectProseMirrorDocument, rehydrateCollaborationDocument } from '../../collaboration';
@@ -69,6 +71,13 @@ const TABLE =
   ) +
   tr('0000080', 'Plain row') +
   '</w:tbl>';
+
+const SECTION = sdt(
+  SECTION_SDT_PR,
+  sdt(ITEM_SDT_PR, tr('0000040', 'Section item A')) +
+    sdt(ITEM2_SDT_PR, tr('0000050', 'Section item B'))
+);
+const PLAIN = tr('0000080', 'Plain row');
 
 const LABELS = [
   'Item',
@@ -187,15 +196,72 @@ describe('table-level content controls wrapping rows', () => {
     expect(block.rows).toHaveLength(LABELS.length);
   });
 
-  test('a row inserted inside a multi-row control does not duplicate the control', async () => {
+  test('a row inserted inside a multi-row control keeps the control whole', async () => {
+    const doc = await parseDocxHeadless(bytes);
+    const t = table(doc);
+    // What the insert commands produce: the new row joins the shared control.
+    const joined: TableRow = { ...t.rows[7]!, tableWrappers: t.rows[5]!.tableWrappers };
+    t.rows.splice(6, 0, joined); // between "Pair top" and "Pair bottom"
+    expect(await savedTableXml(doc)).toBe(
+      TABLE.replace(tr('0000060', 'Pair top'), tr('0000060', 'Pair top') + PLAIN)
+    );
+  });
+
+  test('an unwrapped row inside a control closes it once and keeps later inner controls', async () => {
     const doc = await parseDocxHeadless(bytes);
     const t = table(doc);
     const inserted: TableRow = { ...t.rows[7]!, tableWrappers: undefined };
-    t.rows.splice(6, 0, inserted); // between "Pair top" and "Pair bottom"
-    const xml = await savedTableXml(doc);
-    expect(xml.match(/w:val="pair"/g)).toHaveLength(1);
-    expect(xml.match(/<w:tr>/g)).toHaveLength(LABELS.length + 1);
-    expect(xml).toContain('Pair bottom');
+    t.rows.splice(4, 0, inserted); // between "Section item A" and "Section item B"
+    // The section cannot be reopened without duplicating it, but item B's own
+    // control was never opened and must survive.
+    expect(await savedTableXml(doc)).toBe(
+      TABLE.replace(
+        SECTION,
+        sdt(SECTION_SDT_PR, sdt(ITEM_SDT_PR, tr('0000040', 'Section item A'))) +
+          PLAIN +
+          sdt(ITEM2_SDT_PR, tr('0000050', 'Section item B'))
+      )
+    );
+  });
+
+  test('add row above/below inside a control joins it (editor commands)', async () => {
+    const doc = await parseDocxHeadless(bytes);
+    const pmDoc = await toProseDocHeadless(doc);
+    const at = (state: EditorState, text: string) => {
+      let pos = -1;
+      state.doc.descendants((node, p) => {
+        if (pos < 0 && node.isText && node.text === text) pos = p + 1;
+        return pos < 0;
+      });
+      return state.apply(state.tr.setSelection(TextSelection.create(state.doc, pos)));
+    };
+    const run = (state: EditorState, cmd: typeof addRowBelow) => {
+      let next = state;
+      expect(cmd(state, (tr) => (next = state.apply(tr)))).toBe(true);
+      return next;
+    };
+    let state = EditorState.create({ doc: pmDoc });
+    state = run(at(state, 'Section item A'), addRowBelow);
+    state = run(at(state, 'Pair bottom'), addRowAbove);
+    state = run(at(state, 'Plain row'), addRowBelow); // last row: no wrappers
+
+    const xml = await savedTableXml(fromProseDoc(state.doc, doc));
+    const cut = (s: string, before: string, after: string) => {
+      const i = s.indexOf(before) + before.length;
+      const j = s.indexOf(after, i);
+      const mid = s.slice(i, j);
+      expect(mid).toMatch(/^<w:tr\b.*<\/w:tr>$/s);
+      expect(mid).not.toContain('<w:sdt');
+      return s.slice(0, i) + s.slice(j);
+    };
+    let rest = cut(
+      xml,
+      sdt(ITEM_SDT_PR, tr('0000040', 'Section item A')),
+      `<w:sdt>${ITEM2_SDT_PR}`
+    );
+    rest = cut(rest, tr('0000060', 'Pair top'), tr('0000070', 'Pair bottom'));
+    rest = cut(rest, tr('0000080', 'Plain row'), '</w:tbl>');
+    expect(rest).toBe(TABLE);
   });
 
   test('a save drops a tampered wrapper but keeps its row', async () => {

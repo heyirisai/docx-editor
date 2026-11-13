@@ -171,7 +171,8 @@ function isTrustedSdtPart(xml: string | undefined, name: string): boolean {
  *
  * Consecutive rows sharing a wrapper go back inside the same element. A
  * wrapper that was already closed (an unwrapped row was inserted inside a
- * multi-row control) is not reopened, so a control is never duplicated.
+ * multi-row control) is not reopened, so a control is never duplicated; the
+ * row's other wrappers (e.g. an inner control not yet opened) still are.
  * Wrappers whose captured tags are not the shape the parser produces are
  * dropped and their rows kept.
  */
@@ -195,11 +196,13 @@ export function serializeTableRows(
     for (const w of row.tableWrappers ?? []) {
       if (w.kind === 'customXml') {
         if (!isTrustedRowCustomXml(w.startXml, w.endXml)) continue;
+        if (closed.has(`x${w.id}`)) continue;
         planned.push({ key: `x${w.id}`, open: w.startXml, close: w.endXml });
       } else {
         const pr = w.properties?.rawPropertiesXml;
         const endPr = w.properties?.rawEndPropertiesXml;
         if (!isTrustedSdtPart(pr, 'sdtPr') || !isTrustedSdtPart(endPr, 'sdtEndPr')) continue;
+        if (closed.has(`s${w.id}`)) continue;
         planned.push({
           key: `s${w.id}`,
           open: `<w:sdt>${pr ?? ''}${endPr ?? ''}<w:sdtContent>`,
@@ -218,7 +221,6 @@ export function serializeTableRows(
     }
     closeTo(common);
     for (const w of planned.slice(common)) {
-      if (closed.has(w.key)) break;
       out.push(w.open);
       open.push(w);
     }
