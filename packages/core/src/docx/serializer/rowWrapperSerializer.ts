@@ -150,6 +150,9 @@ export function serializeRowCells(
   return out.join('');
 }
 
+/** A `w:sdtPr`'s `w:id` child (always an empty element, `CT_DecimalNumber`). */
+const SDT_ID_RE = /<w:id\b[^>]*\/>|<w:id\b[^>]*>\s*<\/w:id>/g;
+
 /** `xml` is absent, or one well-formed `<w:${name}>` element. */
 function isTrustedSdtPart(xml: string | undefined, name: string): boolean {
   if (xml === undefined || xml === '') return true;
@@ -169,12 +172,14 @@ function isTrustedSdtPart(xml: string | undefined, name: string): boolean {
  * (`w:tbl > w:sdt > w:sdtContent > w:tr`, ECMA-376 `CT_SdtRow` /
  * `CT_CustomXmlRow`). See `TableRow.tableWrappers`.
  *
- * Consecutive rows sharing a wrapper go back inside the same element. A
- * wrapper that was already closed (an unwrapped row was inserted inside a
- * multi-row control) is not reopened, so a control is never duplicated; the
- * row's other wrappers (e.g. an inner control not yet opened) still are.
- * Wrappers whose captured tags are not the shape the parser produces are
- * dropped and their rows kept.
+ * Consecutive rows sharing a wrapper go back inside the same element. When
+ * rows sharing a wrapper are no longer contiguous (a row was moved out of, or
+ * an unwrapped row inserted into, a multi-row control), the wrapper is
+ * reopened around each later run of rows, as Word does when it splits a
+ * control: every piece keeps the tag, alias and lock. A reopened `w:sdt`
+ * drops its `w:id` (optional in `CT_SdtPr`; Word assigns a fresh one), so no
+ * two controls share an id. Wrappers whose captured tags are not the shape
+ * the parser produces are dropped and their rows kept.
  */
 export function serializeTableRows(
   rows: TableRow[],
@@ -196,16 +201,17 @@ export function serializeTableRows(
     for (const w of row.tableWrappers ?? []) {
       if (w.kind === 'customXml') {
         if (!isTrustedRowCustomXml(w.startXml, w.endXml)) continue;
-        if (closed.has(`x${w.id}`)) continue;
         planned.push({ key: `x${w.id}`, open: w.startXml, close: w.endXml });
       } else {
         const pr = w.properties?.rawPropertiesXml;
         const endPr = w.properties?.rawEndPropertiesXml;
         if (!isTrustedSdtPart(pr, 'sdtPr') || !isTrustedSdtPart(endPr, 'sdtEndPr')) continue;
-        if (closed.has(`s${w.id}`)) continue;
+        const key = `s${w.id}`;
+        // A reopened control must not repeat the first piece's w:id.
+        const prXml = closed.has(key) ? (pr ?? '').replace(SDT_ID_RE, '') : (pr ?? '');
         planned.push({
-          key: `s${w.id}`,
-          open: `<w:sdt>${pr ?? ''}${endPr ?? ''}<w:sdtContent>`,
+          key,
+          open: `<w:sdt>${prXml}${endPr ?? ''}<w:sdtContent>`,
           close: '</w:sdtContent></w:sdt>',
         });
       }

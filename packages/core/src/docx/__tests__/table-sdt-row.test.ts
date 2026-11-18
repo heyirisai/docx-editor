@@ -207,21 +207,50 @@ describe('table-level content controls wrapping rows', () => {
     );
   });
 
-  test('an unwrapped row inside a control closes it once and keeps later inner controls', async () => {
+  test('an unwrapped row inside a control splits it and reopens the control without its w:id', async () => {
     const doc = await parseDocxHeadless(bytes);
     const t = table(doc);
     const inserted: TableRow = { ...t.rows[7]!, tableWrappers: undefined };
     t.rows.splice(4, 0, inserted); // between "Section item A" and "Section item B"
-    // The section cannot be reopened without duplicating it, but item B's own
-    // control was never opened and must survive.
+    // Word splits the control: item B keeps the section (same properties, no
+    // duplicate w:id) and its own item control.
     expect(await savedTableXml(doc)).toBe(
       TABLE.replace(
         SECTION,
         sdt(SECTION_SDT_PR, sdt(ITEM_SDT_PR, tr('0000040', 'Section item A'))) +
           PLAIN +
-          sdt(ITEM2_SDT_PR, tr('0000050', 'Section item B'))
+          sdt(
+            '<w:sdtPr><w15:repeatingSection/></w:sdtPr>',
+            sdt(ITEM2_SDT_PR, tr('0000050', 'Section item B'))
+          )
       )
     );
+  });
+
+  test('rows of one control split by another row are each wrapped (A(s1) B C(s1))', async () => {
+    const PAIR_PR = '<w:sdtPr><w:tag w:val="pair"/><w:id w:val="700000005"/></w:sdtPr>';
+    const CUSTOM_OPEN =
+      '<w:customXml w:uri="urn:x" w:element="row"><w:customXmlPr><w:attr w:name="n" w:val="3"/></w:customXmlPr>';
+    const doc = await parseDocxHeadless(bytes);
+    const t = table(doc);
+    // A(s1) B(none) C(s1): the plain row now sits inside the pair control and
+    // inside a two-row customXml wrapper.
+    const customEnd: TableRow = { ...t.rows[2]!, tableWrappers: t.rows[2]!.tableWrappers };
+    const [plain] = t.rows.splice(7, 1);
+    t.rows.splice(6, 0, plain!); // between "Pair top" and "Pair bottom"
+    t.rows.splice(3, 0, { ...plain! }, customEnd); // Custom, Plain, Custom
+
+    const xml = await savedTableXml(doc);
+    const custom = tr('0000030', 'Custom row');
+    expect(xml).toContain(
+      `${CUSTOM_OPEN}${custom}</w:customXml>${PLAIN}${CUSTOM_OPEN}${custom}</w:customXml>`
+    );
+    expect(xml).toContain(
+      sdt(PAIR_PR, tr('0000060', 'Pair top')) +
+        PLAIN +
+        sdt('<w:sdtPr><w:tag w:val="pair"/></w:sdtPr>', tr('0000070', 'Pair bottom'))
+    );
+    expect(xml.match(/w:val="700000005"/g)).toHaveLength(1);
   });
 
   test('add row above/below inside a control joins it (editor commands)', async () => {
