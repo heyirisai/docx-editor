@@ -161,6 +161,15 @@ export function convertHeaderFooterToContent(headerFooter: HeaderFooter | null |
 export function countTableColumns(tableBlock: TableBlock): number;
 
 // @public
+export function createHeaderFooterPart(pkg: DocxPackage, sectionProperties: SectionProperties, position: 'header' | 'footer', hdrFtrType: 'default' | 'first'): {
+    rId: string;
+    part: HeaderFooter;
+    map: Map<string, HeaderFooter>;
+    relationships: NonNullable<DocxPackage['relationships']>;
+    sectionProperties: SectionProperties;
+};
+
+// @public
 export const DEFAULT_BODY_MARGIN_PX = 96;
 
 // @public
@@ -449,7 +458,7 @@ export function halfPtToPx(halfPt: number): number;
 export function hashParagraphBlock(block: ParagraphBlock): string;
 
 // @public
-export type HeaderFooterDoubleClickHandler = (position: 'header' | 'footer', pageNumber?: number, shownPart?: HeaderFooterPartOnPage | null) => void;
+export type HeaderFooterDoubleClickHandler = (position: 'header' | 'footer', pageNumber?: number, shownPart?: HeaderFooterPartOnPage | null, section?: HeaderFooterPageSection) => void;
 
 // @public
 export type HeaderFooterMetrics = {
@@ -462,10 +471,29 @@ export type HeaderFooterMetrics = {
 };
 
 // @public
+export interface HeaderFooterPageSection {
+    firstPageOfSection: boolean;
+    // (undocumented)
+    index: number;
+}
+
+// @public
 export interface HeaderFooterPartOnPage {
     isFirstPage: boolean;
     // (undocumented)
     rId: string;
+}
+
+// @public
+export interface HeaderFooterSectionTarget {
+    // (undocumented)
+    hdrFtrType: 'default' | 'first';
+    inheritedRId?: string;
+    // (undocumented)
+    isFirstPage: boolean;
+    pos: number | null;
+    // (undocumented)
+    sectionProperties: SectionProperties | undefined;
 }
 
 // @public
@@ -512,7 +540,7 @@ export type MeasureBlockFn = (block: FlowBlock, contentWidth: number, floatingZo
 export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number) => Measure[];
 
 // @public
-export function measureBlocksWithFloats(blocks: FlowBlock[], contentWidth: number | number[], measureBlock: MeasureBlockFn, pageGeometry?: FloatPageGeometry): Measure[];
+export function measureBlocksWithFloats(blocks: FlowBlock[], contentWidth: number | number[], measureBlock: MeasureBlockFn, pageGeometry?: FloatPageGeometry | FloatPageGeometry[]): Measure[];
 
 // @public
 export function measureParagraph(block: ParagraphBlock, maxWidth: number, options?: MeasureParagraphOptions): ParagraphMeasure;
@@ -643,6 +671,9 @@ export function resolveHeaderFooter(doc: Document_2 | null, sp: SectionPropertie
     firstHeader: HeaderFooter | null;
     firstFooter: HeaderFooter | null;
 };
+
+// @public
+export function resolveHeaderFooterSectionTarget(pmDoc: Node_2 | null | undefined, finalSectionProperties: SectionProperties | null | undefined, position: 'header' | 'footer', section?: HeaderFooterPageSection, pageNumber?: number): HeaderFooterSectionTarget;
 
 // @public (undocumented)
 export function resolveHeaderFooterVisualTop(run: ImageRun, paragraphY: number, flowHeight: number, metrics: HeaderFooterMetrics): number;

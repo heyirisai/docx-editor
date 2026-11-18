@@ -705,10 +705,8 @@ export type SectionBreakMeasure = {
 export type SectionHeaderFooterRefs = {
     headerDefault?: string;
     headerFirst?: string;
-    headerEven?: string;
     footerDefault?: string;
     footerFirst?: string;
-    footerEven?: string;
 };
 
 // @public

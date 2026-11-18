@@ -94,7 +94,8 @@ export interface LayoutScheduler {
 }
 
 // @public
-export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number | number[], pageGeometry?: FloatPageGeometry) => Measure[];
+export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number | number[],
+pageGeometry?: FloatPageGeometry | FloatPageGeometry[]) => Measure[];
 
 // @public
 export function stripScrollFlag(transaction: Transaction, probeTr: Transaction): void;
