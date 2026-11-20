@@ -1,5 +1,14 @@
 # @eigenpal/docx-editor-core
 
+## 1.16.1
+
+### Patch Changes
+
+- 60eeaed: Shapes, shape groups, charts and drawn VML shapes now render at their real size, position and wrapping (rectangles, rounded rectangles, ellipses, lines and custom geometry with solid, gradient and theme fills are drawn; anything else shows as a labelled placeholder) and are saved back unchanged. Text box size and insets no longer drift on save.
+- 60eeaed: Each section now paints its own header and footer (first-page only under titlePg), and a top-and-bottom wrapped floating picture sits at its anchor offset with text breaking above and below it.
+- 60eeaed: Tables keep rows wrapped in a row-level content control or customXml (w:tbl > w:sdt > w:tr); they were dropped on open and on save.
+- 871e4e6: When the rows of a table-level content control or customXml wrapper are no longer next to each other, each run of rows is saved inside its own copy of the wrapper (keeping its tag, alias and lock) instead of the later rows losing it. Reopened content controls leave out the duplicate id.
+
 ## 1.16.0
 
 ### Minor Changes
