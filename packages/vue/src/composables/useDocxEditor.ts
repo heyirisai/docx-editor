@@ -177,7 +177,7 @@ function measureBlock(
 function measureBlocks(
   blocks: FlowBlock[],
   contentWidth: number | number[],
-  pageGeometry?: FloatPageGeometry
+  pageGeometry?: FloatPageGeometry | FloatPageGeometry[]
 ): Measure[] {
   return measureBlocksWithFloats(blocks, contentWidth, measureBlock, pageGeometry);
 }
@@ -377,6 +377,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageHeaderForRender,
         firstPageFooterForRender,
         hasTitlePg,
+        sectionHeaderFooters,
         watermark,
         footnotesByPage,
       } = computeLayout({
@@ -418,6 +419,7 @@ export function useDocxEditor(options: UseDocxEditorOptions): UseDocxEditorRetur
         firstPageHeaderContent: firstPageHeaderForRender,
         firstPageFooterContent: firstPageFooterForRender,
         titlePage: hasTitlePg,
+        sectionHeaderFooters,
         watermark,
         footnotesByPage,
         imageAssetLoader,

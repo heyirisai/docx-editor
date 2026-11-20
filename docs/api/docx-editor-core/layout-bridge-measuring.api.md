@@ -154,7 +154,7 @@ export function hashParagraphBlock(block: ParagraphBlock): string;
 export type MeasureBlockFn = (block: FlowBlock, contentWidth: number, floatingZones?: FloatingImageZone[], cumulativeY?: number) => Measure;
 
 // @public
-export function measureBlocksWithFloats(blocks: FlowBlock[], contentWidth: number | number[], measureBlock: MeasureBlockFn, pageGeometry?: FloatPageGeometry): Measure[];
+export function measureBlocksWithFloats(blocks: FlowBlock[], contentWidth: number | number[], measureBlock: MeasureBlockFn, pageGeometry?: FloatPageGeometry | FloatPageGeometry[]): Measure[];
 
 // @public
 export function measureParagraph(block: ParagraphBlock, maxWidth: number, options?: MeasureParagraphOptions): ParagraphMeasure;

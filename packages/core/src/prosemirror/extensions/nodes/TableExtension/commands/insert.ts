@@ -29,11 +29,39 @@ import {
 // from the extensions, so a static import here would close a module cycle that
 // breaks the production bundle's init order. See conversion/tableConverterRegistry.
 import { getTableConverter } from '../../../../conversion/tableConverterRegistry';
-import type { Table, TableRow, TableCell, Theme } from '../../../../../types/document';
+import type {
+  Table,
+  TableRow,
+  TableCell,
+  TableRowTableWrapper,
+  Theme,
+} from '../../../../../types/document';
 import type {
   RevisionInfo,
   TableStructuralChangeInfo,
 } from '../../../../../types/content/trackedChange';
+
+/**
+ * The table-level wrappers (`TableRow.tableWrappers`, outermost first) a row
+ * inserted between `above` and `below` joins: the prefix both neighbours share.
+ * Matching Word, a row inserted inside a content control (a repeating section,
+ * a multi-row control) becomes part of it instead of splitting it.
+ */
+function sharedTableWrappers(
+  above: PMNode | null,
+  below: PMNode | null
+): TableRowTableWrapper[] | null {
+  const a = (above?.attrs.tableWrappers ?? []) as TableRowTableWrapper[];
+  const b = (below?.attrs.tableWrappers ?? []) as TableRowTableWrapper[];
+  let n = 0;
+  while (n < a.length && n < b.length && a[n]!.kind === b[n]!.kind && a[n]!.id === b[n]!.id) n++;
+  return n > 0 ? a.slice(0, n) : null;
+}
+
+function withTableWrappers(row: PMNode, wrappers: TableRowTableWrapper[] | null): PMNode {
+  if (!wrappers) return row;
+  return row.type.create({ ...row.attrs, tableWrappers: wrappers }, row.content, row.marks);
+}
 
 /**
  * Build a tracked-row-insertion row + cells. Caller decides where to insert.
@@ -349,6 +377,14 @@ export function makeAddRowAbove(schema: Schema): Command {
         );
       }
 
+      newRow = withTableWrappers(
+        newRow,
+        sharedTableWrappers(
+          context.rowIndex > 0 ? context.table.child(context.rowIndex - 1) : null,
+          rowNode
+        )
+      );
+
       let rowPos = context.tablePos + 1;
       for (let i = 0; i < context.rowIndex; i++) {
         rowPos += context.table.child(i).nodeSize;
@@ -394,6 +430,16 @@ export function makeAddRowBelow(schema: Schema): Command {
           cells
         );
       }
+
+      newRow = withTableWrappers(
+        newRow,
+        sharedTableWrappers(
+          rowNode,
+          context.rowIndex + 1 < context.table.childCount
+            ? context.table.child(context.rowIndex + 1)
+            : null
+        )
+      );
 
       let rowPos = context.tablePos + 1;
       for (let i = 0; i <= context.rowIndex; i++) {

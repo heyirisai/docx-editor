@@ -11,6 +11,7 @@ import type { InlineSdtWidget } from './inlineSdtWidgets';
 import type { GetPageBodyExclusions } from './bodyExclusions';
 
 export type { InlineSdtWidget } from './inlineSdtWidgets';
+export type * from './sectionHeaderFooterTypes';
 
 /**
  * Unique identifier for a block in the document.
@@ -182,6 +183,8 @@ export type ImageRun = {
   renderOnly?: boolean;
   /** Wrap type from DOCX (inline, square, tight, through, topAndBottom, etc.) */
   wrapType?: string;
+  /** Body `wp:anchor` topAndBottom picture: painted at its anchor, band reserved by a float zone. */
+  anchoredBand?: boolean;
   /** Display mode for CSS rendering */
   displayMode?: 'inline' | 'block' | 'float';
   /** CSS float direction */
@@ -547,6 +550,8 @@ export type SectionBreakBlock = {
   orientation?: 'portrait' | 'landscape';
   margins?: PageMargins;
   columns?: ColumnLayout;
+  /** Header/footer settings of the section this break ends. */
+  headerFooter?: import('./sectionHeaderFooterTypes').SectionHeaderFooterSettings;
 };
 
 /**
@@ -956,17 +961,12 @@ export type Page = {
   size: { w: number; h: number };
   /** Page orientation. */
   orientation?: 'portrait' | 'landscape';
-  /** Section index this page belongs to. */
+  /** Section in effect at the page top (count of earlier breaks); picks its header/footer. */
   sectionIndex?: number;
-  /** Header/footer references for this page. */
-  headerFooterRefs?: {
-    headerDefault?: string;
-    headerFirst?: string;
-    headerEven?: string;
-    footerDefault?: string;
-    footerFirst?: string;
-    footerEven?: string;
-  };
+  /** The section starts on this page (shows its `titlePg` first-page header/footer). */
+  firstPageOfSection?: boolean;
+  /** Header/footer parts this page shows (only the variant in play). */
+  headerFooterRefs?: import('./sectionHeaderFooterTypes').SectionHeaderFooterRefs;
   /** Footnote IDs that appear on this page (for rendering). */
   footnoteIds?: number[];
   /** Height reserved for the footnote area at page bottom (pixels). */

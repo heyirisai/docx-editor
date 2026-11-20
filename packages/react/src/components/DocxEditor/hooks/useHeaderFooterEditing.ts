@@ -1,12 +1,18 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type {
   Document,
   HeaderFooter,
   BlockContent,
   SectionProperties,
 } from '@eigenpal/docx-editor-core/types/document';
-import { resolveHeaderFooter } from '@eigenpal/docx-editor-core/layout-bridge';
-import { proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+import {
+  createHeaderFooterPart,
+  resolveHeaderFooter,
+  resolveHeaderFooterSectionTarget,
+  type HeaderFooterDoubleClickHandler,
+} from '@eigenpal/docx-editor-core/layout-bridge';
+import { fromProseDoc, proseDocToBlocks } from '@eigenpal/docx-editor-core/prosemirror/conversion';
+import type { EditorView } from 'prosemirror-view';
 import type { InlineHeaderFooterEditorRef } from '../../InlineHeaderFooterEditor';
 
 /**
@@ -32,6 +38,7 @@ export function useHeaderFooterEditing({
   setHfEditPosition,
   hfEditIsFirstPage,
   setHfEditIsFirstPage,
+  mainEditorRef,
 }: {
   document: Document | null;
   pushDocument: (doc: Document) => void;
@@ -45,113 +52,127 @@ export function useHeaderFooterEditing({
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
   hfEditIsFirstPage: boolean;
   setHfEditIsFirstPage: React.Dispatch<React.SetStateAction<boolean>>;
+  /** Main body view: a non-final section's `w:sectPr` is a paragraph attr there. */
+  mainEditorRef?: React.RefObject<{ getView(): EditorView | null } | null>;
 }) {
+  // The part a double-click opened when the clicked page shows its own
+  // section's header/footer (sections paint their own parts, ECMA-376 §17.10).
+  const [editTarget, setEditTarget] = useState<{
+    position: 'header' | 'footer';
+    rId: string;
+    isFirstPage: boolean;
+  } | null>(null);
+
   const { headerContent, footerContent, firstPageHeaderContent, firstPageFooterContent } =
     useMemo(() => {
       const { header, footer, firstHeader, firstFooter } = resolveHeaderFooter(
         document ?? null,
         finalSectionProperties ?? initialSectionProperties
       );
-      return {
+      const resolved = {
         headerContent: header,
         footerContent: footer,
         firstPageHeaderContent: firstHeader,
         firstPageFooterContent: firstFooter,
       };
-    }, [document, initialSectionProperties, finalSectionProperties]);
+      if (editTarget && hfEditPosition === editTarget.position) {
+        const map =
+          editTarget.position === 'header'
+            ? document?.package?.headers
+            : document?.package?.footers;
+        const hf = map?.get(editTarget.rId);
+        if (hf) {
+          const key =
+            editTarget.position === 'header'
+              ? editTarget.isFirstPage
+                ? 'firstPageHeaderContent'
+                : 'headerContent'
+              : editTarget.isFirstPage
+                ? 'firstPageFooterContent'
+                : 'footerContent';
+          resolved[key] = hf;
+        }
+      }
+      return resolved;
+    }, [document, initialSectionProperties, finalSectionProperties, editTarget, hfEditPosition]);
 
-  const handleHeaderFooterDoubleClick = useCallback(
-    (position: 'header' | 'footer', pageNumber?: number) => {
+  const handleHeaderFooterDoubleClick = useCallback<HeaderFooterDoubleClickHandler>(
+    (position, pageNumber, shown, section) => {
       // No scroll-to-page-1 — the HF content is shared across all pages by
       // `r:id`, so the painter renders the same edits on every page in real
       // time. Whichever page the user double-clicked, the chrome bar floats
       // over THAT page's header and edits propagate visually to all others.
-      const sectProps = document?.package?.document?.finalSectionProperties;
-      const isFirstPage = sectProps?.titlePg === true && (pageNumber ?? 1) === 1;
-      const hf = isFirstPage
-        ? position === 'header'
-          ? firstPageHeaderContent
-          : firstPageFooterContent
-        : position === 'header'
-          ? headerContent
-          : footerContent;
+      // Edit the part the clicked page shows, when it shows one.
+      const shownMap =
+        position === 'header' ? document?.package?.headers : document?.package?.footers;
+      if (shown && shownMap?.has(shown.rId)) {
+        setEditTarget({ position, rId: shown.rId, isFirstPage: shown.isFirstPage });
+        setHfEditIsFirstPage(shown.isFirstPage);
+        setHfEditPosition(position);
+        return;
+      }
+      setEditTarget(null);
+      if (!document?.package) return;
+      const pkg = document.package;
+
+      // The clicked page's own section (ECMA-376 §17.10).
+      const view = mainEditorRef?.current?.getView() ?? null;
+      const target = resolveHeaderFooterSectionTarget(
+        view?.state.doc,
+        pkg.document?.finalSectionProperties,
+        position,
+        section,
+        pageNumber
+      );
+      const { isFirstPage, inheritedRId } = target;
       setHfEditIsFirstPage(isFirstPage);
-      if (hf) {
+      const mapKey = position === 'header' ? 'headers' : 'footers';
+      if (inheritedRId && pkg[mapKey]?.has(inheritedRId)) {
+        setEditTarget({ position, rId: inheritedRId, isFirstPage });
         setHfEditPosition(position);
         return;
       }
 
-      // Materialise an empty header/footer so the user can start typing.
-      if (!document?.package) return;
-      const pkg = document.package;
-      const sectionProps = pkg.document?.finalSectionProperties;
-      if (!sectionProps) return;
-
-      const hdrFtrType = isFirstPage ? 'first' : 'default';
-      const rId = `rId_new_${position}_${hdrFtrType}`;
-      const emptyHf: HeaderFooter = {
-        type: position === 'header' ? 'header' : 'footer',
-        hdrFtrType,
-        content: [{ type: 'paragraph', content: [] }],
-      };
-
-      const mapKey = position === 'header' ? 'headers' : 'footers';
-      const newMap = new Map(pkg[mapKey] ?? []);
-      newMap.set(rId, emptyHf);
-
-      const refKey = position === 'header' ? 'headerReferences' : 'footerReferences';
-      const existingRefs = sectionProps[refKey] ?? [];
-      const newRef = { type: hdrFtrType as 'default' | 'first', rId };
-
-      // Register the rel so the serializer wires up content types + doc rels (#274).
-      const existingRels = pkg.relationships;
-      const usedTargets = new Set<string>();
-      for (const rel of existingRels?.values() ?? []) {
-        if (rel.target) usedTargets.add(rel.target);
+      // Materialise an empty header/footer in THAT section's sectPr, as Word
+      // does, so the user can start typing. Later sections that do not name
+      // their own part inherit it.
+      if (!target.sectionProperties || (target.pos !== null && !view)) return;
+      const created = createHeaderFooterPart(
+        pkg,
+        target.sectionProperties,
+        position,
+        target.hdrFtrType
+      );
+      const { rId } = created;
+      let base: Document = document;
+      if (target.pos !== null && view) {
+        // A non-final section: its sectPr is a PM paragraph attribute.
+        const node = view.state.doc.nodeAt(target.pos)!;
+        view.dispatch(
+          view.state.tr.setNodeMarkup(target.pos, undefined, {
+            ...node.attrs,
+            _sectionProperties: created.sectionProperties,
+          })
+        );
+        base = fromProseDoc(view.state.doc, document);
       }
-      let targetNum = 1;
-      while (usedTargets.has(`${position}${targetNum}.xml`)) targetNum++;
-      const relType =
-        position === 'header'
-          ? 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header'
-          : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
-      const newRelationships = new Map(existingRels);
-      newRelationships.set(rId, {
-        id: rId,
-        type: relType,
-        target: `${position}${targetNum}.xml`,
-      });
-
-      const newDoc: Document = {
-        ...document,
+      const basePkg = base.package;
+      pushDocument({
+        ...base,
         package: {
-          ...pkg,
-          [mapKey]: newMap,
-          relationships: newRelationships,
-          document: pkg.document
-            ? {
-                ...pkg.document,
-                finalSectionProperties: {
-                  ...sectionProps,
-                  [refKey]: [...existingRefs, newRef],
-                },
-              }
-            : pkg.document,
+          ...basePkg,
+          [mapKey]: created.map,
+          relationships: created.relationships,
+          document:
+            target.pos === null && basePkg.document
+              ? { ...basePkg.document, finalSectionProperties: created.sectionProperties }
+              : basePkg.document,
         },
-      };
-      pushDocument(newDoc);
+      });
+      setEditTarget({ position, rId, isFirstPage });
       setHfEditPosition(position);
     },
-    [
-      headerContent,
-      footerContent,
-      firstPageHeaderContent,
-      firstPageFooterContent,
-      document,
-      pushDocument,
-      setHfEditPosition,
-      setHfEditIsFirstPage,
-    ]
+    [document, mainEditorRef, pushDocument, setHfEditPosition, setHfEditIsFirstPage]
   );
 
   const handleHeaderFooterSave = useCallback(
@@ -168,7 +189,12 @@ export function useHeaderFooterEditing({
           ? sectionProps?.headerReferences
           : sectionProps?.footerReferences;
       const targetType = hfEditIsFirstPage ? 'first' : 'default';
+      const target =
+        editTarget && editTarget.position === hfEditPosition
+          ? { type: editTarget.isFirstPage ? 'first' : 'default', rId: editTarget.rId }
+          : null;
       const activeRef =
+        target ??
         refs?.find((r) => r.type === targetType) ??
         refs?.find((r) => r.type === 'default') ??
         refs?.find((r) => r.type === 'first') ??
@@ -199,7 +225,7 @@ export function useHeaderFooterEditing({
 
       setHfEditPosition(null);
     },
-    [hfEditPosition, hfEditIsFirstPage, document, pushDocument, setHfEditPosition]
+    [hfEditPosition, hfEditIsFirstPage, editTarget, document, pushDocument, setHfEditPosition]
   );
 
   const handleBodyClick = useCallback(() => {
@@ -226,7 +252,20 @@ export function useHeaderFooterEditing({
     const mapKey = hfEditPosition === 'header' ? 'headers' : 'footers';
     const refs = sectionProps?.[refKey];
     const delTargetType = hfEditIsFirstPage ? 'first' : 'default';
+    if (
+      editTarget &&
+      editTarget.position === hfEditPosition &&
+      !refs?.some((r) => r.rId === editTarget.rId)
+    ) {
+      // The part belongs to an earlier section only; removing it would need
+      // that section's sectPr rewritten — leave it in place.
+      setHfEditPosition(null);
+      return;
+    }
     const activeRef =
+      (editTarget && editTarget.position === hfEditPosition
+        ? refs?.find((r) => r.rId === editTarget.rId)
+        : undefined) ??
       refs?.find((r) => r.type === delTargetType) ??
       refs?.find((r) => r.type === 'default') ??
       refs?.find((r) => r.type === 'first') ??
@@ -258,7 +297,7 @@ export function useHeaderFooterEditing({
     }
 
     setHfEditPosition(null);
-  }, [hfEditPosition, hfEditIsFirstPage, document, pushDocument, setHfEditPosition]);
+  }, [hfEditPosition, hfEditIsFirstPage, editTarget, document, pushDocument, setHfEditPosition]);
 
   const getHfTargetElement = useCallback(
     (pos: 'header' | 'footer'): HTMLElement | null => {

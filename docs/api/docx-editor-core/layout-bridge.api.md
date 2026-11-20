@@ -161,6 +161,15 @@ export function convertHeaderFooterToContent(headerFooter: HeaderFooter | null |
 export function countTableColumns(tableBlock: TableBlock): number;
 
 // @public
+export function createHeaderFooterPart(pkg: DocxPackage, sectionProperties: SectionProperties, position: 'header' | 'footer', hdrFtrType: 'default' | 'first'): {
+    rId: string;
+    part: HeaderFooter;
+    map: Map<string, HeaderFooter>;
+    relationships: NonNullable<DocxPackage['relationships']>;
+    sectionProperties: SectionProperties;
+};
+
+// @public
 export const DEFAULT_BODY_MARGIN_PX = 96;
 
 // @public
@@ -449,6 +458,9 @@ export function halfPtToPx(halfPt: number): number;
 export function hashParagraphBlock(block: ParagraphBlock): string;
 
 // @public
+export type HeaderFooterDoubleClickHandler = (position: 'header' | 'footer', pageNumber?: number, shownPart?: HeaderFooterPartOnPage | null, section?: HeaderFooterPageSection) => void;
+
+// @public
 export type HeaderFooterMetrics = {
     section: 'header' | 'footer';
     pageSize: {
@@ -457,6 +469,32 @@ export type HeaderFooterMetrics = {
     };
     margins: PageMargins;
 };
+
+// @public
+export interface HeaderFooterPageSection {
+    firstPageOfSection: boolean;
+    // (undocumented)
+    index: number;
+}
+
+// @public
+export interface HeaderFooterPartOnPage {
+    isFirstPage: boolean;
+    // (undocumented)
+    rId: string;
+}
+
+// @public
+export interface HeaderFooterSectionTarget {
+    // (undocumented)
+    hdrFtrType: 'default' | 'first';
+    inheritedRId?: string;
+    // (undocumented)
+    isFirstPage: boolean;
+    pos: number | null;
+    // (undocumented)
+    sectionProperties: SectionProperties | undefined;
+}
 
 // @public
 export function hitTest(layout: Layout, blocks: FlowBlock[], measures: Measure[], point: Point): HitTestResult;
@@ -502,7 +540,7 @@ export type MeasureBlockFn = (block: FlowBlock, contentWidth: number, floatingZo
 export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number) => Measure[];
 
 // @public
-export function measureBlocksWithFloats(blocks: FlowBlock[], contentWidth: number | number[], measureBlock: MeasureBlockFn, pageGeometry?: FloatPageGeometry): Measure[];
+export function measureBlocksWithFloats(blocks: FlowBlock[], contentWidth: number | number[], measureBlock: MeasureBlockFn, pageGeometry?: FloatPageGeometry | FloatPageGeometry[]): Measure[];
 
 // @public
 export function measureParagraph(block: ParagraphBlock, maxWidth: number, options?: MeasureParagraphOptions): ParagraphMeasure;
@@ -538,11 +576,17 @@ export function normalizeHeaderFooterMeasureBlocks(blocks: FlowBlock[]): FlowBlo
 export function normalizeTableColumnWidths(columnWidths: number[], colCount: number, targetWidth: number): number[];
 
 // @public
+export function pageHeaderFooterRId(page: Readonly<Pick<Page, 'headerFooterRefs'>> | null | undefined, position: 'header' | 'footer'): HeaderFooterPartOnPage | null;
+
+// @public
 export type PageHit = {
     pageIndex: number;
     page: Page;
     pageY: number;
 };
+
+// @public
+export function pageUsesFirstPageHeaderFooter(page: Readonly<Pick<Page, 'number' | 'firstPageOfSection'>>, titlePg: boolean | undefined): boolean;
 
 // @public
 export type Point = {
@@ -602,6 +646,25 @@ export interface ResolvedGridCell {
 }
 
 // @public
+export interface ResolvedSectionHeaderFooter {
+    // (undocumented)
+    firstFooter: HeaderFooter | null;
+    // (undocumented)
+    firstHeader: HeaderFooter | null;
+    // (undocumented)
+    footer: HeaderFooter | null;
+    // (undocumented)
+    footerDistance?: number;
+    // (undocumented)
+    header: HeaderFooter | null;
+    // (undocumented)
+    headerDistance?: number;
+    refs: SectionHeaderFooterRefs;
+    // (undocumented)
+    titlePg: boolean;
+}
+
+// @public
 export function resolveHeaderFooter(doc: Document_2 | null, sp: SectionProperties | null | undefined): {
     header: HeaderFooter | null;
     footer: HeaderFooter | null;
@@ -609,11 +672,17 @@ export function resolveHeaderFooter(doc: Document_2 | null, sp: SectionPropertie
     firstFooter: HeaderFooter | null;
 };
 
+// @public
+export function resolveHeaderFooterSectionTarget(pmDoc: Node_2 | null | undefined, finalSectionProperties: SectionProperties | null | undefined, position: 'header' | 'footer', section?: HeaderFooterPageSection, pageNumber?: number): HeaderFooterSectionTarget;
+
 // @public (undocumented)
 export function resolveHeaderFooterVisualTop(run: ImageRun, paragraphY: number, flowHeight: number, metrics: HeaderFooterMetrics): number;
 
 // @public
 export function resolveListTemplate(template: string, counters: number[], levelNumFmts: NumberFormat[] | undefined): string;
+
+// @public
+export function resolveSectionHeaderFooters(blocks: readonly FlowBlock[], finalSectionProperties: SectionProperties | null | undefined, headers: Map<string, HeaderFooter> | undefined, footers: Map<string, HeaderFooter> | undefined): ResolvedSectionHeaderFooter[];
 
 // @internal
 export function resolveTableColumnWidths(tableBlock: TableBlock, contentWidth: number): number[];
@@ -633,6 +702,9 @@ export interface RunMeasurement {
     // (undocumented)
     width: number;
 }
+
+// @public
+export function sectionHeaderFooterSettings(sp: SectionProperties | null | undefined): SectionHeaderFooterSettings | undefined;
 
 // @public
 export type SelectionRect = {

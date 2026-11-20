@@ -353,6 +353,7 @@ export interface RenderPageOptions {
     };
     pageClassName?: string;
     resolvedCommentIds?: Set<number>;
+    sectionHeaderFooters?: SectionHeaderFooterContent[];
     showBorders?: boolean;
     showShadow?: boolean;
     theme?: Theme | null;

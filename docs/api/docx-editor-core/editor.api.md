@@ -82,6 +82,7 @@ export interface LayoutComputation {
     measures: Measure[];
     // (undocumented)
     pageBorders: SectionProperties['pageBorders'] | undefined;
+    sectionHeaderFooters: SectionHeaderFooterContent[] | undefined;
     // (undocumented)
     watermark: Watermark | undefined;
 }
@@ -93,7 +94,8 @@ export interface LayoutScheduler {
 }
 
 // @public
-export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number | number[], pageGeometry?: FloatPageGeometry) => Measure[];
+export type MeasureBlocksFn = (blocks: FlowBlock[], contentWidth: number | number[],
+pageGeometry?: FloatPageGeometry | FloatPageGeometry[]) => Measure[];
 
 // @public
 export function stripScrollFlag(transaction: Transaction, probeTr: Transaction): void;

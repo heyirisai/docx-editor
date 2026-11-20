@@ -37,10 +37,15 @@ import { headerFooterFilename } from './rezip/parts';
  */
 function hasNewImagesOrHyperlinks(blocks: BlockContent[]): boolean {
   const runHasNewImage = (run: {
-    content: { type: string; image?: { src?: string; rId?: string } }[];
+    content: { type: string; image?: { src?: string; rId?: string; renderOnly?: boolean } }[];
   }): boolean =>
     run.content.some(
-      (c) => c.type === 'drawing' && c.image?.src?.startsWith('data:') && !c.image?.rId
+      (c) =>
+        c.type === 'drawing' &&
+        // A render-only preview is never written, so it is not a new image.
+        !c.image?.renderOnly &&
+        c.image?.src?.startsWith('data:') &&
+        !c.image?.rId
     );
 
   for (const block of blocks) {

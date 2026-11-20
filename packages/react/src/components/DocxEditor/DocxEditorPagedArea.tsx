@@ -1,4 +1,5 @@
 import { TextSelection } from 'prosemirror-state';
+import type { HeaderFooterDoubleClickHandler } from '@eigenpal/docx-editor-core/layout-bridge';
 import type { EditorView } from 'prosemirror-view';
 import { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -134,7 +135,7 @@ export function DocxEditorPagedArea({
   hfEditPosition: 'header' | 'footer' | null;
   setHfEditPosition: React.Dispatch<React.SetStateAction<'header' | 'footer' | null>>;
   hfEditIsFirstPage: boolean;
-  onHeaderFooterDoubleClick: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick: HeaderFooterDoubleClickHandler;
   onHeaderFooterSave: (content: BlockContent[]) => void;
   onRemoveHeaderFooter: () => void;
   onHfTransaction?: (rId: string, view: EditorView, docChanged: boolean) => void;

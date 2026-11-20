@@ -105,7 +105,8 @@ function startsNewPage(block: FlowBlock): boolean {
  * `topAndBottom` text boxes (e.g. a title banner pinned to the page top):
  * without it their reserved band falls back to flow-relative Y and the band
  * won't line up with where the painter places the box. Build it with the
- * shared `pageGeometryFromPage` helper.
+ * shared `pageGeometryFromPage` helper, or pass one geometry per block
+ * (`computePerBlockPageGeometry`) so each block uses its own section's page.
  *
  * @public
  */
@@ -113,7 +114,7 @@ export function measureBlocksWithFloats(
   blocks: FlowBlock[],
   contentWidth: number | number[],
   measureBlock: MeasureBlockFn,
-  pageGeometry?: FloatPageGeometry
+  pageGeometry?: FloatPageGeometry | FloatPageGeometry[]
 ): Measure[] {
   const defaultWidth = Array.isArray(contentWidth) ? (contentWidth[0] ?? 0) : contentWidth;
   const floatingZonesWithAnchors = extractFloatingZones(
@@ -244,15 +245,27 @@ function extractFloatingZones(
   blocks: FlowBlock[],
   contentWidth: number,
   measureBlock: MeasureBlockFn,
-  pageGeometry?: FloatPageGeometry
+  pageGeometryOrPerBlock?: FloatPageGeometry | FloatPageGeometry[]
 ): FloatingZoneWithAnchor[] {
   const zones: FloatingZoneWithAnchor[] = [];
 
   for (let blockIndex = 0; blockIndex < blocks.length; blockIndex++) {
     const block = blocks[blockIndex];
+    // Per-block geometry (one entry per block, from its own section) when the
+    // caller has it, so a later section's page-anchored float resolves against
+    // the page it is painted on.
+    const pageGeometry = Array.isArray(pageGeometryOrPerBlock)
+      ? (pageGeometryOrPerBlock[blockIndex] ?? pageGeometryOrPerBlock[0])
+      : pageGeometryOrPerBlock;
     switch (block.kind) {
       case 'paragraph':
-        extractImageZonesFromParagraph(block as ParagraphBlock, blockIndex, contentWidth, zones);
+        extractImageZonesFromParagraph(
+          block as ParagraphBlock,
+          blockIndex,
+          contentWidth,
+          zones,
+          pageGeometry
+        );
         break;
       case 'table':
         extractFloatingTableZone(
@@ -327,15 +340,45 @@ function isPositionMarginRelative(position: ImageRunPosition | undefined): boole
   return rel === 'margin' || rel === 'page';
 }
 
+/**
+ * True when a full-width topAndBottom band is placed from page geometry rather
+ * than from its paragraph — every vertical anchor except paragraph/line, as
+ * `resolveAnchoredObjectVerticalTop` resolves it (topMargin and bottomMargin
+ * included). Such a band reaches the blocks before its anchor on its page.
+ */
+function isBandPageAnchored(position: ImageRunPosition | undefined): boolean {
+  const vertical = position?.vertical;
+  if (!vertical) return false;
+  return vertical.relativeTo !== 'paragraph' && vertical.relativeTo !== 'line';
+}
+
 function extractImageZonesFromParagraph(
   paragraphBlock: ParagraphBlock,
   blockIndex: number,
   contentWidth: number,
-  out: FloatingZoneWithAnchor[]
+  out: FloatingZoneWithAnchor[],
+  pageGeometry?: FloatPageGeometry
 ): void {
   for (const run of paragraphBlock.runs) {
     if (run.kind !== 'image') continue;
     const imgRun = run as ImageRun;
+    if (imgRun.anchoredBand === true) {
+      // topAndBottom anchor: a full-width band at the picture's own offset —
+      // the text above it stays above, the text below flows under it.
+      const rawTopY = resolveAnchoredObjectVerticalTop(imgRun, 0, pageGeometry);
+      const bottomY = rawTopY + imgRun.height + (imgRun.distBottom ?? 0);
+      if (bottomY <= 0) continue;
+      out.push({
+        leftMargin: 0,
+        rightMargin: 0,
+        topY: Math.max(0, rawTopY - (imgRun.distTop ?? 0)),
+        bottomY,
+        anchorBlockIndex: blockIndex,
+        isMarginRelative: isBandPageAnchored(imgRun.position),
+        fullWidthBlock: true,
+      });
+      continue;
+    }
     if (!isTextWrappingFloatingImageRun(imgRun)) continue;
 
     const distTop = imgRun.distTop ?? 0;
@@ -453,11 +496,6 @@ function extractFloatingTextBoxZone(
   const distLeft = tbBlock.distLeft ?? 12;
   const distRight = tbBlock.distRight ?? 12;
 
-  // NOTE: the page-pinned topAndBottom band below is currently text-box only.
-  // A topAndBottom anchored *image* is still laid out as a block image on its
-  // own line at its anchor (see extractImageZonesFromParagraph / renderPage),
-  // so a page-anchored image band is not yet honored — follow-up.
-  //
   // topAndBottom: reserve a full-width vertical band so body text flows above
   // and below the box. Page/margin-relative boxes (e.g. a banner pinned to the
   // page top) need their offset translated into content-area coordinates.
@@ -485,7 +523,7 @@ function extractFloatingTextBoxZone(
       topY: Math.max(0, rawTopY - distTop),
       bottomY,
       anchorBlockIndex: blockIndex,
-      isMarginRelative: isPositionMarginRelative(tbBlock.position),
+      isMarginRelative: isBandPageAnchored(tbBlock.position),
       fullWidthBlock: true,
     });
     return;

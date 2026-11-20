@@ -299,6 +299,7 @@ export interface TableRowAttrs {
     heightRule?: string;
     isHeader?: boolean;
     _originalFormatting?: TableRowFormatting;
+    tableWrappers?: TableRowTableWrapper[] | null;
     // (undocumented)
     trDel?: RevisionInfo | null;
     trIns?: RevisionInfo | null;

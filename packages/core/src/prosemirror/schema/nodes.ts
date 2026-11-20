@@ -350,6 +350,11 @@ export interface TableRowAttrs {
   trDel?: RevisionInfo | null;
   /** Row-property change history (`<w:trPrChange>`). */
   trPrChange?: import('../../types/document').TableRowPropertyChange[] | null;
+  /**
+   * Table-level `w:sdt` / `w:customXml` wrappers the row was parsed from
+   * (`TableRow.tableWrappers`), kept so a save re-emits them around the row.
+   */
+  tableWrappers?: import('../../types/document').TableRowTableWrapper[] | null;
 }
 
 /**

@@ -387,6 +387,9 @@ function convertTableRow(
   if (row.propertyChanges && row.propertyChanges.length > 0) {
     attrs.trPrChange = row.propertyChanges;
   }
+  if (row.tableWrappers && row.tableWrappers.length > 0) {
+    attrs.tableWrappers = row.tableWrappers;
+  }
 
   const numCells = row.cells.length;
   const isFirstRow = rowIndex === 0;

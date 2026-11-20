@@ -19,6 +19,7 @@ import type { EditorState } from 'prosemirror-state';
 import type { Node as PMNode } from 'prosemirror-model';
 
 import {
+  collectSectionConfigs,
   layoutDocument,
   type ColumnLayout,
   type FlowBlock,
@@ -42,11 +43,19 @@ import {
   twipsToPixels,
   type FloatPageGeometry,
 } from '../layout-bridge';
-import { createHeaderFooterBodyExclusions } from '../layout-bridge/headerFooterFloatExclusions';
+import { createSectionHeaderFooterBodyExclusions } from '../layout-bridge/headerFooterFloatExclusions';
+import { extendSectionMarginsForHeaderFooter } from '../layout-bridge/headerFooterMargins';
+import { computePerBlockPageGeometry } from '../layout-bridge/sectionGeometry';
 import {
-  pageGeometryFromPage,
+  assignPageHeaderFooterRefs,
+  resolveSectionHeaderFooters,
+  type ResolvedSectionHeaderFooter,
+} from '../layout-bridge/sectionHeaderFooters';
+import { isAnchoredTopAndBottomImageRun } from '../layout-painter/floatingImageFlow';
+import {
   type FootnoteRenderItem,
   type HeaderFooterContent,
+  type SectionHeaderFooterContent,
 } from '../layout-painter';
 import type {
   Document,
@@ -66,7 +75,8 @@ interface PageSizePx {
 export type MeasureBlocksFn = (
   blocks: FlowBlock[],
   contentWidth: number | number[],
-  pageGeometry?: FloatPageGeometry
+  /** One geometry for every block, or one per block (its own section's page). */
+  pageGeometry?: FloatPageGeometry | FloatPageGeometry[]
 ) => Measure[];
 
 export interface ComputeLayoutInputs {
@@ -103,6 +113,12 @@ export interface LayoutComputation {
   firstPageHeaderForRender: HeaderFooterContent | undefined;
   firstPageFooterForRender: HeaderFooterContent | undefined;
   hasTitlePg: boolean;
+  /**
+   * Header/footer stories per section, indexed by `Page.sectionIndex` — pass
+   * to `renderPages` as `sectionHeaderFooters` so every page paints its own
+   * section's header/footer. Undefined without a document package.
+   */
+  sectionHeaderFooters: SectionHeaderFooterContent[] | undefined;
   watermark: Watermark | undefined;
   headerDistancePx: number | undefined;
   footerDistancePx: number | undefined;
@@ -145,6 +161,16 @@ function resolveFootnoteColumnLayout(
       : fallbackColumnWidth;
   const columnWidth = (sectionContentWidthPx - (columns - 1) * FOOTNOTE_COLUMN_GAP_PX) / columns;
   return { columns, columnWidth: Math.max(1, columnWidth) };
+}
+
+/** Flag body-level topAndBottom anchored pictures (`ImageRun.anchoredBand`). */
+function markAnchoredTopAndBottomImages(blocks: FlowBlock[]): void {
+  for (const block of blocks) {
+    if (block.kind !== 'paragraph') continue;
+    for (const run of block.runs) {
+      if (run.kind === 'image' && isAnchoredTopAndBottomImageRun(run)) run.anchoredBand = true;
+    }
+  }
 }
 
 /**
@@ -199,10 +225,18 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
   // and the saved DOCX keep the original floating table.
   demoteBlockLikeFloatingTables(blocks, blockWidths, contentWidth);
 
+  // Body topAndBottom anchors sit at their own offset and reserve a full-width
+  // band there (text above stays above), instead of a block line at the run.
+  markAnchoredTopAndBottomImages(blocks);
+
   const measures = measureBlocks(
     blocks,
     blockWidths,
-    pageGeometryFromPage({ size: pageSize, margins })
+    computePerBlockPageGeometry(
+      blocks,
+      { pageSize, margins, columns },
+      { pageSize: finalPageSize, margins: finalMargins, columns: finalColumns }
+    )
   );
 
   // Step 2.5: Footnote references.
@@ -239,6 +273,68 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     ? convertHf(firstPageFooterContent, hfMetricsFooter)
     : undefined;
 
+  // Per-section stories (ECMA-376 §17.10): each page shows the header/footer
+  // of its own section, inheriting references a section omits from the one
+  // before it. Each part is converted once per page geometry.
+  let sectionHeaderFooters: SectionHeaderFooterContent[] | undefined;
+  let resolvedSections: ResolvedSectionHeaderFooter[] = [];
+  if (document?.package) {
+    const resolved = resolveSectionHeaderFooters(
+      blocks,
+      finalSectionProperties,
+      document.package.headers,
+      document.package.footers
+    );
+    const { configs } = collectSectionConfigs(
+      blocks,
+      { pageSize, margins, columns },
+      { pageSize: finalPageSize, margins: finalMargins, columns: finalColumns }
+    );
+    const converted = new Map<string, HeaderFooterContent | undefined>();
+    const partIds = new Map<HeaderFooter, number>();
+    const convertForSection = (
+      hf: HeaderFooter | null,
+      kind: 'header' | 'footer',
+      sectionIndex: number
+    ): HeaderFooterContent | undefined => {
+      if (!hf) return undefined;
+      const geometry = configs[Math.min(sectionIndex, configs.length - 1)] ?? {
+        pageSize,
+        margins,
+      };
+      if (!partIds.has(hf)) partIds.set(hf, partIds.size);
+      const { w, h } = geometry.pageSize;
+      const m = geometry.margins;
+      const key = `${partIds.get(hf)}|${kind}|${w}|${h}|${m.left}|${m.right}|${m.top}|${m.bottom}`;
+      if (!converted.has(key)) {
+        const sectionContentWidth = w - m.left - m.right;
+        const metrics = { section: kind, pageSize: geometry.pageSize, margins: m };
+        const pmDoc = getHfPmDoc(hf);
+        converted.set(
+          key,
+          pmDoc
+            ? convertHeaderFooterPmDocToContent(pmDoc, sectionContentWidth, metrics, hfOptions)
+            : convertHeaderFooterToContent(hf, sectionContentWidth, metrics, hfOptions)
+        );
+      }
+      return converted.get(key);
+    };
+    resolvedSections = resolved;
+    sectionHeaderFooters = resolved.map((section, i) => ({
+      header: convertForSection(section.header, 'header', i),
+      footer: convertForSection(section.footer, 'footer', i),
+      firstPageHeader: section.titlePg
+        ? convertForSection(section.firstHeader, 'header', i)
+        : undefined,
+      firstPageFooter: section.titlePg
+        ? convertForSection(section.firstFooter, 'footer', i)
+        : undefined,
+      titlePg: section.titlePg,
+      headerDistance: section.headerDistance,
+      footerDistance: section.footerDistance,
+    }));
+  }
+
   // Watermark rides PM state as a doc attr (so it's undoable).
   const watermark = (state.doc.attrs?.watermark as Watermark | null) ?? undefined;
 
@@ -258,16 +354,31 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
   // helper: uses in-flow `flowHeight` so page/margin-anchored floats (e.g. a
   // letterhead) don't push the body (issue #705), with a content-area clamp;
   // mutates each `sectionBreak.margins` in place.
-  const { margins: effectiveMargins, finalMargins: effectiveFinalMargins } =
-    extendMarginsForHeaderFooter({
-      pageSize,
-      margins,
-      finalMargins,
-      bodyBlocks: blocks,
-      headers: [headerContentForRender, firstPageHeaderForRender],
-      footers: [footerContentForRender, firstPageFooterForRender],
-      warn: (msg) => console.warn(`[computeLayout] ${msg}`),
-    });
+  const warnMargins = (msg: string) => console.warn(`[computeLayout] ${msg}`);
+  const { margins: effectiveMargins, finalMargins: effectiveFinalMargins } = sectionHeaderFooters
+    ? extendSectionMarginsForHeaderFooter({
+        pageSize,
+        margins,
+        finalPageSize,
+        finalMargins,
+        bodyBlocks: blocks,
+        sections: sectionHeaderFooters.map((section) => ({
+          headers: [section.header, section.firstPageHeader],
+          footers: [section.footer, section.firstPageFooter],
+          headerDistance: section.headerDistance,
+          footerDistance: section.footerDistance,
+        })),
+        warn: warnMargins,
+      })
+    : extendMarginsForHeaderFooter({
+        pageSize,
+        margins,
+        finalMargins,
+        bodyBlocks: blocks,
+        headers: [headerContentForRender, firstPageHeaderForRender],
+        footers: [footerContentForRender, firstPageFooterForRender],
+        warn: warnMargins,
+      });
 
   // Step 3: Layout onto pages (two-pass when footnotes exist).
   const bodyBreakType = finalSectionProperties?.sectionStart as
@@ -287,15 +398,29 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     // Word keeps the body clear of header/footer floats that wrap text and
     // leave no room beside them (a page-wide logo with square wrap pushes every
     // page's body below it). Same stories, distances and page pick as the paint.
-    getPageBodyExclusions: createHeaderFooterBodyExclusions({
-      header: headerContentForRender,
-      footer: footerContentForRender,
-      firstPageHeader: firstPageHeaderForRender,
-      firstPageFooter: firstPageFooterForRender,
-      titlePg: hasTitlePg,
-      headerDistance: headerDistancePx,
-      footerDistance: footerDistancePx,
-    }),
+    getPageBodyExclusions: createSectionHeaderFooterBodyExclusions(
+      sectionHeaderFooters
+        ? sectionHeaderFooters.map((section) => ({
+            header: section.header,
+            footer: section.footer,
+            firstPageHeader: section.firstPageHeader,
+            firstPageFooter: section.firstPageFooter,
+            titlePg: section.titlePg,
+            headerDistance: section.headerDistance,
+            footerDistance: section.footerDistance,
+          }))
+        : [
+            {
+              header: headerContentForRender,
+              footer: footerContentForRender,
+              firstPageHeader: firstPageHeaderForRender,
+              firstPageFooter: firstPageFooterForRender,
+              titlePg: hasTitlePg,
+              headerDistance: headerDistancePx,
+              footerDistance: footerDistancePx,
+            },
+          ]
+    ),
   };
 
   let layout: Layout;
@@ -334,6 +459,7 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
   } else {
     layout = layoutDocument(blocks, measures, layoutOpts);
   }
+  assignPageHeaderFooterRefs(layout.pages, resolvedSections);
 
   const footnotesByPage = hasFootnotes
     ? buildFootnoteRenderItems(pageFootnoteMap, footnoteContentMap, document)
@@ -348,6 +474,7 @@ export function computeLayout(inputs: ComputeLayoutInputs): LayoutComputation {
     firstPageHeaderForRender,
     firstPageFooterForRender,
     hasTitlePg,
+    sectionHeaderFooters,
     watermark,
     headerDistancePx,
     footerDistancePx,

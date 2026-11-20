@@ -210,6 +210,8 @@ export interface RenderPageOptions {
   firstPageFooterContent?: HeaderFooterContent;
   /** Whether different first page headers/footers are enabled (w:titlePg). */
   titlePg?: boolean;
+  /** Per-section stories by `Page.sectionIndex`; override the document-wide HF options. */
+  sectionHeaderFooters?: import('./renderPage/headerFooter').SectionHeaderFooterContent[];
   /** Distance from page top to header content. */
   headerDistance?: number;
   /** Distance from page bottom to footer content. */
@@ -533,8 +535,8 @@ export function renderPage(
         );
         allFloatingImages.push(...extracted);
 
-        // Note: topAndBottom images are handled by measureParagraph as block images
-        // (they get their own line). No exclusion zones needed for them.
+        // Body topAndBottom anchors (`anchoredBand`) are extracted here too;
+        // their band was reserved at measure time (measureBlocksWithFloats).
       }
     }
   }

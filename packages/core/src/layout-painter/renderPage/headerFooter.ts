@@ -56,6 +56,27 @@ export interface HeaderFooterContent {
   visualBottom?: number;
 }
 
+/**
+ * One section's painted header/footer stories (see
+ * `RenderPageOptions.sectionHeaderFooters`).
+ */
+export interface SectionHeaderFooterContent {
+  /** Default header (every page but a `titlePg` first page). */
+  header?: HeaderFooterContent;
+  /** Default footer. */
+  footer?: HeaderFooterContent;
+  /** First-page header, shown on the section's first page under `titlePg`. */
+  firstPageHeader?: HeaderFooterContent;
+  /** First-page footer, shown on the section's first page under `titlePg`. */
+  firstPageFooter?: HeaderFooterContent;
+  /** `w:titlePg` of the section. */
+  titlePg: boolean;
+  /** The section's `w:header` distance in px, when stated. */
+  headerDistance?: number;
+  /** The section's `w:footer` distance in px, when stated. */
+  footerDistance?: number;
+}
+
 export interface HeaderFooterLayoutInfo {
   flowTop: number;
   flowLeft: number;

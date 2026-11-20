@@ -19,6 +19,7 @@
  * identity on every render.
  */
 
+import type { HeaderFooterDoubleClickHandler } from '@eigenpal/docx-editor-core/layout-bridge';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
@@ -31,6 +32,7 @@ import {
   detectTableInsertHover,
   hitTestFragment,
   hitTestTableCell,
+  pageHeaderFooterRId,
   TABLE_INSERT_HIDE_DELAY_MS as TABLE_INSERT_HIDE_DELAY,
 } from '@eigenpal/docx-editor-core/layout-bridge';
 import type { FlowBlock, Layout, Measure } from '@eigenpal/docx-editor-core/layout-engine';
@@ -97,7 +99,7 @@ export interface UsePagesPointerOptions {
     tooltip?: string;
     position: { top: number; left: number };
   }) => void;
-  onHeaderFooterDoubleClick?: (position: 'header' | 'footer', pageNumber?: number) => void;
+  onHeaderFooterDoubleClick?: HeaderFooterDoubleClickHandler;
   setSelectedImageInfo: React.Dispatch<React.SetStateAction<ImageSelectionInfo | null>>;
   setSelectionRects: React.Dispatch<React.SetStateAction<SelectionRect[]>>;
   setCaretPosition: React.Dispatch<React.SetStateAction<CaretPosition | null>>;
@@ -695,7 +697,19 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
           const pageNum = pageEl ? Number(pageEl.dataset.pageNumber) : 1;
           e.preventDefault();
           e.stopPropagation();
-          onHeaderFooterDoubleClick(headerEl ? 'header' : 'footer', pageNum);
+          const position = headerEl ? 'header' : 'footer';
+          const page = layout?.pages.find((p) => p.number === pageNum);
+          onHeaderFooterDoubleClick(
+            position,
+            pageNum,
+            pageHeaderFooterRId(page, position),
+            page
+              ? {
+                  index: page.sectionIndex ?? 0,
+                  firstPageOfSection: page.firstPageOfSection ?? page.number === 1,
+                }
+              : undefined
+          );
           return;
         }
       }
@@ -747,6 +761,7 @@ export function usePagesPointer(opts: UsePagesPointerOptions): UsePagesPointerRe
       onHyperlinkClick,
       findCellPosFromPmPos,
       scrollToPositionImpl,
+      layout,
     ]
   );
 

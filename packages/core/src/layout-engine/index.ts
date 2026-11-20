@@ -321,7 +321,13 @@ export function layoutDocument(
         // type but fall back to current break's type (preserves explicit 'continuous')
         const nextType = sectionBreakTypes[sectionIdx + 1] ?? sectionBreakTypes[sectionIdx];
         const nextSectionConfig = sectionConfigs[sectionIdx + 1] ?? initialConfig;
-        handleSectionBreak(block as SectionBreakBlock, paginator, nextSectionConfig, nextType);
+        handleSectionBreak(
+          block as SectionBreakBlock,
+          paginator,
+          nextSectionConfig,
+          nextType,
+          sectionIdx + 1
+        );
 
         const nextBreakIndex = breakIndices[sectionIdx + 1];
         const isTerminalSection = nextBreakIndex === undefined;
@@ -938,7 +944,8 @@ function handleSectionBreak(
   _block: SectionBreakBlock,
   paginator: ReturnType<typeof createPaginator>,
   nextSectionConfig: SectionLayoutConfig,
-  nextSectionType?: SectionBreakBlock['type']
+  nextSectionType: SectionBreakBlock['type'] | undefined,
+  nextSectionIndex: number
 ): void {
   // ECMA-376 §17.6.22: w:type specifies how the NEXT section starts relative to this one.
   // Default is 'nextPage' when w:type is absent.
@@ -947,11 +954,13 @@ function handleSectionBreak(
   switch (breakType) {
     case 'nextPage':
       paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
+      paginator.startSection(nextSectionIndex, true);
       paginator.forcePageBreak();
       break;
 
     case 'evenPage': {
       paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
+      paginator.startSection(nextSectionIndex, true);
       const state = paginator.forcePageBreak();
       // If landed on odd page, add another page
       if (state.page.number % 2 !== 0) {
@@ -962,6 +971,7 @@ function handleSectionBreak(
 
     case 'oddPage': {
       paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
+      paginator.startSection(nextSectionIndex, true);
       const state = paginator.forcePageBreak();
       // If landed on even page, add another page
       if (state.page.number % 2 === 0) {
@@ -985,6 +995,7 @@ function handleSectionBreak(
           Math.round(nextSize.h) !== Math.round(currentSize.h));
       if (pageSizeChanges) {
         paginator.updatePageLayout(nextSectionConfig.pageSize, nextSectionConfig.margins);
+        paginator.startSection(nextSectionIndex, true);
         paginator.forcePageBreak();
       } else {
         paginator.updatePageLayout(
@@ -992,6 +1003,7 @@ function handleSectionBreak(
           nextSectionConfig.margins,
           /* applyImmediately */ false
         );
+        paginator.startSection(nextSectionIndex, false);
       }
       break;
     }

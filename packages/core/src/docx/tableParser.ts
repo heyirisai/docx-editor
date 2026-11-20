@@ -52,8 +52,6 @@ import {
   findChild,
   findChildren,
   getAttribute,
-  getLocalName,
-  elementToXml,
   parseNumericAttribute,
   parseBooleanElement,
   type XmlElement,
@@ -91,6 +89,7 @@ export {
   getHeaderRows,
   isFloatingTable,
 } from './tableParser/queries';
+import { collectRowCells, collectTableRows } from './tableParser/wrappers';
 
 // ============================================================================
 // TABLE PROPERTIES PARSING (w:tblPr)
@@ -766,88 +765,6 @@ export function parseTableRow(
   return row;
 }
 
-type CollectedRowWrapper =
-  | {
-      kind: 'sdt';
-      id: number;
-      leading: boolean;
-      sdtPr: XmlElement | null;
-      sdtEndPr: XmlElement | null;
-    }
-  | { kind: 'customXml'; id: number; startXml: string; endXml: string };
-
-/** Deepest row-level wrapper nesting honoured (guards hostile input). */
-const MAX_ROW_WRAPPER_DEPTH = 16;
-
-/**
- * The `w:tc` elements of a row in document order, with the row-level wrappers
- * (`w:sdt` → `w:sdtContent`, `w:customXml`) each one sits inside.
- *
- * Word writes `w:tr > w:sdt > w:sdtContent > w:tc` for a content control that
- * wraps a whole cell (questionnaire answer cells). Collecting only direct
- * `w:tc` children dropped those cells and every paragraph in them, leaving a
- * short row.
- */
-function collectRowCells(
-  trElement: XmlElement
-): { element: XmlElement; wrappers: CollectedRowWrapper[] }[] {
-  const out: { element: XmlElement; wrappers: CollectedRowWrapper[] }[] = [];
-  let nextId = 0;
-
-  const walk = (container: XmlElement, wrappers: CollectedRowWrapper[]): void => {
-    for (const child of container.elements ?? []) {
-      if (child.type !== 'element' || !child.name) continue;
-      const localName = getLocalName(child.name);
-      if (localName === 'tc') {
-        // Snapshot the chain: only the first cell of a control carries it, so
-        // the shared wrapper's `leading` flag flips for the cells after it.
-        out.push({ element: child, wrappers: wrappers.map((w) => ({ ...w })) });
-        for (const w of wrappers) if (w.kind === 'sdt') w.leading = false;
-        continue;
-      }
-      if (wrappers.length >= MAX_ROW_WRAPPER_DEPTH) continue;
-      if (localName === 'sdt') {
-        const sdtContent = findChild(child, 'w', 'sdtContent');
-        if (!sdtContent) continue;
-        const wrapper: CollectedRowWrapper = {
-          kind: 'sdt',
-          id: nextId++,
-          leading: true,
-          sdtPr: findChild(child, 'w', 'sdtPr'),
-          sdtEndPr: findChild(child, 'w', 'sdtEndPr'),
-        };
-        walk(sdtContent, [...wrappers, wrapper]);
-      } else if (localName === 'customXml') {
-        const { startXml, endXml } = captureCustomXmlTags(child);
-        walk(child, [...wrappers, { kind: 'customXml', id: nextId++, startXml, endXml }]);
-      }
-    }
-  };
-
-  walk(trElement, []);
-  return out;
-}
-
-/**
- * Verbatim start tag (with its `w:customXmlPr`) and end tag of a row-level
- * `w:customXml`, so the wrapper is re-emitted unchanged around its cells.
- */
-function captureCustomXmlTags(element: XmlElement): { startXml: string; endXml: string } {
-  const marker = '\u0000CELLS\u0000';
-  const shell: XmlElement = {
-    ...element,
-    elements: [
-      ...(element.elements ?? []).filter(
-        (el) => el.type === 'element' && getLocalName(el.name ?? '') === 'customXmlPr'
-      ),
-      { type: 'text', text: marker },
-    ],
-  };
-  const xml = elementToXml(shell);
-  const at = xml.indexOf(marker);
-  return { startXml: xml.slice(0, at), endXml: xml.slice(at + marker.length) };
-}
-
 // ============================================================================
 // TABLE GRID PARSING
 // ============================================================================
@@ -958,10 +875,11 @@ export function parseTable(
     table.columnWidths = columnWidths;
   }
 
-  // Parse rows
-  const rows = findChildren(tblElement, 'w', 'tr');
-  for (const rowElement of rows) {
-    const row = parseTableRow(rowElement, styles, theme, numbering, rels, media, options);
+  // Parse rows — direct `w:tr` children and rows wrapped in a table-level
+  // `w:sdt` / `w:customXml` (CT_Tbl row content: tr | customXml | sdt).
+  for (const { element, wrappers } of collectTableRows(tblElement)) {
+    const row = parseTableRow(element, styles, theme, numbering, rels, media, options);
+    if (wrappers.length > 0) row.tableWrappers = wrappers;
     table.rows.push(row);
   }
 

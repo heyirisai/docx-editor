@@ -271,7 +271,7 @@ export function hashParagraphBlock(block: ParagraphBlock): string {
     } else if (run.kind === 'tab') {
       parts.push(`tab:${run.width}`);
     } else if (run.kind === 'image') {
-      parts.push(`img:${run.width}x${run.height}`);
+      parts.push(`img:${run.width}x${run.height}|${run.wrapType}|${run.anchoredBand === true}`);
     } else if (run.kind === 'lineBreak') {
       parts.push('br');
     }

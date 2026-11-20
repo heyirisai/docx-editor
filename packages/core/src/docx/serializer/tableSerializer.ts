@@ -37,7 +37,7 @@ import type {
 
 import { serializeParagraph } from './paragraphSerializer';
 import { serializeBlockSdt } from './sdtSerializer';
-import { serializeRowCells } from './rowWrapperSerializer';
+import { serializeRowCells, serializeTableRows } from './rowWrapperSerializer';
 import { serializeConditionalFormatStyle } from './conditionalFormatSerializer';
 import { escapeXml, intAttr } from './xmlUtils';
 import { serializeBorder } from './borderSerializer';
@@ -781,10 +781,8 @@ export function serializeTable(table: Table): string {
     parts.push(tblGridXml);
   }
 
-  // Rows
-  for (const row of table.rows) {
-    parts.push(serializeTableRow(row));
-  }
+  // Rows, re-wrapped in their table-level `w:sdt` / `w:customXml`.
+  parts.push(serializeTableRows(table.rows, serializeTableRow));
 
   return `<w:tbl>${parts.join('')}</w:tbl>`;
 }

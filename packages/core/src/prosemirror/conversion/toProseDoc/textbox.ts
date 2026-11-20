@@ -12,7 +12,6 @@
 import type { Node as PMNode } from 'prosemirror-model';
 import { schema } from '../../schema';
 import type { Paragraph, TextBox, Shape, Theme } from '../../../types/document';
-import { emuToPixels } from '../../../docx/imageParser';
 import { resolveColor } from '../../../utils/colorResolver';
 import type { StyleResolver } from '../../styles';
 import { isAnchoredDocxTextBox, textBoxAnchorAttrsFromDocx } from '../textBoxAnchors';
@@ -126,6 +125,11 @@ function extractTextBoxesFromParagraph(paragraph: Paragraph): TextBox[] {
   return textBoxes;
 }
 
+/** EMU → CSS px without rounding (1 px = 9525 EMU), so `pixelsToEmu` inverts it exactly. */
+function exactEmuToPx(emu: number): number {
+  return Number.isFinite(emu) ? emu / 9525 : 0;
+}
+
 /**
  * Convert a TextBox to a ProseMirror textBox node
  */
@@ -135,8 +139,11 @@ function convertTextBox(
   theme?: Theme | null,
   hostParaId?: string | null
 ): PMNode {
-  const widthPx = textBox.size?.width ? emuToPixels(textBox.size.width) : 200;
-  const heightPx = textBox.size?.height ? emuToPixels(textBox.size.height) : undefined;
+  // Unrounded: the save path converts back with `pixelsToEmu`, and a whole-px
+  // value moved every box and inset onto the 9525-EMU grid on each round trip
+  // (a 0.1" inset came back 0.104", reflowing the text in Word).
+  const widthPx = textBox.size?.width ? exactEmuToPx(textBox.size.width) : 200;
+  const heightPx = textBox.size?.height ? exactEmuToPx(textBox.size.height) : undefined;
 
   // Convert fill color. Theme-referenced fills (a:schemeClr — e.g. a
   // full-page cover background rectangle filled with tx1/dk1) must
@@ -164,10 +171,11 @@ function convertTextBox(
   // Convert margins from EMU to pixels. An inset the source did not declare
   // stays null so a save does not invent one — the painter and `toDOM` supply
   // the visual default (DEFAULT_TEXTBOX_MARGINS).
-  const marginTop = textBox.margins?.top != null ? emuToPixels(textBox.margins.top) : null;
-  const marginBottom = textBox.margins?.bottom != null ? emuToPixels(textBox.margins.bottom) : null;
-  const marginLeft = textBox.margins?.left != null ? emuToPixels(textBox.margins.left) : null;
-  const marginRight = textBox.margins?.right != null ? emuToPixels(textBox.margins.right) : null;
+  const marginTop = textBox.margins?.top != null ? exactEmuToPx(textBox.margins.top) : null;
+  const marginBottom =
+    textBox.margins?.bottom != null ? exactEmuToPx(textBox.margins.bottom) : null;
+  const marginLeft = textBox.margins?.left != null ? exactEmuToPx(textBox.margins.left) : null;
+  const marginRight = textBox.margins?.right != null ? exactEmuToPx(textBox.margins.right) : null;
 
   // Convert text box content (paragraphs) to PM nodes
   const contentNodes: PMNode[] = [];

@@ -280,6 +280,9 @@ export function convertPMTable(node: PMNode): Table {
     if (rowAttrs.trPrChange && rowAttrs.trPrChange.length > 0) {
       tr.propertyChanges = rowAttrs.trPrChange;
     }
+    if (rowAttrs.tableWrappers && rowAttrs.tableWrappers.length > 0) {
+      tr.tableWrappers = rowAttrs.tableWrappers;
+    }
     rows.push(tr);
   }
 

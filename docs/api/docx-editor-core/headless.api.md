@@ -1716,6 +1716,7 @@ export interface TableRow {
     formatting?: TableRowFormatting;
     propertyChanges?: TableRowPropertyChange[];
     structuralChange?: TableStructuralChangeInfo;
+    tableWrappers?: TableRowTableWrapper[];
     // (undocumented)
     type: 'tableRow';
 }
