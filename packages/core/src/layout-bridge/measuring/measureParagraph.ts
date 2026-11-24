@@ -87,6 +87,7 @@ function findMaxFittingLength(
 }
 
 export type { FloatingImageZone } from './floatingZones';
+export { clampFloatingWrapMargins } from './floatingZones';
 
 /**
  * Options for paragraph measurement
@@ -97,6 +98,8 @@ export interface MeasureParagraphOptions {
   /** Y offset of this paragraph relative to the exclusion zones (default: 0) */
   paragraphYOffset?: number;
 }
+/** Internal re-measure hint: line index → minimum top (px from paragraph top). */
+type RelayoutOptions = MeasureParagraphOptions & { minLineTops?: Map<number, number> };
 
 /**
  * Typography metrics for a line
@@ -305,32 +308,6 @@ function measureInlineWidthAfterTab(runs: Run[], tabIndex: number): number {
 }
 
 /**
- * When a float's wrap margins consume the entire content width (or more),
- * there is no horizontal strip beside it for body text. Word renders the
- * following lines at full content width instead of squeezing them into a
- * 1-pixel column. Unchecked margins from near-full-width tables/images can
- * exceed contentWidth and collapse every line to ~1 glyph (the "single
- * character per line after a wide floating table" bug).
- *
- * Returned margins are zeroed when:
- * - either side alone is >= contentWidth (no strip on that side at all), or
- * - their sum is >= contentWidth (no strip exists between the two sides).
- */
-export function clampFloatingWrapMargins(
-  leftMargin: number,
-  rightMargin: number,
-  contentWidth: number
-): { leftMargin: number; rightMargin: number } {
-  const cw = Math.max(1, contentWidth);
-  const lm = Math.max(0, leftMargin);
-  const rm = Math.max(0, rightMargin);
-  if (lm >= cw || rm >= cw || lm + rm >= cw) {
-    return { leftMargin: 0, rightMargin: 0 };
-  }
-  return { leftMargin: lm, rightMargin: rm };
-}
-
-/**
  * The text a field run will actually paint. DATE/TIME are recomputed on open
  * and rendered through their `\@` picture, so measuring the value cached in
  * the file sizes the line for the wrong string — which is how a cover date
@@ -389,6 +366,16 @@ export function measureParagraph(
   // Lead-skip to attach to the next line that finalizes — set when we hop
   // past a float that leaves no usable horizontal width at the current Y.
   let pendingFloatSkip = 0;
+  // Re-measure hints: lines moved below a band onto a narrower width (below).
+  let relayoutTops: Map<number, number> | undefined;
+  const minLineTops = (options as RelayoutOptions | undefined)?.minLineTops;
+  const applyMinLineTop = (lineIndex: number): void => {
+    const top = minLineTops?.get(lineIndex) ?? 0;
+    if (top > cumulativeHeight) {
+      pendingFloatSkip += top - cumulativeHeight;
+      cumulativeHeight = top;
+    }
+  };
 
   // Calculate first line width with floating zone adjustment
   const estimatedFirstLineHeight = ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
@@ -410,6 +397,7 @@ export function measureParagraph(
     }
   };
 
+  applyMinLineTop(0);
   skipObstructingFloats(estimatedFirstLineHeight, baseFirstLineWidth);
 
   const firstLineFloatingMargins = getFloatingMargins(
@@ -590,6 +578,12 @@ export function measureParagraph(
       currentLine.leftOffset = below.leftMargin;
       currentLine.rightOffset = below.rightMargin;
       currentLine.segmentZones = below.segments;
+      // Broken for the width above the band: if a side float narrows the
+      // destination, re-measure with this line starting there (Word re-breaks).
+      const baseWidth = lines.length === 0 ? baseFirstLineWidth : bodyContentWidth;
+      if (currentLine.width > getFloatingAvailableWidth(below, baseWidth) + WIDTH_TOLERANCE) {
+        (relayoutTops ??= new Map(minLineTops)).set(lines.length, cumulativeHeight);
+      }
     }
     const line: MeasuredLine = {
       fromRun: currentLine.fromRun,
@@ -683,6 +677,7 @@ export function measureParagraph(
    */
   const startNewLine = (runIndex: number, charIndex: number): void => {
     finalizeLine();
+    applyMinLineTop(lines.length);
 
     // Available width depends on the line's Y vs. floating zones.
     const estimatedLineHeight = ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
@@ -1053,6 +1048,10 @@ export function measureParagraph(
 
   // Finalize the last line
   finalizeLine();
+  if (relayoutTops) {
+    const relayout: RelayoutOptions = { ...options, minLineTops: relayoutTops };
+    return measureParagraph(block, maxWidth, relayout);
+  }
 
   // Calculate total height — include floatSkipBefore from lines bumped past floats.
   const totalHeight = lines.reduce(
