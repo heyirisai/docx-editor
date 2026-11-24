@@ -617,8 +617,8 @@ export function measureParagraph(
 
     lines.push(line);
 
-    // Update cumulative height for next line's floating zone calculation
-    cumulativeHeight += typography.lineHeight;
+    // Advance by the emitted height (an inline image can grow the line).
+    cumulativeHeight += lh;
   };
 
   const createLineSegments = (
