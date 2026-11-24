@@ -53,7 +53,11 @@ const picture =
 
 const text = (t: string) => `<w:r><w:t xml:space="preserve">${t}</w:t></w:r>`;
 
-async function buildDocx(): Promise<Uint8Array> {
+async function buildDocx(
+  body = `<w:p>${picture}${text('Heading')}</w:p>` +
+    `<w:p/><w:p/><w:p/>` +
+    `<w:p>${text('Body text after the grid')}</w:p>`
+): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     '[Content_Types].xml',
@@ -78,9 +82,7 @@ async function buildDocx(): Promise<Uint8Array> {
     'word/document.xml',
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<w:document xmlns:w="${NS_W}" xmlns:r="${NS_R}" xmlns:wp="${NS_WP}"><w:body>` +
-      `<w:p>${picture}${text('Heading')}</w:p>` +
-      `<w:p/><w:p/><w:p/>` +
-      `<w:p>${text('Body text after the grid')}</w:p>` +
+      body +
       `<w:sectPr><w:pgSz w:w="12240" w:h="15840"/>` +
       `<w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>` +
       `</w:sectPr></w:body></w:document>`
@@ -124,5 +126,54 @@ describe('topAndBottom anchored picture reserves a band at its own offset (Word 
     for (const index of [1, 2, 3, 4]) {
       expect(firstLineTop(index)).toBeGreaterThanOrEqual(bandBottom - 0.5);
     }
+  });
+});
+
+/**
+ * The anchoring paragraph's own lines are placed against the band too, using
+ * their real height. A large-font paragraph that wraps to two lines, with the
+ * band 48px below its top: line 1 (~31px) clears the band, line 2 (31–61px)
+ * dips into it, so Word moves line 2 below the band. Before the fix the
+ * obstruction test used a default 11pt line estimate (~17px), so line 2 was
+ * left above the band, overlapping the picture — and everything after the
+ * paragraph sat one line too high, which can keep a following heading on a
+ * page Word has already broken.
+ */
+describe('topAndBottom band pushes a tall line of its own anchoring paragraph below it', () => {
+  const OFFSET_PX = 48;
+  const bigText = (t: string) =>
+    `<w:r><w:rPr><w:sz w:val="40"/></w:rPr><w:t xml:space="preserve">${t}</w:t></w:r>`;
+  const lowPicture = picture.replace('<wp:posOffset>228600<', '<wp:posOffset>457200<');
+
+  let restoreDocument: () => void = () => {};
+  let res: Awaited<ReturnType<typeof layoutDocxHeadless>>;
+  beforeAll(async () => {
+    restoreDocument = installCanvasDocumentStub();
+    const body =
+      `<w:p>${lowPicture}${bigText('A large caption that is long enough to wrap onto a second line here')}</w:p>` +
+      `<w:p>${text('After')}</w:p>`;
+    res = await layoutDocxHeadless(await parseDocxHeadless(await buildDocx(body)));
+  });
+  afterAll(() => restoreDocument());
+
+  test('line 1 stays above the band, line 2 moves below it', () => {
+    const measure = res.measures[0] as ParagraphMeasure;
+    expect(measure.lines).toHaveLength(2);
+    const [line1, line2] = measure.lines;
+    expect(line1!.floatSkipBefore ?? 0).toBe(0);
+    // The fixture really does exercise the gap: line 1 clears the band, but
+    // the 11pt estimate would not have caught line 2.
+    expect(line1!.lineHeight).toBeLessThan(OFFSET_PX);
+    expect(line1!.lineHeight * 2).toBeGreaterThan(OFFSET_PX);
+    const line2Top = line1!.lineHeight + (line2!.floatSkipBefore ?? 0);
+    expect(line2Top).toBeGreaterThanOrEqual(OFFSET_PX + PICTURE_HEIGHT_PX - 0.5);
+  });
+
+  test('the next paragraph follows line 2, below the band', () => {
+    const page = res.layout.pages[0]!;
+    const [first, second] = res.blocks;
+    const top = page.fragments.find((f) => f.blockId === first!.id)!.y;
+    const next = page.fragments.find((f) => f.blockId === second!.id)!.y;
+    expect(next).toBeGreaterThan(top + OFFSET_PX + PICTURE_HEIGHT_PX);
   });
 });

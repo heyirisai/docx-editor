@@ -1,5 +1,37 @@
 import type { WrapTextDirection } from '../../layout-engine/types';
-import { clampFloatingWrapMargins } from './measureParagraph';
+
+/**
+ * When a float's wrap margins consume the entire content width (or more),
+ * there is no horizontal strip beside it for body text. Word renders the
+ * following lines at full content width instead of squeezing them into a
+ * 1-pixel column. Unchecked margins from near-full-width tables/images can
+ * exceed contentWidth and collapse every line to ~1 glyph (the "single
+ * character per line after a wide floating table" bug).
+ *
+ * Returned margins are zeroed when:
+ * - either side alone is >= contentWidth (no strip on that side at all), or
+ * - their sum is >= contentWidth (no strip exists between the two sides).
+ */
+/**
+ * Upper bound on band re-measure passes in measureParagraph. Each pass only
+ * moves lines down past finitely many bands, so it terminates anyway; the cap
+ * bounds canvas measuring on a pathological page.
+ */
+export const MAX_BAND_RELAYOUT_PASSES = 8;
+
+export function clampFloatingWrapMargins(
+  leftMargin: number,
+  rightMargin: number,
+  contentWidth: number
+): { leftMargin: number; rightMargin: number } {
+  const cw = Math.max(1, contentWidth);
+  const lm = Math.max(0, leftMargin);
+  const rm = Math.max(0, rightMargin);
+  if (lm >= cw || rm >= cw || lm + rm >= cw) {
+    return { leftMargin: 0, rightMargin: 0 };
+  }
+  return { leftMargin: lm, rightMargin: rm };
+}
 
 export interface FloatingExclusionRect {
   /** Which side the object is on for simple one-sided wrapping. */
@@ -214,6 +246,27 @@ function intersectSegments(
  * past obstructing floats). Keep these usages in sync.
  */
 export const MIN_WRAP_SEGMENT_WIDTH = 24;
+
+/**
+ * Px a finished line at `absoluteY` must drop so that, at its real
+ * `lineHeight`, it clears every full-width (topAndBottom) band it overlaps —
+ * Word moves such a line below the band (ECMA-376 §20.4.2.20). Lines are
+ * first placed with a default-font height estimate, so a tall line (large
+ * heading text) can reach into a band the estimate missed. Returns 0 when the
+ * line is already clear.
+ */
+export function getBandClearanceSkip(
+  absoluteY: number,
+  lineHeight: number,
+  zones: FloatingImageZone[] | undefined,
+  contentWidth: number
+): number {
+  const bands = zones?.filter((zone) => zone.fullWidthBlock);
+  if (!bands || bands.length === 0) return 0;
+  return (
+    findClearLineY(absoluteY, lineHeight, bands, contentWidth, MIN_WRAP_SEGMENT_WIDTH) - absoluteY
+  );
+}
 
 function canSplitCenteredBothSidesWrap(
   rectLeft: number,

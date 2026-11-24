@@ -47,7 +47,7 @@ type CaretPosition_2 = {
 };
 export { CaretPosition_2 as CaretPosition }
 
-// @public
+// @public (undocumented)
 export function clampFloatingWrapMargins(leftMargin: number, rightMargin: number, contentWidth: number): {
     leftMargin: number;
     rightMargin: number;
