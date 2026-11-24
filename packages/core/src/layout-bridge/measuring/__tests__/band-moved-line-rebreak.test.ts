@@ -14,7 +14,7 @@ if (typeof document === 'undefined') {
 }
 
 import { measureParagraph } from '../measureParagraph';
-import type { FloatingImageZone } from '../floatingZones';
+import { MAX_BAND_RELAYOUT_PASSES, type FloatingImageZone } from '../floatingZones';
 
 /**
  * A large-font line that dips into a topAndBottom band is moved below the
@@ -78,5 +78,16 @@ describe('line moved below a topAndBottom band re-breaks against a side float', 
     for (let i = 1; i < result.lines.length; i++) {
       expect(result.lines[i]!.fromChar).toBe(result.lines[i - 1]!.toChar);
     }
+  });
+
+  test('re-measuring stops at the pass cap', () => {
+    // At the cap the moved line keeps its above-band break (too wide), proving
+    // the recursion is bounded; one pass below the cap it re-breaks.
+    const fits = (opts: object) =>
+      measureParagraph(paragraph, WIDTH, opts as never).lines.every(
+        (l) => l.width <= WIDTH - (l.leftOffset ?? 0) - (l.rightOffset ?? 0) + 0.5
+      );
+    expect(fits({ floatingZones: zones, pass: MAX_BAND_RELAYOUT_PASSES })).toBe(false);
+    expect(fits({ floatingZones: zones, pass: MAX_BAND_RELAYOUT_PASSES - 1 })).toBe(true);
   });
 });

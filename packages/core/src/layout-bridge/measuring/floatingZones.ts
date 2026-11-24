@@ -12,6 +12,13 @@ import type { WrapTextDirection } from '../../layout-engine/types';
  * - either side alone is >= contentWidth (no strip on that side at all), or
  * - their sum is >= contentWidth (no strip exists between the two sides).
  */
+/**
+ * Upper bound on band re-measure passes in measureParagraph. Each pass only
+ * moves lines down past finitely many bands, so it terminates anyway; the cap
+ * bounds canvas measuring on a pathological page.
+ */
+export const MAX_BAND_RELAYOUT_PASSES = 8;
+
 export function clampFloatingWrapMargins(
   leftMargin: number,
   rightMargin: number,

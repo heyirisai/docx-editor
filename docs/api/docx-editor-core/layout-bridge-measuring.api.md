@@ -7,7 +7,7 @@
 // @public
 export function buildFontString(style: FontStyle): string;
 
-// @public
+// @public (undocumented)
 export function clampFloatingWrapMargins(leftMargin: number, rightMargin: number, contentWidth: number): {
     leftMargin: number;
     rightMargin: number;

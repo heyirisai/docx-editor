@@ -22,6 +22,7 @@ import {
   findClearLineY,
   getFloatingAvailableWidth,
   getFloatingMargins,
+  MAX_BAND_RELAYOUT_PASSES,
   MIN_WRAP_SEGMENT_WIDTH,
   getBandClearanceSkip,
   type FloatingImageZone,
@@ -98,8 +99,8 @@ export interface MeasureParagraphOptions {
   /** Y offset of this paragraph relative to the exclusion zones (default: 0) */
   paragraphYOffset?: number;
 }
-/** Internal re-measure hint: line index → minimum top (px from paragraph top). */
-type RelayoutOptions = MeasureParagraphOptions & { minLineTops?: Map<number, number> };
+/** Internal re-measure hint: line index → minimum top (px from paragraph top); pass = depth. */
+type Relayout = MeasureParagraphOptions & { minLineTops?: Map<number, number>; pass?: number };
 
 /**
  * Typography metrics for a line
@@ -366,9 +367,8 @@ export function measureParagraph(
   // Lead-skip to attach to the next line that finalizes — set when we hop
   // past a float that leaves no usable horizontal width at the current Y.
   let pendingFloatSkip = 0;
-  // Re-measure hints: lines moved below a band onto a narrower width (below).
-  let relayoutTops: Map<number, number> | undefined;
-  const minLineTops = (options as RelayoutOptions | undefined)?.minLineTops;
+  let relayoutTops: Map<number, number> | undefined; // lines moved below a band onto a narrower width
+  const { minLineTops, pass = 0 } = (options ?? {}) as Relayout;
   const applyMinLineTop = (lineIndex: number): void => {
     const top = minLineTops?.get(lineIndex) ?? 0;
     if (top > cumulativeHeight) {
@@ -1048,8 +1048,8 @@ export function measureParagraph(
 
   // Finalize the last line
   finalizeLine();
-  if (relayoutTops) {
-    const relayout: RelayoutOptions = { ...options, minLineTops: relayoutTops };
+  if (relayoutTops && pass < MAX_BAND_RELAYOUT_PASSES) {
+    const relayout: Relayout = { ...options, minLineTops: relayoutTops, pass: pass + 1 };
     return measureParagraph(block, maxWidth, relayout);
   }
 
