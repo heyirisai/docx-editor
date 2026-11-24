@@ -23,6 +23,7 @@ import {
   getFloatingAvailableWidth,
   getFloatingMargins,
   MIN_WRAP_SEGMENT_WIDTH,
+  getBandClearanceSkip,
   type FloatingImageZone,
   type FloatingLineSegmentZone,
 } from './floatingZones';
@@ -577,6 +578,19 @@ export function measureParagraph(
       // descent stays as text metrics
     }
 
+    // Lines are placed with a default-font height estimate; a taller line can
+    // still dip into a topAndBottom band, and Word moves it below the band.
+    const lh = finalTypography.lineHeight;
+    const absY = paragraphYOffset + cumulativeHeight;
+    const bandSkip = getBandClearanceSkip(absY, lh, floatingZones, bodyContentWidth);
+    if (bandSkip > 0) {
+      cumulativeHeight += bandSkip;
+      pendingFloatSkip += bandSkip;
+      const below = getFloatingMargins(cumulativeHeight, lh, floatingZones, paragraphYOffset);
+      currentLine.leftOffset = below.leftMargin;
+      currentLine.rightOffset = below.rightMargin;
+      currentLine.segmentZones = below.segments;
+    }
     const line: MeasuredLine = {
       fromRun: currentLine.fromRun,
       fromChar: currentLine.fromChar,

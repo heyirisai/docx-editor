@@ -215,6 +215,27 @@ function intersectSegments(
  */
 export const MIN_WRAP_SEGMENT_WIDTH = 24;
 
+/**
+ * Px a finished line at `absoluteY` must drop so that, at its real
+ * `lineHeight`, it clears every full-width (topAndBottom) band it overlaps —
+ * Word moves such a line below the band (ECMA-376 §20.4.2.20). Lines are
+ * first placed with a default-font height estimate, so a tall line (large
+ * heading text) can reach into a band the estimate missed. Returns 0 when the
+ * line is already clear.
+ */
+export function getBandClearanceSkip(
+  absoluteY: number,
+  lineHeight: number,
+  zones: FloatingImageZone[] | undefined,
+  contentWidth: number
+): number {
+  const bands = zones?.filter((zone) => zone.fullWidthBlock);
+  if (!bands || bands.length === 0) return 0;
+  return (
+    findClearLineY(absoluteY, lineHeight, bands, contentWidth, MIN_WRAP_SEGMENT_WIDTH) - absoluteY
+  );
+}
+
 function canSplitCenteredBothSidesWrap(
   rectLeft: number,
   rectRight: number,
